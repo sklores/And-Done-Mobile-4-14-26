@@ -66,9 +66,11 @@ export async function getTodaySales(creds: ToastCreds): Promise<SalesResult> {
   });
   if (!res.ok) throw new Error(`toast orders ${res.status}`);
   const orders = (await res.json()) as Array<{
-    checks?: Array<{ voided?: boolean; totalAmount?: number }>;
+    checks?: Array<{ voided?: boolean; amount?: number }>;
   }>;
 
+  // Sum `check.amount` — net sales, pre-tax, pre-tip. Matches POS "Sales".
+  // (totalAmount includes tax; payments include tip — neither is what POS shows.)
   let total = 0;
   let checkCount = 0;
   let orderCount = 0;
@@ -77,8 +79,8 @@ export async function getTodaySales(creds: ToastCreds): Promise<SalesResult> {
     for (const o of orders) {
       for (const c of o.checks ?? []) {
         if (c.voided) continue;
-        if (typeof c.totalAmount === "number") {
-          total += c.totalAmount;
+        if (typeof c.amount === "number") {
+          total += c.amount;
           checkCount++;
         }
       }
