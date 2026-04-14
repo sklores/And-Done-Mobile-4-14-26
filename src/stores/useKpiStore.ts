@@ -24,6 +24,7 @@ type KpiState = {
   net: { value: string; label: string; sub: string };
   tiles: Kpi[];
   lastRefresh: number | null;
+  lastError: string | null;
   refresh: () => Promise<void>;
 };
 
@@ -38,23 +39,24 @@ const referenceTiles: Kpi[] = [
 ];
 
 export const useKpiStore = create<KpiState>((set) => ({
-  sales: { value: 12450, label: "Sales", sub: "Today" },
+  sales: { value: 0, label: "Sales", sub: "Today" },
   net: { value: "18.2%", label: "Net", sub: "Today" },
   tiles: referenceTiles,
   lastRefresh: null,
+  lastError: null,
   refresh: async () => {
-    try {
-      const total = await fetchTodaySales();
-      if (total !== null) {
-        set((s) => ({
-          sales: { ...s.sales, value: total },
-          lastRefresh: Date.now(),
-        }));
-      } else {
-        set({ lastRefresh: Date.now() });
-      }
-    } catch {
-      set({ lastRefresh: Date.now() });
+    const result = await fetchTodaySales();
+    if (result) {
+      set((s) => ({
+        sales: { ...s.sales, value: result.total },
+        lastRefresh: Date.now(),
+        lastError: null,
+      }));
+    } else {
+      set({
+        lastRefresh: Date.now(),
+        lastError: "Toast fetch failed",
+      });
     }
   },
 }));
