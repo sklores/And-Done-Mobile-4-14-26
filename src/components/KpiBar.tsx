@@ -1,0 +1,59 @@
+import { coastal } from "../theme/skins";
+
+type Props = {
+  kind: "sales" | "net";
+  label: string;
+  value: string;
+  sub: string;
+};
+
+export function KpiBar({ kind, label, value, sub }: Props) {
+  const s = kind === "sales" ? coastal.salesBar : coastal.netBar;
+  return (
+    <div
+      style={{
+        background: s.bg,
+        padding: "10px 14px",
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        fontFamily: coastal.fonts.manrope,
+      }}
+    >
+      <div
+        style={{
+          color: s.label,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: ".1em",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div
+          style={{
+            color: s.value,
+            fontSize: 22,
+            fontWeight: 800,
+            fontFamily: coastal.fonts.condensed,
+          }}
+        >
+          {value}
+        </div>
+        <div
+          style={{
+            color: s.sub,
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: ".08em",
+          }}
+        >
+          {sub}
+        </div>
+      </div>
+    </div>
+  );
+}
