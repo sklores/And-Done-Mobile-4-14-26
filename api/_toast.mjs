@@ -75,6 +75,54 @@ export async function getTodaySales(creds) {
   };
 }
 
+export async function getTodayLabor(creds) {
+  const token = await getToken(creds);
+
+  // Toast labor API — time entries for today
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const startISO = startOfDay.toISOString();
+  const endISO = now.toISOString();
+
+  const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startISO)}&endDate=${encodeURIComponent(endISO)}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Toast-Restaurant-External-ID": creds.guid,
+    },
+  });
+
+  if (!res.ok) throw new Error(`toast labor ${res.status}`);
+  const entries = await res.json();
+
+  let totalLaborCost = 0;
+  let totalHours = 0;
+  let employeeCount = new Set();
+
+  if (Array.isArray(entries)) {
+    for (const e of entries) {
+      const regular = typeof e.regularHours === "number" ? e.regularHours : 0;
+      const overtime = typeof e.overtimeHours === "number" ? e.overtimeHours : 0;
+      const regularPay = typeof e.regularPay === "number" ? e.regularPay : 0;
+      const overtimePay = typeof e.overtimePay === "number" ? e.overtimePay : 0;
+
+      totalHours += regular + overtime;
+      totalLaborCost += regularPay + overtimePay;
+
+      if (e.employeeReference?.guid) {
+        employeeCount.add(e.employeeReference.guid);
+      }
+    }
+  }
+
+  return {
+    totalLaborCost: Math.round(totalLaborCost * 100) / 100,
+    totalHours: Math.round(totalHours * 100) / 100,
+    employeeCount: employeeCount.size,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export function credsFromEnv(env) {
   const clientId = env.TOAST_CLIENT_ID;
   const clientSecret = env.TOAST_CLIENT_SECRET;
