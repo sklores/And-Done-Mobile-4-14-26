@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useKpiStore } from '../stores/useKpiStore'
 
 type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'sundown' | 'night'
