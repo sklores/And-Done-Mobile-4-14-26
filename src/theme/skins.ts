@@ -1,6 +1,5 @@
 // Coastal skin — all values extracted verbatim from reference HTML.
 // No invented colors.
-
 export type TileStop = {
   bg: string;
   label: string;
@@ -17,7 +16,7 @@ export const coastal = {
   phoneShadow: "0 20px 60px rgba(0,0,0,.12)",
 
   // Status bar
-  statusBarBg: "#2C3A35",
+  statusBarBg: "#2E3235",
 
   // Scene
   scene: {
@@ -46,20 +45,19 @@ export const coastal = {
 
   // Bars
   salesBar: {
-    bg: "#2C3A35",
+    bg: "#383C40",
     label: "rgba(255,255,255,.5)",
     sub: "#7BBFAA",
     value: "#fff",
   },
   netBar: {
-    bg: "#1A2E28",
+    bg: "#2E3235",
     value: "#7BBFAA",
     sub: "#7BBFAA",
     label: "rgba(255,255,255,.45)",
   },
 
-  // Tile palettes — only 3 stops exist in the reference:
-  // GREEN (Excellent/Good), YELLOW (Caution/Watch), RED (Critical).
+  // Tile palettes
   tiles: {
     green: {
       bg: "#B8E4D0",
@@ -86,7 +84,7 @@ export const coastal = {
 
   // Marquee
   marquee: {
-    bg: "#2C3A35",
+    bg: "#383C40",
     text: "rgba(255,255,255,.6)",
   },
   toggle: {
@@ -126,8 +124,7 @@ export const coastal = {
   phoneRadius: 36,
 };
 
-// 8-stop score mapping — uses only the 3 reference palettes.
-// 1–2 = red (Critical), 3–5 = yellow (Caution/Watch), 6–8 = green (Good/Excellent).
+// 8-stop score mapping
 export function tileForScore(score: number): TileStop {
   if (score <= 2) return coastal.tiles.red;
   if (score <= 5) return coastal.tiles.yellow;
