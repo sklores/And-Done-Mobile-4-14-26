@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { coastal } from "../theme/skins";
 
 type FeedKey = "reviews" | "sales" | "social" | "events";
+
+// Pixels per character — controls scroll speed regardless of content length
+const PX_PER_CHAR = 7;
 
 const FEEDS: Record<FeedKey, string[]> = {
   reviews: [
@@ -33,6 +36,7 @@ export function MarqueeFeed() {
     social: true,
     events: false,
   });
+  const [paused, setPaused] = useState(false);
 
   const items: string[] = [];
   (Object.keys(active) as FeedKey[]).forEach((k) => {
@@ -40,11 +44,19 @@ export function MarqueeFeed() {
   });
   const line = items.length ? items.join("   •   ") : "No feeds selected";
 
+  // Duration scales with text length so speed stays constant
+  const duration = useMemo(() => {
+    const totalPx = line.length * PX_PER_CHAR;
+    const seconds = totalPx / 80; // 80px per second
+    return `${Math.max(seconds, 8).toFixed(1)}s`;
+  }, [line]);
+
   const toggle = (k: FeedKey) => setActive((a) => ({ ...a, [k]: !a[k] }));
 
   return (
     <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope }}>
       <div
+        onClick={() => setPaused((p) => !p)}
         style={{
           overflow: "hidden",
           whiteSpace: "nowrap",
@@ -52,13 +64,16 @@ export function MarqueeFeed() {
           color: coastal.marquee.text,
           fontSize: 11,
           fontWeight: 500,
+          cursor: "pointer",
+          userSelect: "none",
         }}
       >
         <div
           style={{
             display: "inline-block",
             paddingLeft: "100%",
-            animation: `marquee ${coastal.marqueeDuration} linear infinite`,
+            animation: `marquee ${duration} linear infinite`,
+            animationPlayState: paused ? "paused" : "running",
           }}
         >
           {line}
