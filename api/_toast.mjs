@@ -1,28 +1,21 @@
-// Shared Toast API helper — runs server-side only.
-// Used by both the Vercel function (api/toast-sales.ts) and the
+// Shared Toast API helper — server-side only.
+// Used by both the Vercel function (api/toast-sales.mjs) and the
 // Vite dev middleware (vite.config.ts).
 
 const AUTH_URL =
   "https://ws-api.toasttab.com/authentication/v1/authentication/login";
 const BASE = "https://ws-api.toasttab.com";
 
-export type ToastCreds = {
-  clientId: string;
-  clientSecret: string;
-  guid: string;
-};
+let cachedToken = null;
 
-type Cached = { token: string; expiresAt: number };
-let cachedToken: Cached | null = null;
-
-export function todayBusinessDate(d = new Date()): string {
+export function todayBusinessDate(d = new Date()) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}${mm}${dd}`;
 }
 
-async function getToken(creds: ToastCreds): Promise<string> {
+async function getToken(creds) {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
     return cachedToken.token;
   }
@@ -36,25 +29,15 @@ async function getToken(creds: ToastCreds): Promise<string> {
     }),
   });
   if (!res.ok) throw new Error(`toast auth ${res.status}`);
-  const body = (await res.json()) as {
-    token?: { accessToken?: string; expiresIn?: number };
-  };
-  const token = body.token?.accessToken;
-  const expiresIn = body.token?.expiresIn ?? 86400;
+  const body = await res.json();
+  const token = body?.token?.accessToken;
+  const expiresIn = body?.token?.expiresIn ?? 86400;
   if (!token) throw new Error("toast auth: no token in response");
   cachedToken = { token, expiresAt: Date.now() + expiresIn * 1000 };
   return token;
 }
 
-export type SalesResult = {
-  total: number;
-  checkCount: number;
-  orderCount: number;
-  businessDate: string;
-  fetchedAt: string;
-};
-
-export async function getTodaySales(creds: ToastCreds): Promise<SalesResult> {
+export async function getTodaySales(creds) {
   const token = await getToken(creds);
   const businessDate = todayBusinessDate();
   const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
@@ -65,12 +48,9 @@ export async function getTodaySales(creds: ToastCreds): Promise<SalesResult> {
     },
   });
   if (!res.ok) throw new Error(`toast orders ${res.status}`);
-  const orders = (await res.json()) as Array<{
-    checks?: Array<{ voided?: boolean; amount?: number }>;
-  }>;
+  const orders = await res.json();
 
   // Sum `check.amount` — net sales, pre-tax, pre-tip. Matches POS "Sales".
-  // (totalAmount includes tax; payments include tip — neither is what POS shows.)
   let total = 0;
   let checkCount = 0;
   let orderCount = 0;
@@ -95,9 +75,7 @@ export async function getTodaySales(creds: ToastCreds): Promise<SalesResult> {
   };
 }
 
-export function credsFromEnv(
-  env: Record<string, string | undefined>,
-): ToastCreds {
+export function credsFromEnv(env) {
   const clientId = env.TOAST_CLIENT_ID;
   const clientSecret = env.TOAST_CLIENT_SECRET;
   const guid = env.TOAST_RESTAURANT_GUID;

@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
               res.setHeader("cache-control", "no-store");
               try {
                 const { credsFromEnv, getTodaySales } = await import(
-                  "./api/_toast"
+                  "./api/_toast.mjs"
                 );
                 const creds = credsFromEnv(env);
                 const data = await getTodaySales(creds);

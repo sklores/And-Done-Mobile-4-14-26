@@ -1,13 +1,9 @@
 // Vercel serverless function: GET /api/toast-sales
 // Runs server-side — keeps Toast client secret off the browser.
 
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { credsFromEnv, getTodaySales } from "./_toast";
+import { credsFromEnv, getTodaySales } from "./_toast.mjs";
 
-export default async function handler(
-  _req: IncomingMessage,
-  res: ServerResponse,
-) {
+export default async function handler(_req, res) {
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");
   try {
