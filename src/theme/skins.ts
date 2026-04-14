@@ -13,7 +13,7 @@ export const coastal = {
   phoneBg: "#E4EDED",
   pageBg: "#f5f5f5",
   phoneBorder: "#ddd",
-  phoneShadow: "0 20px 60px rgba(0,0,0,.12)",
+  phoneShadow: "0 20px 60px rgba(0,0,0,.12)"
 
   // Status bar
   statusBarBg: "#2E3235",
