@@ -13,14 +13,19 @@ import { SalesDrillDown } from "./components/SalesDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
-async function fetchWeather(): Promise<WeatherCondition> {
+type WeatherData = { condition: WeatherCondition; tempF: number | null };
+
+async function fetchWeather(): Promise<WeatherData> {
   try {
     const res = await fetch("/api/weather", { cache: "no-store" });
-    if (!res.ok) return "clear";
+    if (!res.ok) return { condition: "clear", tempF: null };
     const data = await res.json();
-    return (data.condition as WeatherCondition) ?? "clear";
+    return {
+      condition: (data.condition as WeatherCondition) ?? "clear",
+      tempF: typeof data.tempF === "number" ? Math.round(data.tempF) : null,
+    };
   } catch {
-    return "clear";
+    return { condition: "clear", tempF: null };
   }
 }
 
@@ -32,7 +37,7 @@ export default function App() {
   const refresh      = useKpiStore((s) => s.refresh);
 
   const [tab, setTab]         = useState<TabKey>("dashboard");
-  const [weather, setWeather] = useState<WeatherCondition>("clear");
+  const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
   const [drillKey, setDrillKey] = useState<KpiKey | null>(null);
 
   useEffect(() => {
@@ -42,8 +47,8 @@ export default function App() {
   }, [refresh]);
 
   useEffect(() => {
-    fetchWeather().then(setWeather);
-    const id = setInterval(() => fetchWeather().then(setWeather), 30 * 60 * 1000);
+    fetchWeather().then(setWeatherData);
+    const id = setInterval(() => fetchWeather().then(setWeatherData), 30 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -87,12 +92,22 @@ export default function App() {
           }}
         >
           <span>{businessName}</span>
-          <span>
-            {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ opacity: 0.9 }}>
+              {weatherData.condition === "clear"  && "☀️"}
+              {weatherData.condition === "cloudy" && "⛅"}
+              {weatherData.condition === "rain"   && "🌧️"}
+              {weatherData.condition === "snow"   && "❄️"}
+              {weatherData.condition === "wind"   && "💨"}
+              {weatherData.tempF != null && ` ${weatherData.tempF}°`}
+            </span>
+            <span>
+              {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
           </span>
         </div>
 
-        <CoastalScene weather={weather} />
+        <CoastalScene weather={weatherData.condition} />
         <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
         <KpiBar kind="net" label={net.label} value={net.value} sub={net.sub} />

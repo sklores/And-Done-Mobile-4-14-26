@@ -26,15 +26,16 @@ export default async function handler(_req, res) {
   res.setHeader('content-type', 'application/json')
   res.setHeader('cache-control', 's-maxage=1800, stale-while-revalidate') // 30 min cache
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=weather_code,wind_speed_10m&timezone=America%2FNew_York&forecast_days=1`
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=weather_code,wind_speed_10m,temperature_2m&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=1`
     const r = await fetch(url)
     if (!r.ok) throw new Error(`open-meteo ${r.status}`)
     const data = await r.json()
     const code    = data.current?.weather_code ?? 0
     const windKph = data.current?.wind_speed_10m ?? 0
+    const tempF   = data.current?.temperature_2m ?? null
     const condition = WMO_TO_CONDITION(code, windKph)
     res.statusCode = 200
-    res.end(JSON.stringify({ condition, code, windKph, fetchedAt: new Date().toISOString() }))
+    res.end(JSON.stringify({ condition, tempF, code, windKph, fetchedAt: new Date().toISOString() }))
   } catch (e) {
     // Fail gracefully — clear sky is a safe default
     res.statusCode = 200
