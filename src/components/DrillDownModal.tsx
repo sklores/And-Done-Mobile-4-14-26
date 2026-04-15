@@ -90,8 +90,8 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           </div>
         </div>
 
-        {/* Content rows */}
-        <div style={{ padding: "8px 0 32px", background: coastal.phoneBg }}>
+        {/* Content rows — scrollable */}
+        <div style={{ padding: "8px 0 32px", background: coastal.phoneBg, overflowY: "auto", maxHeight: "55vh" }}>
           {children}
         </div>
       </div>

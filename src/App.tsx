@@ -10,6 +10,7 @@ import { MarqueeFeed } from "./components/MarqueeFeed";
 import { BottomTabs } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
 import { SalesDrillDown } from "./components/SalesDrillDown";
+import { PrimeCostDrillDown } from "./components/PrimeCostDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -122,6 +123,10 @@ export default function App() {
       />
       <LaborDrillDown
         open={drillKey === "labor"}
+        onClose={() => setDrillKey(null)}
+      />
+      <PrimeCostDrillDown
+        open={drillKey === "prime"}
         onClose={() => setDrillKey(null)}
       />
     </div>

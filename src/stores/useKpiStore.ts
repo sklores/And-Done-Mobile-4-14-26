@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail } from "../data/toastAdapter";
-import type { SalesDetailResult } from "../data/toastAdapter";
+import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail } from "../data/toastAdapter";
+import type { SalesDetailResult, LaborDetailResult } from "../data/toastAdapter";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -31,6 +31,7 @@ type KpiState = {
   tiles: Kpi[];
   laborDetail: LaborDetail | null;
   salesDetail: SalesDetailResult | null;
+  laborDetailRich: LaborDetailResult | null;
   lastRefresh: number | null;
   lastError: string | null;
   refresh: () => Promise<void>;
@@ -81,14 +82,16 @@ export const useKpiStore = create<KpiState>((set) => ({
   tiles: placeholderTiles,
   laborDetail: null,
   salesDetail: null,
+  laborDetailRich: null,
   lastRefresh: null,
   lastError: null,
 
   refresh: async () => {
-    const [salesResult, laborResult, salesDetailResult] = await Promise.all([
+    const [salesResult, laborResult, salesDetailResult, laborDetailRich] = await Promise.all([
       fetchTodaySales(),
       fetchTodayLabor(),
       fetchSalesDetail(),
+      fetchLaborDetail(),
     ]);
 
     set((s) => {
@@ -149,6 +152,7 @@ export const useKpiStore = create<KpiState>((set) => ({
         tiles: updatedTiles,
         laborDetail,
         salesDetail: salesDetailResult ?? s.salesDetail,
+        laborDetailRich: laborDetailRich ?? s.laborDetailRich,
         lastRefresh: Date.now(),
         lastError: null,
       };

@@ -146,6 +146,113 @@ export async function getTodayLabor(creds) {
   };
 }
 
+// ── Labor detail (hourly/salary split, FOH/BOH, OT, EOD projection) ──────────
+const FOH_KEYWORDS = /server|host(ess)?|bartend|cashier|expo|runner|barista|front|service|counter/i;
+const BOH_KEYWORDS = /cook|kitchen|prep|dish|chef|line|back|grill|fry|saute|sauté|boh/i;
+
+export async function getTodayLaborDetail(creds) {
+  const token = await getToken(creds);
+
+  // Fetch job definitions so we can classify FOH vs BOH by title
+  let jobMap = new Map(); // guid → { title, isFOH }
+  try {
+    const jobsRes = await fetch(`${BASE}/labor/v1/jobs`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Toast-Restaurant-External-ID": creds.guid,
+      },
+    });
+    if (jobsRes.ok) {
+      const jobs = await jobsRes.json();
+      if (Array.isArray(jobs)) {
+        for (const j of jobs) {
+          const title = j.title ?? "";
+          const isFOH = FOH_KEYWORDS.test(title) && !BOH_KEYWORDS.test(title);
+          jobMap.set(j.guid, { title, isFOH });
+        }
+      }
+    }
+  } catch (_) { /* jobs API unavailable — skip FOH/BOH split */ }
+
+  // Fetch today's time entries
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startOfDay.toISOString())}&endDate=${encodeURIComponent(now.toISOString())}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Toast-Restaurant-External-ID": creds.guid,
+    },
+  });
+  if (!res.ok) throw new Error(`toast labor ${res.status}`);
+  const entries = await res.json();
+
+  const nowMs = Date.now();
+  let hourlyCost = 0, hourlyHours = 0;
+  let salaryCost = 0, salaryHours = 0;
+  let fohCost = 0, bohCost = 0, unknownCost = 0;
+  let hasOT = false;
+  const employeeSet = new Set();
+
+  if (Array.isArray(entries)) {
+    for (const e of entries) {
+      if (e.employeeReference?.guid) employeeSet.add(e.employeeReference.guid);
+
+      const isSalaried = !e.hourlyWage || e.hourlyWage === 0;
+      const jobGuid = e.jobReference?.guid;
+      const job = jobMap.get(jobGuid);
+
+      let entryCost = 0, entryHours = 0;
+
+      if (e.outDate) {
+        entryCost = (e.regularPay ?? 0) + (e.overtimePay ?? 0);
+        entryHours = (e.regularHours ?? 0) + (e.overtimeHours ?? 0);
+        if ((e.overtimePay ?? 0) > 0 || (e.overtimeHours ?? 0) > 0) hasOT = true;
+      } else if (e.inDate && e.hourlyWage > 0) {
+        const hrs = Math.max(0, (nowMs - new Date(e.inDate).getTime()) / 3_600_000);
+        entryCost = hrs * e.hourlyWage;
+        entryHours = hrs;
+      }
+
+      if (isSalaried) { salaryCost += entryCost; salaryHours += entryHours; }
+      else             { hourlyCost += entryCost; hourlyHours += entryHours; }
+
+      if (!job)             unknownCost += entryCost;
+      else if (job.isFOH)   fohCost += entryCost;
+      else                  bohCost += entryCost;
+    }
+  }
+
+  // EOD projection — extrapolate from burn rate since open
+  // Assumes 11 AM open, 10 PM close (configurable later)
+  const OPEN_HOUR = 11, CLOSE_HOUR = 22;
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  const totalLaborCost = hourlyCost + salaryCost;
+  let projectedEOD = null;
+  if (nowHour >= OPEN_HOUR && nowHour < CLOSE_HOUR && totalLaborCost > 0) {
+    const elapsed   = Math.max(0.5, nowHour - OPEN_HOUR);
+    const remaining = CLOSE_HOUR - nowHour;
+    projectedEOD = totalLaborCost + (totalLaborCost / elapsed) * remaining;
+  }
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  return {
+    hourlyCost:   round2(hourlyCost),
+    hourlyHours:  round2(hourlyHours),
+    salaryCost:   round2(salaryCost),
+    salaryHours:  round2(salaryHours),
+    fohCost:      round2(fohCost),
+    bohCost:      round2(bohCost),
+    unknownCost:  round2(unknownCost),
+    hasOT,
+    employeeCount: employeeSet.size,
+    projectedEOD: projectedEOD ? round2(projectedEOD) : null,
+    jobsResolved: jobMap.size > 0,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 // ── Dining-option GUID classification ────────────────────────────────────────
 const DOORDASH_GUIDS  = new Set(["55c97b64","65a97c5d","9d9ef51a","e7ca53b4"]);
 const GRUBHUB_GUIDS   = new Set(["5b7c2e6f","6b1533d5"]);

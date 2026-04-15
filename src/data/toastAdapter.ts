@@ -20,6 +20,21 @@ export type LaborResult = {
   fetchedAt: string;
 };
 
+export type LaborDetailResult = {
+  hourlyCost: number;
+  hourlyHours: number;
+  salaryCost: number;
+  salaryHours: number;
+  fohCost: number;
+  bohCost: number;
+  unknownCost: number;
+  hasOT: boolean;
+  employeeCount: number;
+  projectedEOD: number | null;
+  jobsResolved: boolean;
+  fetchedAt: string;
+};
+
 export type PmixItem = {
   name: string;
   revenue: number;
@@ -57,6 +72,16 @@ export async function fetchTodayLabor(): Promise<LaborResult | null> {
     const res = await fetch("/api/toast-labor", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as LaborResult;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchLaborDetail(): Promise<LaborDetailResult | null> {
+  try {
+    const res = await fetch("/api/toast-labor-detail", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as LaborDetailResult;
   } catch {
     return null;
   }

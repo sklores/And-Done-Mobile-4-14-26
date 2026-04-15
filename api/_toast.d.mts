@@ -23,6 +23,21 @@ export type LaborResult = {
   fetchedAt: string;
 };
 
+export type LaborDetailResult = {
+  hourlyCost: number;
+  hourlyHours: number;
+  salaryCost: number;
+  salaryHours: number;
+  fohCost: number;
+  bohCost: number;
+  unknownCost: number;
+  hasOT: boolean;
+  employeeCount: number;
+  projectedEOD: number | null;
+  jobsResolved: boolean;
+  fetchedAt: string;
+};
+
 export type PmixItem = {
   name: string;
   revenue: number;
@@ -48,6 +63,7 @@ export type SalesDetailResult = {
 export function todayBusinessDate(d?: Date): string;
 export function getTodaySales(creds: ToastCreds): Promise<SalesResult>;
 export function getTodayLabor(creds: ToastCreds): Promise<LaborResult>;
+export function getTodayLaborDetail(creds: ToastCreds): Promise<LaborDetailResult>;
 export function getTodaySalesDetail(creds: ToastCreds): Promise<SalesDetailResult>;
 export function credsFromEnv(
   env: Record<string, string | undefined>,
