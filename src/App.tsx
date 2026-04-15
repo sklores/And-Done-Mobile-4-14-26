@@ -47,6 +47,7 @@ export default function App() {
   const [openTab, setOpenTab]   = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
   const [drillKey, setDrillKey] = useState<KpiKey | null>(null);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 600);
 
   useEffect(() => {
     refresh();
@@ -60,12 +61,21 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 600);
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   return (
     <div
-      className="phone-shell-outer"
-      style={{
+      style={isMobile ? {
+        minHeight: "100dvh",
+        background: coastal.phoneBg,
+        fontFamily: coastal.fonts.manrope,
+      } : {
         minHeight: "100vh",
         background: coastal.pageBg,
         display: "flex",
@@ -76,8 +86,13 @@ export default function App() {
       }}
     >
       <div
-        className="phone-shell-inner"
-        style={{
+        style={isMobile ? {
+          width: "100%",
+          minHeight: "100dvh",
+          background: coastal.phoneBg,
+          display: "flex",
+          flexDirection: "column",
+        } : {
           width: 375,
           maxWidth: "100%",
           background: coastal.phoneBg,
