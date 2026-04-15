@@ -133,7 +133,7 @@ export default function App() {
           </span>
         </div>
 
-        <CoastalScene weather={weatherData.condition} sceneHeight={isMobile ? 140 : 200} />
+        <CoastalScene weather={weatherData.condition} />
         <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
         <KpiBar

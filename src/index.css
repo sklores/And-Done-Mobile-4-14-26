@@ -10,13 +10,20 @@ body {
 }
 button { font-family: inherit; }
 
+/* ── Scene height: shorter on all phone-sized screens ───────────────────── */
+.coastal-scene { height: 200px; }
+@media (max-width: 1024px) {
+  .coastal-scene { height: 130px; }
+}
+
+/* ── Mobile layout ───────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   html, body, #root {
     height: 100%;
     overflow: hidden;
   }
   .mobile-app {
-    height: 100dvh;
+    min-height: 100dvh;
     overflow-y: auto;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
@@ -31,22 +38,4 @@ button { font-family: inherit; }
 @keyframes kpiFlash {
   0%   { filter: brightness(1.4); }
   100% { filter: brightness(1); }
-}
-
-/* ── Mobile: strip the desktop phone-mockup shell ───────────────────────── */
-@media (max-width: 480px) {
-  .phone-shell-outer {
-    padding: 0 !important;
-    background: #F2F7F6 !important;
-    align-items: stretch !important;
-    min-height: 100dvh !important;
-  }
-  .phone-shell-inner {
-    width: 100% !important;
-    max-width: 100% !important;
-    border-radius: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    min-height: 100dvh !important;
-  }
 }

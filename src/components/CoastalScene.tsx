@@ -6,7 +6,6 @@ export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'snow' | 'wind'
 
 interface CoastalSceneProps {
   weather?: WeatherCondition
-  sceneHeight?: number
 }
 
 function getTimeOfDay(d = new Date()): TimeOfDay {
@@ -163,7 +162,7 @@ const SNOW_FLAKES: [number, number][] = [
   [50,50],[115,55],[175,48],[235,52],
 ]
 
-export function CoastalScene({ weather = 'clear', sceneHeight = 200 }: CoastalSceneProps) {
+export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const [tod, setTod] = useState<TimeOfDay>(getTimeOfDay())
   const salesRaw = useKpiStore(s => s.sales)
   const tiles    = useKpiStore(s => s.tiles)
@@ -239,7 +238,7 @@ export function CoastalScene({ weather = 'clear', sceneHeight = 200 }: CoastalSc
   const dolphinSpd    = dolphinActive ? (socScore >= 6 ? 4.5 : socScore >= 4 ? 7.5 : 12) : 99
 
   return (
-    <div style={{ width: '100%', height: sceneHeight, overflow: 'hidden', display: 'block' }}>
+    <div className="coastal-scene" style={{ width: '100%', overflow: 'hidden', display: 'block' }}>
       <style>{SCENE_CSS}</style>
       <svg viewBox="0 0 375 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: 'block' }}>
         <defs>
