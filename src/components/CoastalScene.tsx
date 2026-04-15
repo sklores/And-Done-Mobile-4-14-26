@@ -109,6 +109,7 @@ const SCENE_CSS = `
 @keyframes cs-spray2{0%{opacity:0}25%{opacity:.55}100%{opacity:0;transform:translateY(-10px) translateX(8px)}}
 @keyframes cs-sprayl{0%{opacity:0;transform:translateY(0)}30%{opacity:.5}100%{opacity:0;transform:translateY(-12px) scaleX(1.3)}}
 @keyframes cs-dolphin{0%,22%,100%{transform:translateY(0) rotate(0deg);opacity:0} 7%{transform:translateY(-26px) rotate(-22deg);opacity:1} 14%{transform:translateY(-14px) rotate(12deg);opacity:0.8} 18%{transform:translateY(0) rotate(0deg);opacity:0}}
+@keyframes cs-brand-fade{0%{opacity:0}20%{opacity:1}100%{opacity:.18}}
 @keyframes cs-dolphin2{0%,24%,100%{transform:translateY(0) rotate(0deg);opacity:0} 8%{transform:translateY(-20px) rotate(-18deg);opacity:0.85} 15%{transform:translateY(-8px) rotate(10deg);opacity:0.6} 20%{transform:translateY(0) rotate(0deg);opacity:0}}
 `
 
@@ -483,6 +484,22 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
 
           {/* Bottom water depth */}
           <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
+
+          {/* &done watermark — painter's signature ghosted into the scene */}
+          <text
+            x="187.5"
+            y="100"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#ffffff"
+            fontFamily="'Manrope', sans-serif"
+            fontSize="28"
+            fontWeight="700"
+            letterSpacing="5"
+            style={{ animation: "cs-brand-fade 3s ease-out forwards" }}
+          >
+            &amp;done
+          </text>
 
         </g>
       </svg>
