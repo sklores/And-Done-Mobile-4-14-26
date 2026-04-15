@@ -109,12 +109,12 @@ export default function App() {
           style={{
             background: coastal.statusBarBg,
             color: "#fff",
-            fontSize: 10,
+            fontSize: isMobile ? 13 : 10,
             fontWeight: 700,
-            padding: "6px 14px",
+            padding: isMobile ? "10px 18px" : "6px 14px",
             display: "flex",
             justifyContent: "space-between",
-            letterSpacing: ".08em",
+            letterSpacing: ".06em",
           }}
         >
           <span>{businessName}</span>
@@ -133,7 +133,7 @@ export default function App() {
           </span>
         </div>
 
-        <CoastalScene weather={weatherData.condition} />
+        <CoastalScene weather={weatherData.condition} sceneHeight={isMobile ? 140 : 200} />
         <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
         <KpiBar
