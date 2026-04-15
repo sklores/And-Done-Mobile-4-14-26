@@ -57,7 +57,7 @@ export const coastal = {
     label: "rgba(255,255,255,.45)",
   },
 
-  // Tile palettes
+  // Tile palettes (kept for reference)
   tiles: {
     green: {
       bg: "#B8E4D0",
@@ -124,21 +124,31 @@ export const coastal = {
   phoneRadius: 36,
 };
 
-// 8-stop score mapping
+// Full 8-stop gradient: score 1 (worst/red) → 8 (best/deep teal-green)
+// Each stop is visually distinct — no two adjacent scores share the same hue.
+const TILE_GRADIENT: TileStop[] = [
+  // 1 — Worst (deep coral-red)
+  { bg: "#FF8888", label: "#5C0010", value: "#720012", status: "#620010", statusText: "#620010" },
+  // 2 — Critical (salmon)
+  { bg: "#FFAAA0", label: "#780A14", value: "#920E1A", status: "#880E18", statusText: "#880E18" },
+  // 3 — Bad (warm amber-orange)
+  { bg: "#FFBC72", label: "#7A3200", value: "#8A3C00", status: "#7A3200", statusText: "#7A3200" },
+  // 4 — Alert (golden yellow)
+  { bg: "#FFE070", label: "#6A4800", value: "#7A5200", status: "#6A4800", statusText: "#6A4800" },
+  // 5 — Caution (pale yellow-green, neutral transition)
+  { bg: "#E8F5A8", label: "#4A5C10", value: "#526618", status: "#4A5C10", statusText: "#4A5C10" },
+  // 6 — Watch (light seafoam)
+  { bg: "#B8EDD4", label: "#1A6040", value: "#147248", status: "#1A6840", statusText: "#1A6840" },
+  // 7 — Good (medium coastal mint)
+  { bg: "#7ED8B4", label: "#0A4A2A", value: "#0C5832", status: "#0A5230", statusText: "#0A5230" },
+  // 8 — Excellent (rich deep teal-green)
+  { bg: "#4EC89A", label: "#083820", value: "#0A4828", status: "#084020", statusText: "#084020" },
+];
+
 export function tileForScore(score: number): TileStop {
-  if (score <= 2) return coastal.tiles.red;
-  if (score <= 5) return coastal.tiles.yellow;
-  return coastal.tiles.green;
+  const idx = Math.min(8, Math.max(1, Math.round(score))) - 1;
+  return TILE_GRADIENT[idx];
 }
 
-export const spectrum: TileStop[] = [
-  coastal.tiles.red,    // 1
-  coastal.tiles.red,    // 2
-  coastal.tiles.yellow, // 3
-  coastal.tiles.yellow, // 4
-  coastal.tiles.yellow, // 5
-  coastal.tiles.green,  // 6
-  coastal.tiles.green,  // 7
-  coastal.tiles.green,  // 8
-];
+export const spectrum: TileStop[] = TILE_GRADIENT;
  
