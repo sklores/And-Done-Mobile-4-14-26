@@ -60,12 +60,13 @@ export function MarqueeFeed() {
         style={{
           overflow: "hidden",
           whiteSpace: "nowrap",
-          padding: "6px 0",
+          padding: "11px 0",
           color: coastal.marquee.text,
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 500,
           cursor: "pointer",
           userSelect: "none",
+          letterSpacing: ".01em",
         }}
       >
         <div

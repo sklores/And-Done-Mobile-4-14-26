@@ -17,7 +17,9 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
       onClick={onClick}
       style={{
         background: s.bg,
-        padding: "10px 14px",
+        borderRadius: 10,
+        margin: "6px",
+        padding: "14px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -28,7 +30,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
       <div
         style={{
           color: s.label,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           letterSpacing: ".1em",
           textTransform: "uppercase",
@@ -41,11 +43,10 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
         {valueSub && (
           <div
             style={{
-              color: s.sub,
-              fontSize: 13,
+              color: s.label,
+              fontSize: 14,
               fontWeight: 700,
               fontFamily: coastal.fonts.condensed,
-              opacity: 0.85,
             }}
           >
             {valueSub}
@@ -54,9 +55,10 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
         <div
           style={{
             color: s.value,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: 800,
             fontFamily: coastal.fonts.condensed,
+            lineHeight: 1,
           }}
         >
           {value}

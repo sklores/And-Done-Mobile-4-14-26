@@ -43,18 +43,18 @@ export const coastal = {
     palmBase: "#C4922A",
   },
 
-  // Bars
+  // Bars — full-width light KPI tiles (same family as grid tiles)
   salesBar: {
-    bg: "#383C40",
-    label: "rgba(255,255,255,.5)",
-    sub: "#7BBFAA",
-    value: "#fff",
+    bg: "#DCE6E6",
+    label: "#8A9C9C",
+    sub: "#5BA090",
+    value: "#1A2E28",
   },
   netBar: {
-    bg: "#2E3235",
-    value: "#7BBFAA",
-    sub: "#7BBFAA",
-    label: "rgba(255,255,255,.45)",
+    bg: "#DCE6E6",
+    value: "#5BA090",
+    sub: "#5BA090",
+    label: "#8A9C9C",
   },
 
   // Tile palettes (kept for reference)
@@ -82,10 +82,10 @@ export const coastal = {
     } as TileStop,
   },
 
-  // Marquee
+  // Marquee — intentional darker neutral, distinct from status bar
   marquee: {
-    bg: "#383C40",
-    text: "rgba(255,255,255,.6)",
+    bg: "#3A4045",
+    text: "rgba(255,255,255,.72)",
   },
   toggle: {
     onBg: "#7BBFAA",
