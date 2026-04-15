@@ -83,26 +83,54 @@ export async function getTodaySales(creds) {
 export async function getTodayLabor(creds) {
   const token = await getToken(creds);
 
-  // Toast labor API — time entries for today
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    "Toast-Restaurant-External-ID": creds.guid,
+  };
+
+  // ── Fetch employee wage rates (best-effort) so open shifts can accrue cost.
+  // Toast's timeEntries response often omits hourlyWage for clocked-in employees,
+  // so we build our own guid → wage map from the employees endpoint.
+  const employeeWages = new Map(); // employeeGuid → hourly wage (number)
+  try {
+    const empRes = await fetch(`${BASE}/labor/v1/employees`, { headers: authHeaders });
+    if (empRes.ok) {
+      const employees = await empRes.json();
+      if (Array.isArray(employees)) {
+        for (const emp of employees) {
+          if (!emp.guid) continue;
+          // wageOverrides is an array of per-job wage objects { jobReference, wage }
+          if (Array.isArray(emp.wageOverrides) && emp.wageOverrides.length > 0) {
+            const wages = emp.wageOverrides
+              .map((w) => (typeof w.wage === "number" ? w.wage : parseFloat(w.wage ?? "0")))
+              .filter((w) => w > 0);
+            if (wages.length > 0) employeeWages.set(emp.guid, Math.max(...wages));
+          } else if (typeof emp.hourlyWage === "number" && emp.hourlyWage > 0) {
+            employeeWages.set(emp.guid, emp.hourlyWage);
+          }
+        }
+      }
+    }
+  } catch (_) {
+    // employees endpoint unavailable — open-shift wages will fall back to
+    // the hourlyWage field on the time entry (if present)
+  }
+
+  // ── Toast labor API — time entries for today ─────────────────────────────
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const startISO = startOfDay.toISOString();
   const endISO = now.toISOString();
 
   const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startISO)}&endDate=${encodeURIComponent(endISO)}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Toast-Restaurant-External-ID": creds.guid,
-    },
-  });
+  const res = await fetch(url, { headers: authHeaders });
 
   if (!res.ok) throw new Error(`toast labor ${res.status}`);
   const entries = await res.json();
 
   // Toast only populates regularHours/regularPay AFTER clock-out.
-  // For open shifts (outDate === null), accrue cost from inDate → now
-  // using the employee's hourlyWage so the tile reflects live labor burn.
+  // For open shifts (outDate === null), accrue cost from inDate → now.
+  // Wage priority: time-entry hourlyWage → employees map → 0
   const nowMs = Date.now();
   let closedCost = 0;
   let closedHours = 0;
@@ -111,9 +139,16 @@ export async function getTodayLabor(creds) {
   let openCount = 0;
   const employeeSet = new Set();
 
+  /** Parse a wage value that might be number, numeric string, or missing */
+  const parseWage = (raw) =>
+    typeof raw === "number" && raw > 0 ? raw
+    : typeof raw === "string" && parseFloat(raw) > 0 ? parseFloat(raw)
+    : 0;
+
   if (Array.isArray(entries)) {
     for (const e of entries) {
-      if (e.employeeReference?.guid) employeeSet.add(e.employeeReference.guid);
+      const empGuid = e.employeeReference?.guid;
+      if (empGuid) employeeSet.add(empGuid);
 
       if (e.outDate) {
         closedCost +=
@@ -122,12 +157,15 @@ export async function getTodayLabor(creds) {
         closedHours +=
           (typeof e.regularHours === "number" ? e.regularHours : 0) +
           (typeof e.overtimeHours === "number" ? e.overtimeHours : 0);
-      } else if (e.inDate && typeof e.hourlyWage === "number") {
-        const inMs = new Date(e.inDate).getTime();
-        const hoursSoFar = Math.max(0, (nowMs - inMs) / 3_600_000);
-        openHours += hoursSoFar;
-        openCost += hoursSoFar * e.hourlyWage;
-        openCount++;
+      } else if (e.inDate) {
+        // Resolve wage: prefer the entry's own hourlyWage, then the employees map
+        const wage = parseWage(e.hourlyWage) || (empGuid ? (employeeWages.get(empGuid) ?? 0) : 0);
+        if (wage > 0) {
+          const hoursSoFar = Math.max(0, (nowMs - new Date(e.inDate).getTime()) / 3_600_000);
+          openHours += hoursSoFar;
+          openCost += hoursSoFar * wage;
+          openCount++;
+        }
       }
     }
   }
@@ -153,17 +191,20 @@ const BOH_KEYWORDS = /cook|kitchen|prep|dish|chef|line|back|grill|fry|saute|saut
 export async function getTodayLaborDetail(creds) {
   const token = await getToken(creds);
 
-  // Fetch job definitions so we can classify FOH vs BOH by title
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    "Toast-Restaurant-External-ID": creds.guid,
+  };
+
+  // ── Fetch job definitions (FOH/BOH classification) and employee wages in parallel
   let jobMap = new Map(); // guid → { title, isFOH }
-  try {
-    const jobsRes = await fetch(`${BASE}/labor/v1/jobs`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Toast-Restaurant-External-ID": creds.guid,
-      },
-    });
-    if (jobsRes.ok) {
-      const jobs = await jobsRes.json();
+  const employeeWages = new Map(); // employeeGuid → hourly wage
+
+  await Promise.allSettled([
+    // Jobs — for FOH/BOH split
+    fetch(`${BASE}/labor/v1/jobs`, { headers: authHeaders }).then(async (r) => {
+      if (!r.ok) return;
+      const jobs = await r.json();
       if (Array.isArray(jobs)) {
         for (const j of jobs) {
           const title = j.title ?? "";
@@ -171,19 +212,32 @@ export async function getTodayLaborDetail(creds) {
           jobMap.set(j.guid, { title, isFOH });
         }
       }
-    }
-  } catch (_) { /* jobs API unavailable — skip FOH/BOH split */ }
+    }),
+    // Employees — for open-shift wage lookup
+    fetch(`${BASE}/labor/v1/employees`, { headers: authHeaders }).then(async (r) => {
+      if (!r.ok) return;
+      const employees = await r.json();
+      if (Array.isArray(employees)) {
+        for (const emp of employees) {
+          if (!emp.guid) continue;
+          if (Array.isArray(emp.wageOverrides) && emp.wageOverrides.length > 0) {
+            const wages = emp.wageOverrides
+              .map((w) => (typeof w.wage === "number" ? w.wage : parseFloat(w.wage ?? "0")))
+              .filter((w) => w > 0);
+            if (wages.length > 0) employeeWages.set(emp.guid, Math.max(...wages));
+          } else if (typeof emp.hourlyWage === "number" && emp.hourlyWage > 0) {
+            employeeWages.set(emp.guid, emp.hourlyWage);
+          }
+        }
+      }
+    }),
+  ]);
 
-  // Fetch today's time entries
+  // ── Fetch today's time entries ───────────────────────────────────────────
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startOfDay.toISOString())}&endDate=${encodeURIComponent(now.toISOString())}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Toast-Restaurant-External-ID": creds.guid,
-    },
-  });
+  const res = await fetch(url, { headers: authHeaders });
   if (!res.ok) throw new Error(`toast labor ${res.status}`);
   const entries = await res.json();
 
@@ -194,11 +248,19 @@ export async function getTodayLaborDetail(creds) {
   let hasOT = false;
   const employeeSet = new Set();
 
+  const parseWage = (raw) =>
+    typeof raw === "number" && raw > 0 ? raw
+    : typeof raw === "string" && parseFloat(raw) > 0 ? parseFloat(raw)
+    : 0;
+
   if (Array.isArray(entries)) {
     for (const e of entries) {
-      if (e.employeeReference?.guid) employeeSet.add(e.employeeReference.guid);
+      const empGuid = e.employeeReference?.guid;
+      if (empGuid) employeeSet.add(empGuid);
 
-      const isSalaried = !e.hourlyWage || e.hourlyWage === 0;
+      // Resolve wage: entry field → employees map → 0
+      const wage = parseWage(e.hourlyWage) || (empGuid ? (employeeWages.get(empGuid) ?? 0) : 0);
+      const isSalaried = wage === 0; // treat no-wage entries as salaried placeholder
       const jobGuid = e.jobReference?.guid;
       const job = jobMap.get(jobGuid);
 
@@ -208,9 +270,9 @@ export async function getTodayLaborDetail(creds) {
         entryCost = (e.regularPay ?? 0) + (e.overtimePay ?? 0);
         entryHours = (e.regularHours ?? 0) + (e.overtimeHours ?? 0);
         if ((e.overtimePay ?? 0) > 0 || (e.overtimeHours ?? 0) > 0) hasOT = true;
-      } else if (e.inDate && e.hourlyWage > 0) {
+      } else if (e.inDate && wage > 0) {
         const hrs = Math.max(0, (nowMs - new Date(e.inDate).getTime()) / 3_600_000);
-        entryCost = hrs * e.hourlyWage;
+        entryCost = hrs * wage;
         entryHours = hrs;
       }
 
