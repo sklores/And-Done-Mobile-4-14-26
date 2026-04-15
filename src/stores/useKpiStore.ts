@@ -101,8 +101,8 @@ const placeholderTiles: Kpi[] = [
   { key: "labor",   label: "Labor",      value: "--",    status: "Loading",   score: 5 },
   { key: "prime",   label: "Prime Cost", value: "--",    status: "Loading",   score: 5 },
   { key: "fixed",   label: "Fixed Cost", value: "--",    status: "Loading",   score: 5 },
-  { key: "reviews", label: "Reviews",    value: "4.8",   status: "Excellent", score: 8 },
-  { key: "social",  label: "Social",     value: "+142",  status: "Watch",     score: 4 },
+  { key: "reviews", label: "Reviews",    value: "4.8 ★", status: "Excellent", score: 8 },
+  { key: "social",  label: "Social",     value: "+142",  status: "Alert",     score: 4 },
 ];
 
 export const useKpiStore = create<KpiState>((set) => ({

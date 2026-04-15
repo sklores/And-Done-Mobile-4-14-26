@@ -14,6 +14,8 @@ import { PrimeCostDrillDown } from "./components/PrimeCostDrillDown";
 import { FixedCostDrillDown } from "./components/FixedCostDrillDown";
 import { NetDrillDown } from "./components/NetDrillDown";
 import { COGSDrillDown } from "./components/COGSDrillDown";
+import { ReviewsDrillDown } from "./components/ReviewsDrillDown";
+import { SocialDrillDown } from "./components/SocialDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -149,6 +151,14 @@ export default function App() {
       />
       <COGSDrillDown
         open={drillKey === "cogs"}
+        onClose={() => setDrillKey(null)}
+      />
+      <ReviewsDrillDown
+        open={drillKey === "reviews"}
+        onClose={() => setDrillKey(null)}
+      />
+      <SocialDrillDown
+        open={drillKey === "social"}
         onClose={() => setDrillKey(null)}
       />
     </div>
