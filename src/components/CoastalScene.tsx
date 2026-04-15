@@ -98,6 +98,9 @@ const SCENE_CSS = `
 @keyframes cs-twink{0%,100%{opacity:.85}50%{opacity:.15}}
 @keyframes cs-shark1{0%{transform:translateX(0)}50%{transform:translateX(-28px)}100%{transform:translateX(0)}}
 @keyframes cs-shark2{0%{transform:translateX(0)}50%{transform:translateX(22px)}100%{transform:translateX(0)}}
+@keyframes cs-shark3{0%{transform:translateX(0)}50%{transform:translateX(-20px)}100%{transform:translateX(0)}}
+@keyframes cs-shark4{0%{transform:translateX(0)}50%{transform:translateX(26px)}100%{transform:translateX(0)}}
+@keyframes cs-shark5{0%{transform:translateX(0)}50%{transform:translateX(-16px)}100%{transform:translateX(0)}}
 @keyframes cs-rain{0%{transform:translateY(-30px)}100%{transform:translateY(210px) translateX(20px)}}
 @keyframes cs-snow{0%{transform:translateY(-10px)}50%{transform:translateY(80px) translateX(8px)}100%{transform:translateY(175px) translateX(-4px)}}
 @keyframes cs-wind{0%{opacity:0;transform:translateX(-60px)}40%{opacity:.32}100%{opacity:0;transform:translateX(420px)}}
@@ -118,6 +121,39 @@ const RAIN_DROPS: [number, number][] = [
   [55,38],[110,45],[165,30],[220,42],[275,35],[320,48],
   [18,55],[90,60],[160,52],[230,58],[310,40],
 ]
+// 20 bird slots — rendered first-N based on labor score (3=good → 20=bad)
+const BIRD_SLOTS = [
+  { y: 44, spd: 22, dl: 2,  s: 1.0, sw: 1.1 },
+  { y: 32, spd: 30, dl: 11, s: 0.9, sw: 0.9 },
+  { y: 52, spd: 38, dl: 18, s: 0.85,sw: 0.85},
+  { y: 28, spd: 25, dl: 5,  s: 1.0, sw: 1.0 },
+  { y: 48, spd: 20, dl: 8,  s: 0.9, sw: 0.9 },
+  { y: 36, spd: 33, dl: 14, s: 0.85,sw: 0.85},
+  { y: 56, spd: 28, dl: 3,  s: 1.0, sw: 0.9 },
+  { y: 24, spd: 18, dl: 9,  s: 1.1, sw: 1.0 },
+  { y: 40, spd: 35, dl: 20, s: 0.8, sw: 0.8 },
+  { y: 60, spd: 24, dl: 6,  s: 0.9, sw: 0.85},
+  { y: 20, spd: 40, dl: 15, s: 0.75,sw: 0.75},
+  { y: 50, spd: 26, dl: 1,  s: 0.95,sw: 0.9 },
+  { y: 34, spd: 32, dl: 12, s: 0.85,sw: 0.85},
+  { y: 58, spd: 22, dl: 7,  s: 0.9, sw: 0.85},
+  { y: 22, spd: 29, dl: 16, s: 0.8, sw: 0.8 },
+  { y: 46, spd: 36, dl: 4,  s: 0.85,sw: 0.85},
+  { y: 30, spd: 21, dl: 10, s: 1.0, sw: 0.9 },
+  { y: 62, spd: 27, dl: 19, s: 0.75,sw: 0.75},
+  { y: 38, spd: 31, dl: 13, s: 0.9, sw: 0.85},
+  { y: 26, spd: 23, dl: 17, s: 0.95,sw: 0.9 },
+]
+
+// 5 shark positions — rendered first-N based on expenses score (0=good → 5=bad)
+const SHARK_DEFS = [
+  { x: 262, fy: WL+20, ty: WL+11, hw: 9,  rx: 11, ry: 3.5, anim: 'cs-shark1', dur: 9,  dl: 0 },
+  { x: 316, fy: WL+26, ty: WL+19, hw: 8,  rx: 9,  ry: 3.0, anim: 'cs-shark2', dur: 13, dl: 4 },
+  { x: 236, fy: WL+24, ty: WL+16, hw: 8,  rx: 10, ry: 3.2, anim: 'cs-shark3', dur: 11, dl: 2 },
+  { x: 292, fy: WL+30, ty: WL+22, hw: 7,  rx: 8,  ry: 2.8, anim: 'cs-shark4', dur: 15, dl: 7 },
+  { x: 340, fy: WL+22, ty: WL+15, hw: 8,  rx: 9,  ry: 3.0, anim: 'cs-shark5', dur: 10, dl: 5 },
+]
+
 const SNOW_FLAKES: [number, number][] = [
   [45,5],[100,12],[160,3],[220,8],[280,14],[335,6],
   [70,20],[130,25],[190,18],[250,22],[305,28],
@@ -174,10 +210,8 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const lx    = 52
   const lBase = WL
 
-  // Labor → birds (count + opacity)
-  const laborNorm  = (laborScore - 1) / 7
-  const birdCount  = laborScore >= 6 ? 3 : laborScore >= 4 ? 2 : laborScore >= 2 ? 1 : 0
-  const birdOpBase = .15 + laborNorm * .65
+  // Labor → birds: high labor % (bad score) = more birds. 3 (good) → 20 (bad).
+  const birdCount = isNight ? 0 : Math.round(3 + (8 - laborScore) / 7 * 17)
 
   // COGS → water clarity (murky tint when bad)
   const murkyOp = Math.max(0, (5 - cogsScore) / 6) * 0.22
@@ -191,10 +225,10 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const bx      = 195
   const by      = Math.round(14 + (1 - revNorm) * 44)  // 14 (excellent) → 58 (critical)
 
-  // Expenses → sharks (more visible when bad)
-  const sharkVis = expScore <= 2 ? 3 : expScore <= 4 ? 2 : expScore <= 6 ? 1 : 0
-  const shark1Op = sharkVis >= 2 ? (isNight ? .55 : .75) : sharkVis >= 1 ? (isNight ? .28 : .42) : 0
-  const shark2Op = sharkVis >= 3 ? (isNight ? .42 : .60) : sharkVis >= 2 ? (isNight ? .30 : .48) : 0
+  // Expenses → sharks: 0 = good (no sharks), 5 = bad (5 sharks).
+  const SHARK_COUNT_MAP = [0, 5, 5, 4, 3, 2, 1, 0, 0]
+  const sharkCount = SHARK_COUNT_MAP[expScore] ?? 0
+  const sharkOp = isNight ? 0.5 : 0.75
 
   // Social → dolphins (active + frequency when good)
   const socNorm       = (socScore - 1) / 7
@@ -313,27 +347,13 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
             <rect x={bx-7} y={by+43} width="14" height="6" rx="2"   fill="#A07848" opacity={.55} />
           </g>
 
-          {/* Birds — count + opacity = Labor score */}
-          {!isNight && birdCount >= 1 && (
-            <g style={{ animation: `cs-bfly 22s linear infinite 2s` }} opacity={birdOpBase}>
-              <path d="M0,44 Q3.5,39 7,44 Q10.5,39 14,44"  stroke="#4A6A80" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-              <path d="M18,38 Q21,33 24,38 Q27,33 30,38"   stroke="#4A6A80" strokeWidth=".9"  fill="none" strokeLinecap="round" />
-              <path d="M34,42 Q37,37 40,42 Q43,37 46,42"   stroke="#4A6A80" strokeWidth=".9"  fill="none" strokeLinecap="round" />
+          {/* Birds — Labor score: 3 (good/low labor) → 20 (bad/high labor) */}
+          {BIRD_SLOTS.slice(0, birdCount).map((b, i) => (
+            <g key={i} style={{ animation: `cs-bfly ${b.spd}s linear infinite ${b.dl}s` }}>
+              <path d={`M0,${b.y} Q${3.5*b.s},${b.y-5*b.s} ${7*b.s},${b.y} Q${10.5*b.s},${b.y-5*b.s} ${14*b.s},${b.y}`}
+                stroke="#4A6A80" strokeWidth={b.sw} fill="none" strokeLinecap="round" />
             </g>
-          )}
-          {!isNight && birdCount >= 2 && (
-            <g style={{ animation: `cs-bfly2 30s linear infinite 11s` }} opacity={birdOpBase * .7}>
-              <path d="M0,32 Q3,27 6,32 Q9,27 12,32"     stroke="#4A6A80" strokeWidth=".9" fill="none" strokeLinecap="round" />
-              <path d="M16,36 Q19,31 22,36 Q25,31 28,36" stroke="#4A6A80" strokeWidth=".8" fill="none" strokeLinecap="round" />
-            </g>
-          )}
-          {!isNight && birdCount >= 3 && (
-            <g style={{ animation: `cs-bfly3 38s linear infinite 18s` }} opacity={birdOpBase * .5}>
-              <path d="M0,52 Q3,47 6,52 Q9,47 12,52"      stroke="#4A6A80" strokeWidth=".8" fill="none" strokeLinecap="round" />
-              <path d="M14,48 Q17,43 20,48 Q23,43 26,48"  stroke="#4A6A80" strokeWidth=".7" fill="none" strokeLinecap="round" />
-              <path d="M28,54 Q31,49 34,54 Q37,49 40,54"  stroke="#4A6A80" strokeWidth=".7" fill="none" strokeLinecap="round" />
-            </g>
-          )}
+          ))}
 
           {/* Horizon haze */}
           <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />
@@ -376,19 +396,15 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           <path d={`M100,${WL+14-Math.round(amp*.1)} C145,${WL+14-Math.round(amp*.2)} 195,${WL+14+Math.round(amp*.12)} 245,${WL+14-Math.round(amp*.1)} C295,${WL+14-Math.round(amp*.2)} 340,${WL+14+Math.round(amp*.12)} 375,${WL+14}`}
             stroke="white" strokeWidth={.6} fill="none" opacity={(parseFloat(foamOp)*.55).toFixed(2)} />
 
-          {/* Sharks — Expenses score (more fins when expenses are bad) */}
-          {shark1Op > 0 && (
-            <g style={{ animation: `cs-shark1 9s ease-in-out infinite` }} opacity={shark1Op}>
-              <path d={`M268,${WL+20} L277,${WL+11} L286,${WL+20}`} fill={isNight ? '#0A2030' : '#1A3A50'} />
-              <ellipse cx="277" cy={WL+21} rx="11" ry="3.5" fill={isNight ? '#0A2030' : '#1A3A50'} opacity={.36} />
+          {/* Sharks — Expenses: 0 = good (no sharks), 5 = critical (5 sharks) */}
+          {SHARK_DEFS.slice(0, sharkCount).map((sk, i) => (
+            <g key={i} style={{ animation: `${sk.anim} ${sk.dur}s ease-in-out infinite ${sk.dl}s` }} opacity={sharkOp}>
+              <path d={`M${sk.x},${sk.fy} L${sk.x+sk.hw},${sk.ty} L${sk.x+sk.hw*2},${sk.fy}`}
+                fill={isNight ? '#0A2030' : '#1A3A50'} />
+              <ellipse cx={sk.x+sk.hw} cy={sk.fy+1} rx={sk.rx} ry={sk.ry}
+                fill={isNight ? '#0A2030' : '#1A3A50'} opacity={.32} />
             </g>
-          )}
-          {shark2Op > 0 && (
-            <g style={{ animation: `cs-shark2 13s ease-in-out infinite 4s` }} opacity={shark2Op}>
-              <path d={`M320,${WL+26} L327,${WL+19} L334,${WL+26}`} fill={isNight ? '#0A2030' : '#1A3A50'} />
-              <ellipse cx="327" cy={WL+27} rx="9" ry="3" fill={isNight ? '#0A2030' : '#1A3A50'} opacity={.3} />
-            </g>
-          )}
+          ))}
 
           {/* Sailboat */}
           <g style={{ animation: `cs-bob 5.5s ease-in-out infinite` }}>

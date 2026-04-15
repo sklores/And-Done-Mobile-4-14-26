@@ -44,6 +44,15 @@ export default defineConfig(({ mode }) => {
               });
             }
           });
+
+          server.middlewares.use("/api/weather", async (_req, res) => {
+            try {
+              const { default: handler } = await import("./api/weather.mjs" as string);
+              await handler(_req, res);
+            } catch (e) {
+              respond(res, 200, { condition: "clear", error: e instanceof Error ? e.message : String(e) });
+            }
+          });
         },
       },
     ],
