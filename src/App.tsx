@@ -64,6 +64,7 @@ export default function App() {
 
   return (
     <div
+      className="phone-shell-outer"
       style={{
         minHeight: "100vh",
         background: coastal.pageBg,
@@ -75,6 +76,7 @@ export default function App() {
       }}
     >
       <div
+        className="phone-shell-inner"
         style={{
           width: 375,
           maxWidth: "100%",

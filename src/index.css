@@ -18,3 +18,21 @@ button { font-family: inherit; }
   0%   { filter: brightness(1.4); }
   100% { filter: brightness(1); }
 }
+
+/* ── Mobile: strip the desktop phone-mockup shell ───────────────────────── */
+@media (max-width: 480px) {
+  .phone-shell-outer {
+    padding: 0 !important;
+    background: #F2F7F6 !important;
+    align-items: stretch !important;
+    min-height: 100dvh !important;
+  }
+  .phone-shell-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 100dvh !important;
+  }
+}

@@ -11,25 +11,25 @@ type TabDef = {
   label: string;
   icon: string;
   bg: string;
-  color: string;
+  activeTxt: string;
 };
 
 const TABS: TabDef[] = [
-  { key: "invoices", label: "Invoices", icon: "📋", bg: "#2A3C48",     color: "#fff" },
-  { key: "log",      label: "Log",      icon: "📝", bg: "#1A4A36",     color: "#fff" },
-  { key: "gizmo",    label: "Gizmo",    icon: "⚡", bg: "#3D2880",     color: "#fff" },
+  { key: "invoices", label: "Invoices", icon: "📋", bg: "#2A3C48", activeTxt: "#fff" },
+  { key: "log",      label: "Log",      icon: "📝", bg: "#1A4A36", activeTxt: "#fff" },
+  { key: "gizmo",    label: "Gizmo",    icon: "⚡", bg: "#1A2E28", activeTxt: "#7BBFAA" },
 ];
 
 export function BottomTabs({ onOpen }: Props) {
   return (
     <div
       style={{
-        padding: "10px 14px 16px",
-        background: coastal.tabs.bg,
-        borderTop: "1px solid rgba(0,0,0,.06)",
         display: "flex",
-        gap: 8,
+        background: coastal.tabs.bg,
+        borderTop: "1px solid rgba(0,0,0,.07)",
         fontFamily: coastal.fonts.manrope,
+        padding: "6px 10px 10px",
+        gap: 7,
       }}
     >
       {TABS.map((t) => (
@@ -39,27 +39,23 @@ export function BottomTabs({ onOpen }: Props) {
           style={{
             flex: 1,
             background: t.bg,
-            color: t.color,
+            color: t.activeTxt,
             border: "none",
-            borderRadius: 14,
-            padding: "12px 0",
+            borderRadius: 10,
+            padding: "9px 0 8px",
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
-            gap: 4,
+            justifyContent: "center",
+            gap: 5,
             cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            transition: "transform 0.1s, box-shadow 0.1s",
+            fontFamily: coastal.fonts.manrope,
           }}
-          onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.96)"; }}
-          onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
         >
-          <span style={{ fontSize: 20 }}>{t.icon}</span>
+          <span style={{ fontSize: 13, lineHeight: 1 }}>{t.icon}</span>
           <span style={{
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 800,
-            letterSpacing: ".08em",
+            letterSpacing: ".06em",
             textTransform: "uppercase",
           }}>
             {t.label}
