@@ -151,12 +151,16 @@ export async function getTodayLabor(creds) {
       if (empGuid) employeeSet.add(empGuid);
 
       if (e.outDate) {
-        closedCost +=
-          (typeof e.regularPay === "number" ? e.regularPay : 0) +
-          (typeof e.overtimePay === "number" ? e.overtimePay : 0);
-        closedHours +=
-          (typeof e.regularHours === "number" ? e.regularHours : 0) +
-          (typeof e.overtimeHours === "number" ? e.overtimeHours : 0);
+        const hours = (e.regularHours ?? 0) + (e.overtimeHours ?? 0);
+        closedHours += hours;
+        // Toast often leaves regularPay null even after clock-out.
+        // Fall back to hours × wage when pay is missing.
+        if (typeof e.regularPay === "number" || typeof e.overtimePay === "number") {
+          closedCost += (e.regularPay ?? 0) + (e.overtimePay ?? 0);
+        } else {
+          const wage = parseWage(e.hourlyWage) || (empGuid ? (employeeWages.get(empGuid) ?? 0) : 0);
+          closedCost += hours * wage;
+        }
       } else if (e.inDate) {
         // Resolve wage: prefer the entry's own hourlyWage, then the employees map
         const wage = parseWage(e.hourlyWage) || (empGuid ? (employeeWages.get(empGuid) ?? 0) : 0);
@@ -267,8 +271,13 @@ export async function getTodayLaborDetail(creds) {
       let entryCost = 0, entryHours = 0;
 
       if (e.outDate) {
-        entryCost = (e.regularPay ?? 0) + (e.overtimePay ?? 0);
         entryHours = (e.regularHours ?? 0) + (e.overtimeHours ?? 0);
+        // Fall back to hours × wage if Toast left regularPay null
+        if (typeof e.regularPay === "number" || typeof e.overtimePay === "number") {
+          entryCost = (e.regularPay ?? 0) + (e.overtimePay ?? 0);
+        } else {
+          entryCost = entryHours * wage;
+        }
         if ((e.overtimePay ?? 0) > 0 || (e.overtimeHours ?? 0) > 0) hasOT = true;
       } else if (e.inDate && wage > 0) {
         const hrs = Math.max(0, (nowMs - new Date(e.inDate).getTime()) / 3_600_000);
