@@ -20,6 +20,9 @@ button { font-family: inherit; }
     overflow-y: auto;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
+    /* Respect iPhone notch / home bar */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 

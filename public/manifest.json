@@ -1,0 +1,18 @@
+{
+  "name": "And Done — GCDC Dashboard",
+  "short_name": "And Done",
+  "description": "Real-time restaurant dashboard for GCDC Grilled Cheese Bar",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F7F6",
+  "theme_color": "#2E3235",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
