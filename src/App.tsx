@@ -12,6 +12,7 @@ import { LaborDrillDown } from "./components/LaborDrillDown";
 import { SalesDrillDown } from "./components/SalesDrillDown";
 import { PrimeCostDrillDown } from "./components/PrimeCostDrillDown";
 import { FixedCostDrillDown } from "./components/FixedCostDrillDown";
+import { NetDrillDown } from "./components/NetDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -112,7 +113,14 @@ export default function App() {
         <CoastalScene weather={weatherData.condition} />
         <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
-        <KpiBar kind="net" label={net.label} value={net.value} sub={net.sub} />
+        <KpiBar
+          kind="net"
+          label={net.label}
+          value={net.value}
+          valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
+          sub="today"
+          onClick={() => setDrillKey("net" as KpiKey)}
+        />
         <MarqueeFeed />
         <BottomTabs active={tab} onChange={setTab} />
       </div>
@@ -132,6 +140,10 @@ export default function App() {
       />
       <FixedCostDrillDown
         open={drillKey === "fixed"}
+        onClose={() => setDrillKey(null)}
+      />
+      <NetDrillDown
+        open={drillKey === "net"}
         onClose={() => setDrillKey(null)}
       />
     </div>

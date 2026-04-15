@@ -27,9 +27,35 @@ export type LaborDetail = {
   tipPct: number | null;
 };
 
+export type NetDetail = {
+  salesDollars: number;
+  laborDollars: number;
+  cogsDollars: number;
+  primeDollars: number;
+  primePct: number;
+  fixedDollars: number;
+  fixedPct: number;
+  rentDollars: number;
+  amortizedDollars: number;
+  mrDollars: number;
+  netDollars: number;
+  netPct: number;
+};
+
+function netScore(pct: number): number {
+  if (pct >= 20) return 8;
+  if (pct >= 15) return 7;
+  if (pct >= 10) return 6;
+  if (pct >=  5) return 5;
+  if (pct >=  2) return 4;
+  if (pct >=  0) return 3;
+  return 2; // losing money
+}
+
 type KpiState = {
   sales: { value: number; label: string; sub: string };
-  net: { value: string; label: string; sub: string };
+  net: { value: string; dollars: number; label: string; sub: string; score: number };
+  netDetail: NetDetail | null;
   tiles: Kpi[];
   laborDetail: LaborDetail | null;
   salesDetail: SalesDetailResult | null;
@@ -80,7 +106,8 @@ const placeholderTiles: Kpi[] = [
 
 export const useKpiStore = create<KpiState>((set) => ({
   sales: { value: 0, label: "Sales", sub: "Today" },
-  net: { value: "18.2%", label: "Net", sub: "Today" },
+  net: { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 },
+  netDetail: null,
   tiles: placeholderTiles,
   laborDetail: null,
   salesDetail: null,
@@ -175,8 +202,43 @@ export const useKpiStore = create<KpiState>((set) => ({
         return t;
       });
 
+      // ── Net Profit ─────────────────────────────────────────────────
+      const laborCostFinal  = laborResult?.totalLaborCost ?? 0;
+      const cogsDollars     = totalSales * (COGS_PCT_MOCK / 100);
+      const primeDollars    = laborCostFinal + cogsDollars;
+      const netDollars      = totalSales - primeDollars - totalFixed;
+      const netPct          = totalSales > 0 ? (netDollars / totalSales) * 100 : 0;
+      const nScore          = totalSales > 0 ? netScore(netPct) : 5;
+
+      const netDetail: NetDetail | null = totalSales > 0 ? {
+        salesDollars:     totalSales,
+        laborDollars:     laborCostFinal,
+        cogsDollars:      Math.round(cogsDollars * 100) / 100,
+        primeDollars:     Math.round(primeDollars * 100) / 100,
+        primePct:         totalSales > 0 ? (primeDollars / totalSales) * 100 : 0,
+        fixedDollars:     Math.round(totalFixed * 100) / 100,
+        fixedPct:         totalSales > 0 ? (totalFixed / totalSales) * 100 : 0,
+        rentDollars:      Math.round(rentCost * 100) / 100,
+        amortizedDollars: Math.round(amortizedCost * 100) / 100,
+        mrDollars:        Math.round(todayMR * 100) / 100,
+        netDollars:       Math.round(netDollars * 100) / 100,
+        netPct:           Math.round(netPct * 10) / 10,
+      } : s.netDetail;
+
+      const netState = totalSales > 0
+        ? {
+            value:   `${netPct.toFixed(1)}%`,
+            dollars: Math.round(netDollars),
+            label:   "Net Profit",
+            sub:     `$${Math.round(netDollars).toLocaleString()} today`,
+            score:   nScore,
+          }
+        : { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 };
+
       return {
         sales: { ...s.sales, value: totalSales },
+        net: netState,
+        netDetail,
         tiles: updatedTiles,
         laborDetail,
         salesDetail: salesDetailResult ?? s.salesDetail,

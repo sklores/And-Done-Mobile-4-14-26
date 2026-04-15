@@ -5,10 +5,12 @@ type Props = {
   label: string;
   value: string;
   sub: string;
+  /** Net bar only: shows dollar amount alongside the % */
+  valueSub?: string;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
   const s = kind === "sales" ? coastal.salesBar : coastal.netBar;
   return (
     <div
@@ -17,7 +19,7 @@ export function KpiBar({ kind, label, value, sub, onClick }: Props) {
         background: s.bg,
         padding: "10px 14px",
         display: "flex",
-        alignItems: "baseline",
+        alignItems: "center",
         justifyContent: "space-between",
         fontFamily: coastal.fonts.manrope,
         cursor: onClick ? "pointer" : undefined,
@@ -35,6 +37,20 @@ export function KpiBar({ kind, label, value, sub, onClick }: Props) {
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        {/* Dollar amount shown to the left of % on net bar */}
+        {valueSub && (
+          <div
+            style={{
+              color: s.sub,
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: coastal.fonts.condensed,
+              opacity: 0.85,
+            }}
+          >
+            {valueSub}
+          </div>
+        )}
         <div
           style={{
             color: s.value,
