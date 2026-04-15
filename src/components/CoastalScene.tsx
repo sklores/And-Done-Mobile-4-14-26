@@ -172,7 +172,7 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const laborScore = tiles.find(t => t.key === 'labor')?.score    ?? 5
   const cogsScore  = tiles.find(t => t.key === 'cogs')?.score     ?? 5
   const primeScore = tiles.find(t => t.key === 'prime')?.score    ?? 5
-  const expScore   = tiles.find(t => t.key === 'expenses')?.score ?? 5
+  const expScore   = tiles.find(t => t.key === 'fixed')?.score ?? 5
   const revScore   = tiles.find(t => t.key === 'reviews')?.score  ?? 5
   const socScore   = tiles.find(t => t.key === 'social')?.score   ?? 5
 

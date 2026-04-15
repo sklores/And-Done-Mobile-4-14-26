@@ -1,10 +1,12 @@
 import { create } from "zustand";
 import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail } from "../data/toastAdapter";
 import type { SalesDetailResult, LaborDetailResult } from "../data/toastAdapter";
+import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
+import { useMaintenanceStore } from "./useMaintenanceStore";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
-  | "expenses" | "reviews" | "social" | "net";
+  | "fixed" | "reviews" | "social" | "net";
 
 export type Kpi = {
   key: KpiKey;
@@ -68,12 +70,12 @@ function scoreStatus(score: number): string {
 const COGS_PCT_MOCK = 26.4;
 
 const placeholderTiles: Kpi[] = [
-  { key: "cogs",     label: "COGS",       value: "26.4%",  status: "Excellent", score: 8 },
-  { key: "labor",    label: "Labor",      value: "--",     status: "Loading",   score: 5 },
-  { key: "prime",    label: "Prime Cost", value: "--",     status: "Loading",   score: 5 },
-  { key: "expenses", label: "Expenses",   value: "38.1%",  status: "Critical",  score: 2 },
-  { key: "reviews",  label: "Reviews",    value: "4.8",    status: "Excellent", score: 8 },
-  { key: "social",   label: "Social",     value: "+142",   status: "Watch",     score: 4 },
+  { key: "cogs",    label: "COGS",       value: "26.4%", status: "Excellent", score: 8 },
+  { key: "labor",   label: "Labor",      value: "--",    status: "Loading",   score: 5 },
+  { key: "prime",   label: "Prime Cost", value: "--",    status: "Loading",   score: 5 },
+  { key: "fixed",   label: "Fixed Cost", value: "--",    status: "Loading",   score: 5 },
+  { key: "reviews", label: "Reviews",    value: "4.8",   status: "Excellent", score: 8 },
+  { key: "social",  label: "Social",     value: "+142",  status: "Watch",     score: 4 },
 ];
 
 export const useKpiStore = create<KpiState>((set) => ({
@@ -96,8 +98,9 @@ export const useKpiStore = create<KpiState>((set) => ({
 
     set((s) => {
       const totalSales = salesResult?.total ?? s.sales.value;
-      const totalTips = salesResult?.totalTips ?? 0;
+      const totalTips  = salesResult?.totalTips ?? 0;
 
+      // ── Labor ──────────────────────────────────────────────────────
       let laborTile: Kpi = s.tiles.find((t) => t.key === "labor") ?? placeholderTiles[1];
       let primeTile: Kpi = s.tiles.find((t) => t.key === "prime") ?? placeholderTiles[2];
       let laborDetail: LaborDetail | null = s.laborDetail;
@@ -141,9 +144,34 @@ export const useKpiStore = create<KpiState>((set) => ({
         }
       }
 
+      // ── Fixed Cost ─────────────────────────────────────────────────
+      const todayMR       = useMaintenanceStore.getState().todayTotal();
+      const rentCost      = totalSales * RENT_PCT;
+      const amortizedCost = dailyFixed();
+      const totalFixed    = rentCost + amortizedCost + todayMR;
+
+      let fixedTile: Kpi;
+      if (totalSales > 0) {
+        const fixedPct = (totalFixed / totalSales) * 100;
+        const fScore   = fixedScore(fixedPct);
+        fixedTile = {
+          key: "fixed", label: "Fixed Cost",
+          value: `${fixedPct.toFixed(1)}%`,
+          status: scoreStatus(fScore), score: fScore,
+        };
+      } else {
+        // No sales yet — show raw daily burden in dollars
+        fixedTile = {
+          key: "fixed", label: "Fixed Cost",
+          value: `$${Math.round(amortizedCost + todayMR)}`,
+          status: "No Sales", score: 4,
+        };
+      }
+
       const updatedTiles = s.tiles.map((t) => {
         if (t.key === "labor") return laborTile;
         if (t.key === "prime") return primeTile;
+        if (t.key === "fixed") return fixedTile;
         return t;
       });
 

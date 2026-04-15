@@ -11,6 +11,7 @@ import { BottomTabs } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
 import { SalesDrillDown } from "./components/SalesDrillDown";
 import { PrimeCostDrillDown } from "./components/PrimeCostDrillDown";
+import { FixedCostDrillDown } from "./components/FixedCostDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -127,6 +128,10 @@ export default function App() {
       />
       <PrimeCostDrillDown
         open={drillKey === "prime"}
+        onClose={() => setDrillKey(null)}
+      />
+      <FixedCostDrillDown
+        open={drillKey === "fixed"}
         onClose={() => setDrillKey(null)}
       />
     </div>
