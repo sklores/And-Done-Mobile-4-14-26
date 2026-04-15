@@ -95,30 +95,48 @@ export async function getTodayLabor(creds) {
   if (!res.ok) throw new Error(`toast labor ${res.status}`);
   const entries = await res.json();
 
-  let totalLaborCost = 0;
-  let totalHours = 0;
-  let employeeCount = new Set();
+  // Toast only populates regularHours/regularPay AFTER clock-out.
+  // For open shifts (outDate === null), accrue cost from inDate → now
+  // using the employee's hourlyWage so the tile reflects live labor burn.
+  const nowMs = Date.now();
+  let closedCost = 0;
+  let closedHours = 0;
+  let openCost = 0;
+  let openHours = 0;
+  let openCount = 0;
+  const employeeSet = new Set();
 
   if (Array.isArray(entries)) {
     for (const e of entries) {
-      const regular = typeof e.regularHours === "number" ? e.regularHours : 0;
-      const overtime = typeof e.overtimeHours === "number" ? e.overtimeHours : 0;
-      const regularPay = typeof e.regularPay === "number" ? e.regularPay : 0;
-      const overtimePay = typeof e.overtimePay === "number" ? e.overtimePay : 0;
+      if (e.employeeReference?.guid) employeeSet.add(e.employeeReference.guid);
 
-      totalHours += regular + overtime;
-      totalLaborCost += regularPay + overtimePay;
-
-      if (e.employeeReference?.guid) {
-        employeeCount.add(e.employeeReference.guid);
+      if (e.outDate) {
+        closedCost +=
+          (typeof e.regularPay === "number" ? e.regularPay : 0) +
+          (typeof e.overtimePay === "number" ? e.overtimePay : 0);
+        closedHours +=
+          (typeof e.regularHours === "number" ? e.regularHours : 0) +
+          (typeof e.overtimeHours === "number" ? e.overtimeHours : 0);
+      } else if (e.inDate && typeof e.hourlyWage === "number") {
+        const inMs = new Date(e.inDate).getTime();
+        const hoursSoFar = Math.max(0, (nowMs - inMs) / 3_600_000);
+        openHours += hoursSoFar;
+        openCost += hoursSoFar * e.hourlyWage;
+        openCount++;
       }
     }
   }
 
+  const totalLaborCost = closedCost + openCost;
+  const totalHours = closedHours + openHours;
+
   return {
     totalLaborCost: Math.round(totalLaborCost * 100) / 100,
     totalHours: Math.round(totalHours * 100) / 100,
-    employeeCount: employeeCount.size,
+    closedCost: Math.round(closedCost * 100) / 100,
+    openCost: Math.round(openCost * 100) / 100,
+    employeeCount: employeeSet.size,
+    openCount,
     fetchedAt: new Date().toISOString(),
   };
 }

@@ -83,12 +83,22 @@ export const useKpiStore = create<KpiState>((set) => ({
           status: laborStatus(score),
           score,
         };
-      } else if (laborResult && totalSales === 0) {
+      } else if (laborResult && totalSales === 0 && laborResult.totalLaborCost > 0) {
+        // People clocked in but no sales yet — labor ratio is effectively infinite.
         laborTile = {
           key: "labor",
           label: "Labor",
           value: `$${laborResult.totalLaborCost.toFixed(0)}`,
-          status: "Live",
+          status: "No Sales",
+          score: 2,
+        };
+      } else if (laborResult) {
+        // No labor, no sales — nothing happening yet.
+        laborTile = {
+          key: "labor",
+          label: "Labor",
+          value: "--",
+          status: "Idle",
           score: 5,
         };
       }
