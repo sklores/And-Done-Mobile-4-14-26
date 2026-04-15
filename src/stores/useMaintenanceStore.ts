@@ -17,9 +17,16 @@ type MaintenanceState = {
   entries: MaintenanceEntry[];
   addEntry: (amount: number, description: string) => void;
   removeEntry: (id: string) => void;
-  todayEntries: () => MaintenanceEntry[];
-  todayTotal: () => number;
 };
+
+// Non-reactive helpers — call via useMaintenanceStore.getState()
+export function getTodayEntries(): MaintenanceEntry[] {
+  const today = new Date().toISOString().slice(0, 10);
+  return useMaintenanceStore.getState().entries.filter((e) => e.date === today);
+}
+export function getTodayMRTotal(): number {
+  return getTodayEntries().reduce((s, e) => s + e.amount, 0);
+}
 
 const STORAGE_KEY = "anddone:maintenance";
 
@@ -41,7 +48,7 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
+export const useMaintenanceStore = create<MaintenanceState>((set) => ({
   entries: load(),
 
   addEntry: (amount, description) => {
@@ -64,17 +71,5 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
       save(entries);
       return { entries };
     });
-  },
-
-  todayEntries: () => {
-    const today = todayStr();
-    return get().entries.filter((e) => e.date === today);
-  },
-
-  todayTotal: () => {
-    const today = todayStr();
-    return get()
-      .entries.filter((e) => e.date === today)
-      .reduce((s, e) => s + e.amount, 0);
   },
 }));

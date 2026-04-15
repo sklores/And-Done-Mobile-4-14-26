@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail } from "../data/toastAdapter";
 import type { SalesDetailResult, LaborDetailResult } from "../data/toastAdapter";
 import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
-import { useMaintenanceStore } from "./useMaintenanceStore";
+import { getTodayMRTotal } from "./useMaintenanceStore";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -145,7 +145,7 @@ export const useKpiStore = create<KpiState>((set) => ({
       }
 
       // ── Fixed Cost ─────────────────────────────────────────────────
-      const todayMR       = useMaintenanceStore.getState().todayTotal();
+      const todayMR       = getTodayMRTotal();
       const rentCost      = totalSales * RENT_PCT;
       const amortizedCost = dailyFixed();
       const totalFixed    = rentCost + amortizedCost + todayMR;

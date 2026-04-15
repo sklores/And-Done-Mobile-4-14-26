@@ -114,11 +114,14 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
 }
 
 export function FixedCostDrillDown({ open, onClose }: Props) {
-  const fixedTile    = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
-  const salesVal     = useKpiStore((s) => s.sales.value);
-  const todayEntries = useMaintenanceStore((s) => s.todayEntries());
-  const removeEntry  = useMaintenanceStore((s) => s.removeEntry);
-  const todayMR      = useMaintenanceStore((s) => s.todayTotal());
+  const fixedTile   = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
+  const salesVal    = useKpiStore((s) => s.sales.value);
+  const allEntries  = useMaintenanceStore((s) => s.entries);
+  const removeEntry = useMaintenanceStore((s) => s.removeEntry);
+
+  const todayStr    = new Date().toISOString().slice(0, 10);
+  const todayEntries = allEntries.filter((e) => e.date === todayStr);
+  const todayMR      = todayEntries.reduce((sum, e) => sum + e.amount, 0);
 
   const [showForm, setShowForm] = useState(false);
 
