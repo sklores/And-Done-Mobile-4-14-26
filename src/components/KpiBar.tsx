@@ -5,12 +5,14 @@ type Props = {
   label: string;
   value: string;
   sub: string;
+  onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub }: Props) {
+export function KpiBar({ kind, label, value, sub, onClick }: Props) {
   const s = kind === "sales" ? coastal.salesBar : coastal.netBar;
   return (
     <div
+      onClick={onClick}
       style={{
         background: s.bg,
         padding: "10px 14px",
@@ -18,6 +20,7 @@ export function KpiBar({ kind, label, value, sub }: Props) {
         alignItems: "baseline",
         justifyContent: "space-between",
         fontFamily: coastal.fonts.manrope,
+        cursor: onClick ? "pointer" : undefined,
       }}
     >
       <div

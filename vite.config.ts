@@ -45,6 +45,19 @@ export default defineConfig(({ mode }) => {
             }
           });
 
+          server.middlewares.use("/api/toast-sales-detail", async (_req, res) => {
+            try {
+              const { credsFromEnv, getTodaySalesDetail } = await import(
+                "./api/_toast.mjs"
+              );
+              respond(res, 200, await getTodaySalesDetail(credsFromEnv(env)));
+            } catch (e) {
+              respond(res, 500, {
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+          });
+
           server.middlewares.use("/api/weather", async (_req, res) => {
             try {
               const { default: handler } = await import("./api/weather.mjs" as string);

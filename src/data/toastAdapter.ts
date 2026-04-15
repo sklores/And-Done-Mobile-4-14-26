@@ -1,4 +1,4 @@
-// Client-side adapter: calls our own /api/toast-sales and /api/toast-labor endpoints.
+// Client-side adapter: calls our own /api/toast-* endpoints.
 // All Toast auth + secrets live server-side (api/_toast.mjs).
 
 export type SalesResult = {
@@ -20,6 +20,28 @@ export type LaborResult = {
   fetchedAt: string;
 };
 
+export type PmixItem = {
+  name: string;
+  revenue: number;
+  qty: number;
+};
+
+export type SalesChannels = {
+  dinein: number;
+  takeout: number;
+  doordash: number;
+  ubereats: number;
+  grubhub: number;
+  other3p: number;
+};
+
+export type SalesDetailResult = {
+  pmixTop: PmixItem[];
+  pmixBottom: PmixItem[];
+  channels: SalesChannels;
+  fetchedAt: string;
+};
+
 export async function fetchTodaySales(): Promise<SalesResult | null> {
   try {
     const res = await fetch("/api/toast-sales", { cache: "no-store" });
@@ -35,6 +57,16 @@ export async function fetchTodayLabor(): Promise<LaborResult | null> {
     const res = await fetch("/api/toast-labor", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as LaborResult;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchSalesDetail(): Promise<SalesDetailResult | null> {
+  try {
+    const res = await fetch("/api/toast-sales-detail", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as SalesDetailResult;
   } catch {
     return null;
   }

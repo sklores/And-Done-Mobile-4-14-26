@@ -9,6 +9,7 @@ import { CoastalScene, type WeatherCondition } from "./components/CoastalScene";
 import { MarqueeFeed } from "./components/MarqueeFeed";
 import { BottomTabs } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
+import { SalesDrillDown } from "./components/SalesDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -92,7 +93,7 @@ export default function App() {
         </div>
 
         <CoastalScene weather={weather} />
-        <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} />
+        <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
         <KpiBar kind="net" label={net.label} value={net.value} sub={net.sub} />
         <MarqueeFeed />
@@ -100,6 +101,10 @@ export default function App() {
       </div>
 
       {/* Drill-down modals */}
+      <SalesDrillDown
+        open={drillKey === "sales"}
+        onClose={() => setDrillKey(null)}
+      />
       <LaborDrillDown
         open={drillKey === "labor"}
         onClose={() => setDrillKey(null)}

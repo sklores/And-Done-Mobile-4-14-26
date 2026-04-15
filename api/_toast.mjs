@@ -146,6 +146,106 @@ export async function getTodayLabor(creds) {
   };
 }
 
+// ── Dining-option GUID classification ────────────────────────────────────────
+const DOORDASH_GUIDS  = new Set(["55c97b64","65a97c5d","9d9ef51a","e7ca53b4"]);
+const GRUBHUB_GUIDS   = new Set(["5b7c2e6f","6b1533d5"]);
+const UBEREATS_GUIDS  = new Set(["8314427f","9ca6a892","d02668c9","af84c0e7"]);
+const CHOWNOW_GUIDS   = new Set(["88310bd0"]);
+const TOAST_DEL_GUIDS = new Set(["d6613ebf"]);
+const DINEIN_GUIDS    = new Set(["08bc3079","b774f8de"]);
+// everything else = takeout (counter / phone / online direct)
+
+function classifyDiningOption(guid) {
+  if (!guid) return "takeout";
+  const short = guid.substring(0, 8);
+  if (DOORDASH_GUIDS.has(short))  return "doordash";
+  if (GRUBHUB_GUIDS.has(short))   return "grubhub";
+  if (UBEREATS_GUIDS.has(short))  return "ubereats";
+  if (CHOWNOW_GUIDS.has(short))   return "other3p";
+  if (TOAST_DEL_GUIDS.has(short)) return "other3p";
+  if (DINEIN_GUIDS.has(short))    return "dinein";
+  return "takeout";
+}
+
+export async function getTodaySalesDetail(creds) {
+  const token = await getToken(creds);
+  const businessDate = todayBusinessDate();
+  const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Toast-Restaurant-External-ID": creds.guid,
+    },
+  });
+  if (!res.ok) throw new Error(`toast orders ${res.status}`);
+  const orders = await res.json();
+
+  // Product mix: aggregate top-level menu items (salesCategory != null) by revenue
+  const itemMap = new Map(); // displayName → { revenue, qty }
+
+  // Channel breakdown
+  const channels = { dinein: 0, takeout: 0, doordash: 0, ubereats: 0, grubhub: 0, other3p: 0 };
+
+  if (Array.isArray(orders)) {
+    for (const o of orders) {
+      const channel = classifyDiningOption(o.diningOption?.guid);
+
+      for (const c of o.checks ?? []) {
+        if (c.voided) continue;
+        // Channel: attribute net sales from check.amount to this order's channel
+        if (typeof c.amount === "number") {
+          channels[channel] = (channels[channel] ?? 0) + c.amount;
+        }
+        // Product mix: iterate top-level selections (not modifiers)
+        for (const sel of c.selections ?? []) {
+          if (sel.voided) continue;
+          // Modifiers have null salesCategory; skip them
+          if (!sel.salesCategory) continue;
+          const name = sel.displayName ?? sel.name ?? "Unknown";
+          const revenue = typeof sel.receiptLinePrice === "number"
+            ? sel.receiptLinePrice
+            : (typeof sel.price === "number" ? sel.price * (sel.quantity ?? 1) : 0);
+          const qty = sel.quantity ?? 1;
+          const existing = itemMap.get(name);
+          if (existing) {
+            existing.revenue += revenue;
+            existing.qty += qty;
+          } else {
+            itemMap.set(name, { name, revenue, qty });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort by revenue desc, take top 5 and bottom 5 (min 2 items to show bottom)
+  const allItems = Array.from(itemMap.values()).sort((a, b) => b.revenue - a.revenue);
+  const top = allItems.slice(0, 5).map((i) => ({
+    name: i.name,
+    revenue: Math.round(i.revenue * 100) / 100,
+    qty: i.qty,
+  }));
+  const bottom = allItems.length >= 4
+    ? allItems.slice(-3).reverse().map((i) => ({
+        name: i.name,
+        revenue: Math.round(i.revenue * 100) / 100,
+        qty: i.qty,
+      }))
+    : [];
+
+  // Round channel values
+  for (const k of Object.keys(channels)) {
+    channels[k] = Math.round(channels[k] * 100) / 100;
+  }
+
+  return {
+    pmixTop: top,
+    pmixBottom: bottom,
+    channels,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export function credsFromEnv(env) {
   const clientId = env.TOAST_CLIENT_ID;
   const clientSecret = env.TOAST_CLIENT_SECRET;
