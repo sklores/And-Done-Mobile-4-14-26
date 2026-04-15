@@ -9,10 +9,12 @@ type Props = {
   valueSub?: string;
   /** 1–8 benchmark score — when provided, bar uses the shared tile gradient */
   score?: number;
+  /** Last stacked bar before the marquee — needs bottom margin for rhythm */
+  isLast?: boolean;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, score, isLast, onClick }: Props) {
   const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
 
@@ -28,7 +30,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Pr
       style={{
         background: bg,
         borderRadius: 10,
-        margin: "6px",
+        margin: isLast ? "8px 12px 8px" : "8px 12px 0",
         padding: "14px 16px",
         display: "flex",
         alignItems: "center",
@@ -48,13 +50,13 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Pr
       >
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         {/* Dollar amount shown to the left of % on net bar */}
         {valueSub && (
           <div
             style={{
               color: valueSubCol,
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: 700,
               fontFamily: coastal.fonts.condensed,
             }}

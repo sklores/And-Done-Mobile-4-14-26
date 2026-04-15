@@ -153,12 +153,12 @@ export default function App() {
         {/* Framed painting: sits inside the phone "wall" with border + shadow */}
         <div
           style={{
-            margin: "6px 12px 0",
-            border: "3px solid #C8D0CE",
+            margin: "8px 12px 0",
+            border: "3px solid #D8CEB4",
             borderRadius: 8,
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             overflow: "hidden",
-            background: "#C8D0CE",
+            background: "#D8CEB4",
           }}
         >
           <CoastalScene weather={weatherData.condition} />
@@ -179,6 +179,7 @@ export default function App() {
           valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
           sub="today"
           score={netScore}
+          isLast
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed />

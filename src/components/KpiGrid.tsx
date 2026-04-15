@@ -16,7 +16,7 @@ export function KpiGrid({ tiles, onTileClick }: Props) {
         flex: 1,
         minHeight: 0,
         gap: 6,
-        padding: 6,
+        padding: "8px 12px 0",
         background: "#E4EDED",
       }}
     >

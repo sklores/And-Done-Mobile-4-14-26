@@ -91,7 +91,7 @@ export function MarqueeFeed() {
                 flex: 1,
                 background: on ? coastal.toggle.onBg : coastal.toggle.offBg,
                 color: on ? coastal.toggle.onColor : coastal.toggle.offColor,
-                border: "none",
+                border: `1px solid ${on ? coastal.toggle.onBg : coastal.toggle.offBorder}`,
                 borderRadius: 6,
                 padding: "5px 0",
                 fontSize: 9,

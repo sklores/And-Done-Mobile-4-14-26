@@ -82,16 +82,17 @@ export const coastal = {
     } as TileStop,
   },
 
-  // Marquee — intentional darker neutral, distinct from status bar
+  // Marquee — warm cream/driftwood, part of the coastal family
   marquee: {
-    bg: "#3A4045",
-    text: "rgba(255,255,255,.72)",
+    bg: "#F0EBDD",
+    text: "#4A5856",
   },
   toggle: {
-    onBg: "#7BBFAA",
-    onColor: "#1A2E28",
-    offBg: "rgba(255,255,255,.1)",
-    offColor: "rgba(255,255,255,.3)",
+    onBg: "#7ED8B4",
+    onColor: "#0A4A2A",
+    offBg: "transparent",
+    offColor: "#8A9C9C",
+    offBorder: "#C8D0CE",
   },
 
   // Bottom tabs
