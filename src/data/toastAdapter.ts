@@ -3,6 +3,7 @@
 
 export type SalesResult = {
   total: number;
+  totalTips: number;
   checkCount: number;
   orderCount: number;
   businessDate: string;
@@ -12,7 +13,10 @@ export type SalesResult = {
 export type LaborResult = {
   totalLaborCost: number;
   totalHours: number;
+  closedCost: number;
+  openCost: number;
   employeeCount: number;
+  openCount: number;
   fetchedAt: string;
 };
 

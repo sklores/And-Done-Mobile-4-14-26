@@ -54,6 +54,7 @@ export async function getTodaySales(creds) {
   let total = 0;
   let checkCount = 0;
   let orderCount = 0;
+  let totalTips = 0;
   if (Array.isArray(orders)) {
     orderCount = orders.length;
     for (const o of orders) {
@@ -63,11 +64,15 @@ export async function getTodaySales(creds) {
           total += c.amount;
           checkCount++;
         }
+        for (const p of c.payments ?? []) {
+          if (typeof p.tipAmount === "number") totalTips += p.tipAmount;
+        }
       }
     }
   }
   return {
     total,
+    totalTips: Math.round(totalTips * 100) / 100,
     checkCount,
     orderCount,
     businessDate,

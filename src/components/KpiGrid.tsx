@@ -1,9 +1,12 @@
 import { KpiTile } from "./KpiTile";
-import type { Kpi } from "../stores/useKpiStore";
+import type { Kpi, KpiKey } from "../stores/useKpiStore";
 
-type Props = { tiles: Kpi[] };
+type Props = {
+  tiles: Kpi[];
+  onTileClick?: (key: KpiKey) => void;
+};
 
-export function KpiGrid({ tiles }: Props) {
+export function KpiGrid({ tiles, onTileClick }: Props) {
   return (
     <div
       style={{
@@ -15,7 +18,11 @@ export function KpiGrid({ tiles }: Props) {
       }}
     >
       {tiles.map((k) => (
-        <KpiTile key={k.key} kpi={k} />
+        <KpiTile
+          key={k.key}
+          kpi={k}
+          onClick={onTileClick ? () => onTileClick(k.key) : undefined}
+        />
       ))}
     </div>
   );

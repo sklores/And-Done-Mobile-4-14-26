@@ -6,6 +6,7 @@ export type ToastCreds = {
 
 export type SalesResult = {
   total: number;
+  totalTips: number;
   checkCount: number;
   orderCount: number;
   businessDate: string;
