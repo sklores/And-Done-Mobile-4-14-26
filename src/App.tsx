@@ -69,6 +69,19 @@ export default function App() {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
+  // ── Color-grading scores for the headline bars ────────────────────────
+  // Sales benchmark: $500 (weak) → $2,500 (excellent)
+  // Net profit benchmark: -5% (loss) → +15% (excellent)
+  const scoreFromRange = (v: number, min: number, max: number) => {
+    if (!Number.isFinite(v)) return 5;
+    if (v <= min) return 1;
+    if (v >= max) return 8;
+    return Math.round(1 + ((v - min) / (max - min)) * 7);
+  };
+  const salesScore = scoreFromRange(sales.value, 500, 2500);
+  const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
+  const netScore   = scoreFromRange(netPctNum, -5, 15);
+
   return (
     <div
       style={isMobile ? {
@@ -137,8 +150,27 @@ export default function App() {
           </span>
         </div>
 
-        <CoastalScene weather={weatherData.condition} />
-        <KpiBar kind="sales" label={sales.label} value={salesDisplay} sub={sales.sub} onClick={() => setDrillKey("sales" as KpiKey)} />
+        {/* Framed painting: sits inside the phone "wall" with border + shadow */}
+        <div
+          style={{
+            margin: "6px 12px 0",
+            border: "3px solid #C8D0CE",
+            borderRadius: 8,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            overflow: "hidden",
+            background: "#C8D0CE",
+          }}
+        >
+          <CoastalScene weather={weatherData.condition} />
+        </div>
+        <KpiBar
+          kind="sales"
+          label={sales.label}
+          value={salesDisplay}
+          sub={sales.sub}
+          score={salesScore}
+          onClick={() => setDrillKey("sales" as KpiKey)}
+        />
         <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
         <KpiBar
           kind="net"
@@ -146,6 +178,7 @@ export default function App() {
           value={net.value}
           valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
           sub="today"
+          score={netScore}
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed />

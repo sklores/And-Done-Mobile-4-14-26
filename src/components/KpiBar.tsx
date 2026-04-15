@@ -1,4 +1,4 @@
-import { coastal } from "../theme/skins";
+import { coastal, tileForScore } from "../theme/skins";
 
 type Props = {
   kind: "sales" | "net";
@@ -7,16 +7,26 @@ type Props = {
   sub: string;
   /** Net bar only: shows dollar amount alongside the % */
   valueSub?: string;
+  /** 1–8 benchmark score — when provided, bar uses the shared tile gradient */
+  score?: number;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
-  const s = kind === "sales" ? coastal.salesBar : coastal.netBar;
+export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Props) {
+  const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
+  const palette = typeof score === "number" ? tileForScore(score) : null;
+
+  const bg           = palette?.bg         ?? defaults.bg;
+  const labelColor   = palette?.label      ?? defaults.label;
+  const valueColor   = palette?.value      ?? defaults.value;
+  const subColor     = palette?.statusText ?? defaults.sub;
+  const valueSubCol  = palette?.label      ?? defaults.label;
+
   return (
     <div
       onClick={onClick}
       style={{
-        background: s.bg,
+        background: bg,
         borderRadius: 10,
         margin: "6px",
         padding: "14px 16px",
@@ -29,7 +39,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
     >
       <div
         style={{
-          color: s.label,
+          color: labelColor,
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: ".1em",
@@ -43,7 +53,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
         {valueSub && (
           <div
             style={{
-              color: s.label,
+              color: valueSubCol,
               fontSize: 14,
               fontWeight: 700,
               fontFamily: coastal.fonts.condensed,
@@ -54,7 +64,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
         )}
         <div
           style={{
-            color: s.value,
+            color: valueColor,
             fontSize: 24,
             fontWeight: 800,
             fontFamily: coastal.fonts.condensed,
@@ -65,7 +75,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, onClick }: Props) {
         </div>
         <div
           style={{
-            color: s.sub,
+            color: subColor,
             fontSize: 10,
             fontWeight: 700,
             textTransform: "uppercase",
