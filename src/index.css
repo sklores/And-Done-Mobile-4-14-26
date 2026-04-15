@@ -10,23 +10,11 @@ body {
 }
 button { font-family: inherit; }
 
-/* ── Scene height: shorter on all phone-sized screens ───────────────────── */
-.coastal-scene { height: 200px; }
-@media (max-width: 1024px) {
-  .coastal-scene { height: 130px; }
-}
-
 /* ── Mobile layout ───────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   html, body, #root {
     height: 100%;
     overflow: hidden;
-  }
-  .mobile-app {
-    min-height: 100dvh;
-    overflow-y: auto;
-    overscroll-behavior: none;
-    -webkit-overflow-scrolling: touch;
   }
 }
 

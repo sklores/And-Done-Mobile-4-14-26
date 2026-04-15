@@ -43,8 +43,6 @@ export function BottomTabs({ onOpen }: Props) {
           </button>
         ))}
       </div>
-      {/* Fills the iOS/Android home-bar safe area with the tab background */}
-      <div style={{ height: "env(safe-area-inset-bottom)", background: coastal.tabs.bg }} />
     </div>
   );
 }

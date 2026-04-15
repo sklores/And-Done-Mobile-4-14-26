@@ -72,7 +72,8 @@ export default function App() {
   return (
     <div
       style={isMobile ? {
-        minHeight: "100dvh",
+        height: "100dvh",
+        overflow: "hidden",
         background: coastal.phoneBg,
         fontFamily: coastal.fonts.manrope,
       } : {
@@ -89,9 +90,12 @@ export default function App() {
         className={isMobile ? "mobile-app" : undefined}
         style={isMobile ? {
           width: "100%",
+          height: "100%",
           background: coastal.phoneBg,
           display: "flex",
           flexDirection: "column",
+          overflowY: "auto",
+          overscrollBehavior: "none",
         } : {
           width: 375,
           maxWidth: "100%",
