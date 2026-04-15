@@ -5,7 +5,7 @@ html, body, #root { margin: 0; padding: 0; min-height: 100%; }
 body {
   font-family: 'Manrope', sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #f5f5f5;
+  background: #E4EDED;
   overscroll-behavior: none;
 }
 button { font-family: inherit; }
@@ -20,8 +20,6 @@ button { font-family: inherit; }
     overflow-y: auto;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    /* Top notch only — bottom safe area handled by BottomTabs */
-    padding-top: env(safe-area-inset-top);
   }
 }
 

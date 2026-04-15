@@ -241,7 +241,7 @@ export function CoastalScene({ weather = 'clear', sceneHeight = 200 }: CoastalSc
   return (
     <div style={{ width: '100%', height: sceneHeight, overflow: 'hidden', display: 'block' }}>
       <style>{SCENE_CSS}</style>
-      <svg viewBox="0 0 375 200" width="100%" height={sceneHeight} style={{ display: 'block' }}>
+      <svg viewBox="0 0 375 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: 'block' }}>
         <defs>
           <linearGradient id="cs-sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor={skyTop} />
