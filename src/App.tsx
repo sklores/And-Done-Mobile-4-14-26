@@ -86,9 +86,9 @@ export default function App() {
       }}
     >
       <div
+        className={isMobile ? "mobile-app" : undefined}
         style={isMobile ? {
           width: "100%",
-          minHeight: "100dvh",
           background: coastal.phoneBg,
           display: "flex",
           flexDirection: "column",
