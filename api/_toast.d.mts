@@ -63,8 +63,42 @@ export type SalesDetailResult = {
 export function todayBusinessDate(d?: Date): string;
 export function getTodaySales(creds: ToastCreds): Promise<SalesResult>;
 export function getTodayLabor(creds: ToastCreds): Promise<LaborResult>;
+export type CategorySale = {
+  name: string;
+  revenue: number;
+  revenuePct: number;
+  cogsPct: number;
+  cogsDollars: number;
+};
+
+export type COGSDetailResult = {
+  categorySales: CategorySale[];
+  totalRevenue: number;
+  categoryCOGS: number;
+  categoryCOGSPct: number;
+  dineInSales: number;
+  dineInPaper: number;
+  takeoutDeliverySales: number;
+  takeoutDeliveryPaper: number;
+  totalPaper: number;
+  doordashSales: number;
+  ubereatsSales: number;
+  grubhubSales: number;
+  commissionBase: number;
+  thirdPartyCommission: number;
+  compCount: number;
+  compValue: number;
+  voidCount: number;
+  voidValue: number;
+  voidCost: number;
+  effectiveCOGS: number;
+  effectiveCOGSPct: number;
+  fetchedAt: string;
+};
+
 export function getTodayLaborDetail(creds: ToastCreds): Promise<LaborDetailResult>;
 export function getTodaySalesDetail(creds: ToastCreds): Promise<SalesDetailResult>;
+export function getTodayCOGSDetail(creds: ToastCreds): Promise<COGSDetailResult>;
 export function credsFromEnv(
   env: Record<string, string | undefined>,
 ): ToastCreds;

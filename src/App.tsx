@@ -13,6 +13,7 @@ import { SalesDrillDown } from "./components/SalesDrillDown";
 import { PrimeCostDrillDown } from "./components/PrimeCostDrillDown";
 import { FixedCostDrillDown } from "./components/FixedCostDrillDown";
 import { NetDrillDown } from "./components/NetDrillDown";
+import { COGSDrillDown } from "./components/COGSDrillDown";
 
 type TabKey = "dashboard" | "invoices" | "log" | "gizmo";
 
@@ -144,6 +145,10 @@ export default function App() {
       />
       <NetDrillDown
         open={drillKey === "net"}
+        onClose={() => setDrillKey(null)}
+      />
+      <COGSDrillDown
+        open={drillKey === "cogs"}
         onClose={() => setDrillKey(null)}
       />
     </div>

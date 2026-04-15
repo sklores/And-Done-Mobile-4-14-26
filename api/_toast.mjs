@@ -353,6 +353,161 @@ export async function getTodaySalesDetail(creds) {
   };
 }
 
+// ── COGS detail (category sales, paper, 3P commission, comps, voids) ─────────
+const CATEGORY_COGS_PCT = {
+  'Food': 30, 'Dessert': 30, 'Appetizer': 30, 'Sides': 30, 'Kids': 30,
+  'Beer': 25, 'Draft Beer': 25, 'Bottle Beer': 25, 'Bottled Beer': 25,
+  'Wine': 35, 'Bottle Wine': 35, 'Wines': 35,
+  'Cocktails': 18, 'Cocktail': 18, 'Spirits': 18, 'Liquor': 18, 'Bar': 18,
+  'NA Beverage': 20, 'Non-Alcoholic': 20, 'Soft Drinks': 20, 'Soda': 20,
+  'Coffee': 25, 'Tea': 20, 'Juice': 20, 'Beverages': 20,
+  'Merchandise': 40, 'Retail': 40,
+};
+const DEFAULT_COGS_PCT = 30;
+const PAPER_DINEIN_PCT      = 0.01;  // 1%
+const PAPER_TAKEOUT_PCT     = 0.04;  // 4% (takeout + delivery)
+const THIRD_PARTY_COMM_PCT  = 0.18;  // 18%
+
+export async function getTodayCOGSDetail(creds) {
+  const token = await getToken(creds);
+  const businessDate = todayBusinessDate();
+  const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Toast-Restaurant-External-ID': creds.guid,
+    },
+  });
+  if (!res.ok) throw new Error(`toast orders ${res.status}`);
+  const orders = await res.json();
+
+  const categoryMap = new Map(); // catName → revenue
+  let totalRevenue = 0;
+  let dineInSales = 0, takeoutSales = 0;
+  let doordashSales = 0, ubereatsSales = 0, grubhubSales = 0, other3pSales = 0;
+  let compCount = 0, compValue = 0;
+  let voidCount = 0, voidValue = 0;
+
+  if (Array.isArray(orders)) {
+    for (const o of orders) {
+      const channel = classifyDiningOption(o.diningOption?.guid);
+
+      for (const c of o.checks ?? []) {
+        if (c.voided) continue;
+        const checkAmt = typeof c.amount === 'number' ? c.amount : 0;
+        totalRevenue += checkAmt;
+
+        if      (channel === 'dinein')   dineInSales   += checkAmt;
+        else if (channel === 'takeout')  takeoutSales  += checkAmt;
+        else if (channel === 'doordash') doordashSales += checkAmt;
+        else if (channel === 'ubereats') ubereatsSales += checkAmt;
+        else if (channel === 'grubhub')  grubhubSales  += checkAmt;
+        else if (channel === 'other3p')  other3pSales  += checkAmt;
+        else                             takeoutSales  += checkAmt;
+
+        // Comps — all applied discounts across check and selections
+        for (const d of c.appliedDiscounts ?? []) {
+          const amt = typeof d.discountAmount === 'number' ? d.discountAmount : 0;
+          if (amt > 0) { compValue += amt; compCount++; }
+        }
+        for (const sel of c.selections ?? []) {
+          for (const d of sel.appliedDiscounts ?? []) {
+            const amt = typeof d.discountAmount === 'number' ? d.discountAmount : 0;
+            if (amt > 0) { compValue += amt; compCount++; }
+          }
+        }
+
+        // Selections — category revenue + voids
+        for (const sel of c.selections ?? []) {
+          if (sel.voided) {
+            const v = typeof sel.price === 'number' ? sel.price * (sel.quantity ?? 1) : 0;
+            if (v > 0) { voidValue += v; voidCount++; }
+            continue;
+          }
+          if (!sel.salesCategory) continue; // skip modifiers
+          const catName = (typeof sel.salesCategory === 'object'
+            ? sel.salesCategory.name
+            : sel.salesCategory) ?? 'Other';
+          const rev = typeof sel.receiptLinePrice === 'number'
+            ? sel.receiptLinePrice
+            : (typeof sel.price === 'number' ? sel.price * (sel.quantity ?? 1) : 0);
+          if (rev > 0) {
+            const existing = categoryMap.get(catName);
+            if (existing) existing.revenue += rev;
+            else categoryMap.set(catName, { revenue: rev });
+          }
+        }
+      }
+    }
+  }
+
+  // Build category breakdown with per-category COGS estimate
+  let categoryCOGS = 0;
+  const categorySales = Array.from(categoryMap.entries())
+    .sort((a, b) => b[1].revenue - a[1].revenue)
+    .map(([name, data]) => {
+      const cogsPct = CATEGORY_COGS_PCT[name] ?? DEFAULT_COGS_PCT;
+      const cogsDollars = data.revenue * (cogsPct / 100);
+      categoryCOGS += cogsDollars;
+      return {
+        name,
+        revenue: Math.round(data.revenue * 100) / 100,
+        revenuePct: totalRevenue > 0 ? Math.round((data.revenue / totalRevenue) * 1000) / 10 : 0,
+        cogsPct,
+        cogsDollars: Math.round(cogsDollars * 100) / 100,
+      };
+    });
+
+  // Paper costs — 1% dine-in, 4% takeout + all delivery
+  const thirdPartySales      = doordashSales + ubereatsSales + grubhubSales + other3pSales;
+  const takeoutDeliverySales = takeoutSales + thirdPartySales;
+  const dineInPaper          = dineInSales * PAPER_DINEIN_PCT;
+  const takeoutDeliveryPaper = takeoutDeliverySales * PAPER_TAKEOUT_PCT;
+  const totalPaper           = dineInPaper + takeoutDeliveryPaper;
+
+  // 3rd party commission — 18% on DoorDash + Uber Eats + Grubhub only
+  const commissionBase       = doordashSales + ubereatsSales + grubhubSales;
+  const thirdPartyCommission = commissionBase * THIRD_PARTY_COMM_PCT;
+
+  // Effective COGS = category COGS + paper + 3P commission + comps + void cost
+  // Void cost estimated at average COGS% (not retail) to avoid double-counting
+  const avgCogsPct   = totalRevenue > 0 ? categoryCOGS / totalRevenue : DEFAULT_COGS_PCT / 100;
+  const voidCost     = voidValue * avgCogsPct; // estimated cost, not retail value
+  const effectiveCOGS = categoryCOGS + totalPaper + thirdPartyCommission + compValue + voidCost;
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+
+  return {
+    categorySales,
+    totalRevenue:       r2(totalRevenue),
+    categoryCOGS:       r2(categoryCOGS),
+    categoryCOGSPct:    totalRevenue > 0 ? r2((categoryCOGS / totalRevenue) * 100) : 0,
+
+    dineInSales:         r2(dineInSales),
+    dineInPaper:         r2(dineInPaper),
+    takeoutDeliverySales: r2(takeoutDeliverySales),
+    takeoutDeliveryPaper: r2(takeoutDeliveryPaper),
+    totalPaper:           r2(totalPaper),
+
+    doordashSales:       r2(doordashSales),
+    ubereatsSales:       r2(ubereatsSales),
+    grubhubSales:        r2(grubhubSales),
+    commissionBase:      r2(commissionBase),
+    thirdPartyCommission: r2(thirdPartyCommission),
+
+    compCount,
+    compValue:   r2(compValue),
+    voidCount,
+    voidValue:   r2(voidValue),
+    voidCost:    r2(voidCost),
+
+    effectiveCOGS:    r2(effectiveCOGS),
+    effectiveCOGSPct: totalRevenue > 0 ? r2((effectiveCOGS / totalRevenue) * 100) : 0,
+
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export function credsFromEnv(env) {
   const clientId = env.TOAST_CLIENT_ID;
   const clientSecret = env.TOAST_CLIENT_SECRET;

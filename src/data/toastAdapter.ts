@@ -87,6 +87,49 @@ export async function fetchLaborDetail(): Promise<LaborDetailResult | null> {
   }
 }
 
+export type CategorySale = {
+  name: string;
+  revenue: number;
+  revenuePct: number;
+  cogsPct: number;
+  cogsDollars: number;
+};
+
+export type COGSDetailResult = {
+  categorySales: CategorySale[];
+  totalRevenue: number;
+  categoryCOGS: number;
+  categoryCOGSPct: number;
+  dineInSales: number;
+  dineInPaper: number;
+  takeoutDeliverySales: number;
+  takeoutDeliveryPaper: number;
+  totalPaper: number;
+  doordashSales: number;
+  ubereatsSales: number;
+  grubhubSales: number;
+  commissionBase: number;
+  thirdPartyCommission: number;
+  compCount: number;
+  compValue: number;
+  voidCount: number;
+  voidValue: number;
+  voidCost: number;
+  effectiveCOGS: number;
+  effectiveCOGSPct: number;
+  fetchedAt: string;
+};
+
+export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
+  try {
+    const res = await fetch("/api/toast-cogs-detail", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as COGSDetailResult;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSalesDetail(): Promise<SalesDetailResult | null> {
   try {
     const res = await fetch("/api/toast-sales-detail", { cache: "no-store" });

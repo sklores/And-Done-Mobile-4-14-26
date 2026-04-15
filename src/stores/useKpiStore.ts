@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail } from "../data/toastAdapter";
-import type { SalesDetailResult, LaborDetailResult } from "../data/toastAdapter";
+import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toastAdapter";
+import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
 
@@ -60,6 +60,7 @@ type KpiState = {
   laborDetail: LaborDetail | null;
   salesDetail: SalesDetailResult | null;
   laborDetailRich: LaborDetailResult | null;
+  cogsDetail: COGSDetailResult | null;
   lastRefresh: number | null;
   lastError: string | null;
   refresh: () => Promise<void>;
@@ -112,20 +113,46 @@ export const useKpiStore = create<KpiState>((set) => ({
   laborDetail: null,
   salesDetail: null,
   laborDetailRich: null,
+  cogsDetail: null,
   lastRefresh: null,
   lastError: null,
 
   refresh: async () => {
-    const [salesResult, laborResult, salesDetailResult, laborDetailRich] = await Promise.all([
+    const [salesResult, laborResult, salesDetailResult, laborDetailRich, cogsDetailResult] = await Promise.all([
       fetchTodaySales(),
       fetchTodayLabor(),
       fetchSalesDetail(),
       fetchLaborDetail(),
+      fetchCOGSDetail(),
     ]);
 
     set((s) => {
       const totalSales = salesResult?.total ?? s.sales.value;
       const totalTips  = salesResult?.totalTips ?? 0;
+
+      // ── COGS tile (real if available, mock fallback) ───────────────
+      let cogsTile: Kpi = s.tiles.find((t) => t.key === "cogs") ?? placeholderTiles[0];
+      const cogsPctActual    = cogsDetailResult?.effectiveCOGSPct ?? COGS_PCT_MOCK;
+      const cogsDollarsActual = cogsDetailResult?.effectiveCOGS
+        ?? (totalSales * COGS_PCT_MOCK / 100);
+
+      function cogsScore(pct: number): number {
+        if (pct <= 25) return 8;
+        if (pct <= 28) return 7;
+        if (pct <= 31) return 6;
+        if (pct <= 34) return 5;
+        if (pct <= 37) return 4;
+        if (pct <= 42) return 3;
+        return 2;
+      }
+      if (cogsDetailResult && totalSales > 0) {
+        const cScore = cogsScore(cogsPctActual);
+        cogsTile = {
+          key: "cogs", label: "COGS",
+          value: `${cogsPctActual.toFixed(1)}%`,
+          status: scoreStatus(cScore), score: cScore,
+        };
+      }
 
       // ── Labor ──────────────────────────────────────────────────────
       let laborTile: Kpi = s.tiles.find((t) => t.key === "labor") ?? placeholderTiles[1];
@@ -155,7 +182,7 @@ export const useKpiStore = create<KpiState>((set) => ({
             value: `${laborPct.toFixed(1)}%`,
             status: scoreStatus(lScore), score: lScore,
           };
-          const primePct = laborPct + COGS_PCT_MOCK;
+          const primePct = laborPct + cogsPctActual;
           const pScore   = primeScore(primePct);
           primeTile = {
             key: "prime", label: "Prime Cost",
@@ -196,6 +223,7 @@ export const useKpiStore = create<KpiState>((set) => ({
       }
 
       const updatedTiles = s.tiles.map((t) => {
+        if (t.key === "cogs")  return cogsTile;
         if (t.key === "labor") return laborTile;
         if (t.key === "prime") return primeTile;
         if (t.key === "fixed") return fixedTile;
@@ -204,7 +232,7 @@ export const useKpiStore = create<KpiState>((set) => ({
 
       // ── Net Profit ─────────────────────────────────────────────────
       const laborCostFinal  = laborResult?.totalLaborCost ?? 0;
-      const cogsDollars     = totalSales * (COGS_PCT_MOCK / 100);
+      const cogsDollars     = cogsDollarsActual;
       const primeDollars    = laborCostFinal + cogsDollars;
       const netDollars      = totalSales - primeDollars - totalFixed;
       const netPct          = totalSales > 0 ? (netDollars / totalSales) * 100 : 0;
@@ -213,7 +241,7 @@ export const useKpiStore = create<KpiState>((set) => ({
       const netDetail: NetDetail | null = totalSales > 0 ? {
         salesDollars:     totalSales,
         laborDollars:     laborCostFinal,
-        cogsDollars:      Math.round(cogsDollars * 100) / 100,
+        cogsDollars:      Math.round(cogsDollarsActual * 100) / 100,
         primeDollars:     Math.round(primeDollars * 100) / 100,
         primePct:         totalSales > 0 ? (primeDollars / totalSales) * 100 : 0,
         fixedDollars:     Math.round(totalFixed * 100) / 100,
@@ -243,6 +271,7 @@ export const useKpiStore = create<KpiState>((set) => ({
         laborDetail,
         salesDetail: salesDetailResult ?? s.salesDetail,
         laborDetailRich: laborDetailRich ?? s.laborDetailRich,
+        cogsDetail: cogsDetailResult ?? s.cogsDetail,
         lastRefresh: Date.now(),
         lastError: null,
       };
