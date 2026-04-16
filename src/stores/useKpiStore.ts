@@ -172,7 +172,24 @@ export const useKpiStore = create<KpiState>((set) => ({
       if (laborResult) {
         const hoursWorked  = laborResult.totalHours;
         const hourlyCost   = laborResult.totalLaborCost;
-        const salaryCost   = DAILY_SALARY_COST;
+
+        // Amortize salary from first clock-in to last clock-out.
+        // While shifts are open we prorate over a 12-hour standard day.
+        // Once all closed the full daily rate is earned.
+        const STANDARD_DAY_MS = 12 * 60 * 60 * 1000;
+        let salaryCost = 0;
+        if (laborResult.firstClockIn) {
+          if (laborResult.openCount === 0 && laborResult.lastClockOut) {
+            // Day complete — full daily rate
+            salaryCost = DAILY_SALARY_COST;
+          } else {
+            // Day in progress — prorate elapsed vs 12-hour day
+            const elapsedMs = Date.now() - new Date(laborResult.firstClockIn).getTime();
+            const fraction   = Math.min(elapsedMs / STANDARD_DAY_MS, 1);
+            salaryCost = Math.round(DAILY_SALARY_COST * fraction * 100) / 100;
+          }
+        }
+
         const payrollTax   = Math.round((hourlyCost + salaryCost) * PAYROLL_TAX_RATE * 100) / 100;
         const laborCost    = hourlyCost + salaryCost + payrollTax;
 

@@ -17,6 +17,8 @@ export type LaborResult = {
   openCost: number;
   employeeCount: number;
   openCount: number;
+  firstClockIn: string | null;   // ISO — earliest inDate today
+  lastClockOut: string | null;   // ISO — latest outDate today (null if all open)
   fetchedAt: string;
 };
 

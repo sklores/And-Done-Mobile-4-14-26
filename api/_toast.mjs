@@ -138,6 +138,8 @@ export async function getTodayLabor(creds) {
   let openHours = 0;
   let openCount = 0;
   const employeeSet = new Set();
+  let firstClockInMs = Infinity;
+  let lastClockOutMs = -Infinity;
 
   /** Parse a wage value that might be number, numeric string, or missing */
   const parseWage = (raw) =>
@@ -149,6 +151,16 @@ export async function getTodayLabor(creds) {
     for (const e of entries) {
       const empGuid = e.employeeReference?.guid;
       if (empGuid) employeeSet.add(empGuid);
+
+      // Track day span
+      if (e.inDate) {
+        const inMs = new Date(e.inDate).getTime();
+        if (inMs < firstClockInMs) firstClockInMs = inMs;
+      }
+      if (e.outDate) {
+        const outMs = new Date(e.outDate).getTime();
+        if (outMs > lastClockOutMs) lastClockOutMs = outMs;
+      }
 
       if (e.outDate) {
         const hours = (e.regularHours ?? 0) + (e.overtimeHours ?? 0);
@@ -184,6 +196,8 @@ export async function getTodayLabor(creds) {
     openCost: Math.round(openCost * 100) / 100,
     employeeCount: employeeSet.size,
     openCount,
+    firstClockIn: firstClockInMs < Infinity ? new Date(firstClockInMs).toISOString() : null,
+    lastClockOut: lastClockOutMs > -Infinity ? new Date(lastClockOutMs).toISOString() : null,
     fetchedAt: new Date().toISOString(),
   };
 }
