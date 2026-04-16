@@ -1,5 +1,6 @@
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
+import { FEED_SCORES } from "../data/feedScores";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -51,7 +52,7 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
     <DrillDownModal
       open={open}
       onClose={onClose}
-      score={8}
+      score={FEED_SCORES.reviews}
       label="Reviews"
       value={`${OVERALL_RATING} ★`}
       status={`${TOTAL_REVIEWS} reviews across all platforms`}

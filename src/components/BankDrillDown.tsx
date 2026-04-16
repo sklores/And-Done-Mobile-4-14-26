@@ -1,5 +1,6 @@
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal, tileForScore } from "../theme/skins";
+import { FEED_SCORES } from "../data/feedScores";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -24,7 +25,6 @@ const TRANSACTIONS: Transaction[] = [
 ];
 
 const BALANCE = 14_280;
-const BALANCE_SCORE = 7;
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
   return (
@@ -48,7 +48,7 @@ export function BankDrillDown({ open, onClose }: Props) {
     <DrillDownModal
       open={open}
       onClose={onClose}
-      score={BALANCE_SCORE}
+      score={FEED_SCORES.bank}
       label="Bank"
       value={`$${BALANCE.toLocaleString()}`}
       status="current balance · Chase Business"

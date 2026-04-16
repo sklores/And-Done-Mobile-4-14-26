@@ -101,6 +101,14 @@ export function SalesDrillDown({ open, onClose }: Props) {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
+  // Sales score: $500 (weak/1) → $2,500 (excellent/8)
+  const salesScore = (() => {
+    const v = sales.value, min = 500, max = 2500;
+    if (!Number.isFinite(v) || v <= min) return 1;
+    if (v >= max) return 8;
+    return Math.round(1 + ((v - min) / (max - min)) * 7);
+  })();
+
   // Derive total 3rd party
   const ch = detail?.channels;
   const thirdParty  = ch ? (ch.doordash + ch.ubereats + ch.grubhub + ch.other3p) : null;
@@ -115,7 +123,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
     <DrillDownModal
       open={open}
       onClose={onClose}
-      score={8}
+      score={salesScore}
       label="Sales"
       value={salesDisplay}
       status={detail ? `${detail.pmixTop.length + detail.pmixBottom.length} items sold today` : "Today"}

@@ -1,17 +1,10 @@
 import { useState, useMemo, useRef } from "react";
 import { coastal, tileForScore } from "../theme/skins";
+import { FEED_SCORES } from "../data/feedScores";
 
 export type FeedKey = "reviews" | "bank" | "social" | "events";
 
 const PX_PER_CHAR = 7;
-
-// Mock scores — wire to real data sources when APIs are connected
-const FEED_SCORES: Record<FeedKey, number> = {
-  reviews: 8,   // 4.8★ excellent
-  bank:    6,   // normal transactions, nothing alarming
-  social:  4,   // below follower target — alert
-  events:  5,   // some events need attention
-};
 
 const FEEDS: Record<FeedKey, string[]> = {
   reviews: [
