@@ -167,38 +167,35 @@ export default function App() {
           overflow: "hidden",
         }}
       >
-        {/* Pull-to-refresh indicator */}
-        <div style={{
-          height: isRefreshing ? 36 : pullY,
-          overflow: "hidden",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          transition: pullY === 0 ? "height 0.25s ease" : "none",
-          background: coastal.phoneBg,
-          flexShrink: 0,
-        }}>
+        {/* Scrollable content */}
+        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+
+          {/* Pull-to-refresh indicator — overlays content, never moves it */}
           {(pullY > 10 || isRefreshing) && (
             <div style={{
-              width: 22, height: 22,
+              position: "absolute",
+              top: isRefreshing ? 10 : pullY - 32,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 10,
+              width: 28, height: 28,
               borderRadius: "50%",
-              border: `2.5px solid rgba(255,255,255,0.25)`,
+              border: "2.5px solid rgba(255,255,255,0.25)",
               borderTopColor: "#fff",
               opacity: isRefreshing ? 1 : pullProgress,
               animation: isRefreshing ? "ptr-spin 0.7s linear infinite" : "none",
-              transform: isRefreshing ? undefined : `rotate(${pullProgress * 270}deg)`,
+              rotate: isRefreshing ? undefined : `${pullProgress * 270}deg`,
+              transition: pullY === 0 ? "top 0.25s ease, opacity 0.25s ease" : "none",
             }} />
           )}
-        </div>
 
-        {/* Scrollable content */}
         <div
           ref={scrollRef}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           style={{
-            flex: 1,
+            height: "100%",
             overflowY: "auto",
             overscrollBehavior: "none",
             display: "flex",
@@ -268,7 +265,8 @@ export default function App() {
             onClick={() => setDrillKey("net" as KpiKey)}
           />
           <MarqueeFeed onLongPress={setOpenFeed} />
-        </div>
+        </div>{/* end scroll container */}
+        </div>{/* end relative wrapper */}
 
         <BottomTabs onOpen={setOpenTab} />
       </div>
