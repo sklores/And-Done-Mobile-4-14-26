@@ -1,4 +1,5 @@
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { FEED_SCORES } from "../data/feedScores";
 import { coastal } from "../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
@@ -102,13 +103,12 @@ function TrendBar() {
 
 export function SocialDrillDown({ open, onClose }: Props) {
   const pct = Math.round((THIS_WEEK.newFollowers / THIS_WEEK.target) * 100);
-  const score = pct >= 100 ? 8 : pct >= 80 ? 7 : pct >= 65 ? 6 : pct >= 50 ? 5 : pct >= 35 ? 4 : 3;
 
   return (
     <DrillDownModal
       open={open}
       onClose={onClose}
-      score={score}
+      score={FEED_SCORES.social}
       label="Social"
       value={`+${THIS_WEEK.newFollowers}`}
       status={`new followers this week · ${pct}% of target`}
