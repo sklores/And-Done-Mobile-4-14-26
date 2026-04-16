@@ -50,7 +50,6 @@ export default function App() {
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
   const [drillKey, setDrillKey]   = useState<KpiKey | null>(null);
   const [openFeed, setOpenFeed]   = useState<FeedKey | null>(null);
-  const [isMobile, setIsMobile]   = useState(() => window.innerWidth <= 600);
 
   useEffect(() => {
     refresh();
@@ -62,12 +61,6 @@ export default function App() {
     fetchWeather().then(setWeatherData);
     const id = setInterval(() => fetchWeather().then(setWeatherData), 30 * 60 * 1000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth <= 600);
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
   }, []);
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -87,47 +80,34 @@ export default function App() {
 
   return (
     <div
-      style={isMobile ? {
+      style={{
         height: "100dvh",
         overflow: "hidden",
         background: coastal.phoneBg,
         fontFamily: coastal.fonts.manrope,
-      } : {
-        minHeight: "100vh",
-        background: coastal.pageBg,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "flex-start",
-        padding: "20px 0",
-        fontFamily: coastal.fonts.manrope,
       }}
     >
       <div
-        className={isMobile ? "mobile-app" : undefined}
-        style={isMobile ? {
+        className="mobile-app"
+        style={{
           width: "100%",
+          maxWidth: 480,
+          margin: "0 auto",
           height: "100%",
           background: coastal.phoneBg,
-          display: "flex",
-          flexDirection: "column",
-        } : {
-          width: 375,
-          maxWidth: "100%",
-          background: coastal.phoneBg,
-          borderRadius: coastal.phoneRadius,
-          border: `1.5px solid ${coastal.phoneBorder}`,
-          boxShadow: coastal.phoneShadow,
-          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
         }}
       >
         {/* Scrollable content — fills all space above the pinned tab bar */}
-        <div style={isMobile ? {
+        <div style={{
           flex: 1,
           overflowY: "auto",
           overscrollBehavior: "none",
-        } : {}}>
+          display: "flex",
+          flexDirection: "column",
+          background: coastal.tabs.bg,
+        }}>
 
         {/* Framed painting with nameplate along the bottom of the frame */}
         <div
@@ -146,9 +126,9 @@ export default function App() {
             style={{
               background: "#B4B8BC",
               color: "#1F2124",
-              fontSize: isMobile ? 12 : 10,
+              fontSize: 12,
               fontWeight: 700,
-              padding: isMobile ? "7px 12px" : "6px 10px",
+              padding: "7px 12px",
               display: "flex",
               justifyContent: "space-between",
               letterSpacing: ".06em",
@@ -191,6 +171,7 @@ export default function App() {
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed onLongPress={setOpenFeed} />
+        <div style={{ flex: 1, background: coastal.tabs.bg }} />
 
         </div>{/* end scroll container */}
         <BottomTabs onOpen={setOpenTab} />
