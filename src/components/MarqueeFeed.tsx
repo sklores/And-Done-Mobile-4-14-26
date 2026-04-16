@@ -54,7 +54,7 @@ export function MarqueeFeed() {
   const toggle = (k: FeedKey) => setActive((a) => ({ ...a, [k]: !a[k] }));
 
   return (
-    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope }}>
+    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope, marginTop: 8 }}>
       <div
         onClick={() => setPaused((p) => !p)}
         style={{
