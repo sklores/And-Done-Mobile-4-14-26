@@ -44,7 +44,7 @@ export function TabPanel({ open, onClose, title, accent = "#1A2E28", children }:
           zIndex: 201,
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.2)",
+          boxShadow: open ? "0 -8px 40px rgba(0,0,0,0.2)" : "none",
         }}
       >
         {/* Header */}

@@ -49,7 +49,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           borderRadius: "18px 18px 0 0",
           overflow: "hidden",
           zIndex: 101,
-          boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+          boxShadow: open ? "0 -8px 40px rgba(0,0,0,0.18)" : "none",
         }}
       >
         {/* Header — tile color */}

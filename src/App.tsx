@@ -106,7 +106,6 @@ export default function App() {
           overscrollBehavior: "none",
           display: "flex",
           flexDirection: "column",
-          background: coastal.phoneBg,
         }}>
 
         {/* Framed painting with nameplate along the bottom of the frame */}
@@ -171,7 +170,6 @@ export default function App() {
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed onLongPress={setOpenFeed} />
-        <div style={{ flex: 1, background: coastal.phoneBg }} />
 
         </div>{/* end scroll container */}
         <BottomTabs onOpen={setOpenTab} />
