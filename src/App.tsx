@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { coastal } from "./theme/skins";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
@@ -39,6 +39,8 @@ async function fetchWeather(): Promise<WeatherData> {
   }
 }
 
+const PULL_THRESHOLD = 70; // px needed to trigger refresh
+
 export default function App() {
   const businessName = useAppStore((s) => s.businessName);
   const sales        = useKpiStore((s) => s.sales);
@@ -46,10 +48,40 @@ export default function App() {
   const tiles        = useKpiStore((s) => s.tiles);
   const refresh      = useKpiStore((s) => s.refresh);
 
-  const [openTab, setOpenTab]     = useState<TabKey | null>(null);
+  const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
-  const [drillKey, setDrillKey]   = useState<KpiKey | null>(null);
-  const [openFeed, setOpenFeed]   = useState<FeedKey | null>(null);
+  const [drillKey, setDrillKey]     = useState<KpiKey | null>(null);
+  const [openFeed, setOpenFeed]     = useState<FeedKey | null>(null);
+
+  // ── Pull-to-refresh state ─────────────────────────────────────────────────
+  const scrollRef      = useRef<HTMLDivElement>(null);
+  const touchStartY    = useRef(0);
+  const [pullY, setPullY]           = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ── Back-button: push history entry when any modal opens ─────────────────
+  const anyOpen = drillKey !== null || openTab !== null || openFeed !== null;
+  const prevAnyOpen = useRef(false);
+
+  useEffect(() => {
+    if (anyOpen && !prevAnyOpen.current) {
+      history.pushState({ modal: true }, "");
+    }
+    prevAnyOpen.current = anyOpen;
+  }, [anyOpen]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      // Close whichever modal is open — back stays on page
+      if (drillKey !== null) { setDrillKey(null); return; }
+      if (openTab  !== null) { setOpenTab(null);  return; }
+      if (openFeed !== null) { setOpenFeed(null); return; }
+      // Nothing open — re-push so the page is never popped away
+      history.pushState({ modal: false }, "");
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [drillKey, openTab, openFeed]);
 
   useEffect(() => {
     refresh();
@@ -63,11 +95,43 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Pull-to-refresh handlers ──────────────────────────────────────────────
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (scrollRef.current && scrollRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+    } else {
+      touchStartY.current = 0;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartY.current || isRefreshing) return;
+    const delta = e.touches[0].clientY - touchStartY.current;
+    if (delta > 0) {
+      // Dampen pull so it feels springy
+      setPullY(Math.min(delta * 0.45, PULL_THRESHOLD));
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullY >= PULL_THRESHOLD && !isRefreshing) {
+      setIsRefreshing(true);
+      setPullY(0);
+      await Promise.all([
+        refresh(),
+        fetchWeather().then(setWeatherData),
+        new Promise((r) => setTimeout(r, 600)), // minimum spinner time
+      ]);
+      setIsRefreshing(false);
+    } else {
+      setPullY(0);
+    }
+    touchStartY.current = 0;
+  };
+
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // ── Color-grading scores for the headline bars ────────────────────────
-  // Sales benchmark: $500 (weak) → $2,500 (excellent)
-  // Net profit benchmark: -5% (loss) → +15% (excellent)
+  // ── Color-grading scores for the headline bars ────────────────────────────
   const scoreFromRange = (v: number, min: number, max: number) => {
     if (!Number.isFinite(v)) return 5;
     if (v <= min) return 1;
@@ -77,6 +141,9 @@ export default function App() {
   const salesScore = scoreFromRange(sales.value, 500, 2500);
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
   const netScore   = scoreFromRange(netPctNum, -5, 15);
+
+  // Pull indicator progress 0→1
+  const pullProgress = Math.min(pullY / PULL_THRESHOLD, 1);
 
   return (
     <div
@@ -100,80 +167,109 @@ export default function App() {
           overflow: "hidden",
         }}
       >
-        {/* Scrollable content — fills all space above the pinned tab bar */}
+        {/* Pull-to-refresh indicator */}
         <div style={{
-          flex: 1,
-          overflowY: "auto",
-          overscrollBehavior: "none",
+          height: isRefreshing ? 36 : pullY,
+          overflow: "hidden",
           display: "flex",
-          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: pullY === 0 ? "height 0.25s ease" : "none",
           background: coastal.phoneBg,
+          flexShrink: 0,
         }}>
+          {(pullY > 10 || isRefreshing) && (
+            <div style={{
+              width: 22, height: 22,
+              borderRadius: "50%",
+              border: `2.5px solid rgba(255,255,255,0.25)`,
+              borderTopColor: "#fff",
+              opacity: isRefreshing ? 1 : pullProgress,
+              animation: isRefreshing ? "ptr-spin 0.7s linear infinite" : "none",
+              transform: isRefreshing ? undefined : `rotate(${pullProgress * 270}deg)`,
+            }} />
+          )}
+        </div>
 
-        {/* Framed painting with nameplate along the bottom of the frame */}
+        {/* Scrollable content */}
         <div
+          ref={scrollRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           style={{
-            margin: "8px 12px 0",
-            border: "3px solid #B4B8BC",
-            borderRadius: 8,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-            overflow: "hidden",
-            background: "#B4B8BC",
-            flexShrink: 0,
+            flex: 1,
+            overflowY: "auto",
+            overscrollBehavior: "none",
+            display: "flex",
+            flexDirection: "column",
+            background: coastal.phoneBg,
           }}
         >
-          <CoastalScene weather={weatherData.condition} />
+          {/* Framed painting with nameplate along the bottom of the frame */}
           <div
             style={{
+              margin: "8px 12px 0",
+              border: "3px solid #B4B8BC",
+              borderRadius: 8,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              overflow: "hidden",
               background: "#B4B8BC",
-              color: "#1F2124",
-              fontSize: 12,
-              fontWeight: 700,
-              padding: "7px 12px",
-              display: "flex",
-              justifyContent: "space-between",
-              letterSpacing: ".06em",
-              borderTop: "1px solid #9EA2A4",
+              flexShrink: 0,
             }}
           >
-            <span>{businessName}</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ opacity: 0.9 }}>
-                {weatherData.condition === "clear"  && "☀️"}
-                {weatherData.condition === "cloudy" && "⛅"}
-                {weatherData.condition === "rain"   && "🌧️"}
-                {weatherData.condition === "snow"   && "❄️"}
-                {weatherData.condition === "wind"   && "💨"}
-                {weatherData.tempF != null && ` ${weatherData.tempF}°`}
+            <CoastalScene weather={weatherData.condition} />
+            <div
+              style={{
+                background: "#B4B8BC",
+                color: "#1F2124",
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "7px 12px",
+                display: "flex",
+                justifyContent: "space-between",
+                letterSpacing: ".06em",
+                borderTop: "1px solid #9EA2A4",
+              }}
+            >
+              <span>{businessName}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ opacity: 0.9 }}>
+                  {weatherData.condition === "clear"  && "☀️"}
+                  {weatherData.condition === "cloudy" && "⛅"}
+                  {weatherData.condition === "rain"   && "🌧️"}
+                  {weatherData.condition === "snow"   && "❄️"}
+                  {weatherData.condition === "wind"   && "💨"}
+                  {weatherData.tempF != null && ` ${weatherData.tempF}°`}
+                </span>
+                <span>
+                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </span>
               </span>
-              <span>
-                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </span>
+            </div>
           </div>
+          <KpiBar
+            kind="sales"
+            label={sales.label}
+            value={salesDisplay}
+            sub={sales.sub}
+            score={salesScore}
+            onClick={() => setDrillKey("sales" as KpiKey)}
+          />
+          <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
+          <KpiBar
+            kind="net"
+            label={net.label}
+            value={net.value}
+            valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
+            sub="today"
+            score={netScore}
+            isLast
+            onClick={() => setDrillKey("net" as KpiKey)}
+          />
+          <MarqueeFeed onLongPress={setOpenFeed} />
         </div>
-        <KpiBar
-          kind="sales"
-          label={sales.label}
-          value={salesDisplay}
-          sub={sales.sub}
-          score={salesScore}
-          onClick={() => setDrillKey("sales" as KpiKey)}
-        />
-        <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
-        <KpiBar
-          kind="net"
-          label={net.label}
-          value={net.value}
-          valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
-          sub="today"
-          score={netScore}
-          isLast
-          onClick={() => setDrillKey("net" as KpiKey)}
-        />
-        <MarqueeFeed onLongPress={setOpenFeed} />
 
-        </div>{/* end scroll container */}
         <BottomTabs onOpen={setOpenTab} />
       </div>
 
@@ -195,6 +291,12 @@ export default function App() {
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />
       <LogTab      open={openTab === "log"}      onClose={() => setOpenTab(null)} />
       <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} />
+
+      <style>{`
+        @keyframes ptr-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
