@@ -85,14 +85,14 @@ export const coastal = {
   // Marquee — warm cream/driftwood, part of the coastal family
   marquee: {
     bg: "#F0EBDD",
-    text: "#4A5856",
+    text: "#5A4A2E",
   },
   toggle: {
     onBg: "#7ED8B4",
     onColor: "#0A4A2A",
     offBg: "transparent",
-    offColor: "#8A9C9C",
-    offBorder: "#C8D0CE",
+    offColor: "#8A7A60",
+    offBorder: "#C8B898",
   },
 
   // Bottom tabs

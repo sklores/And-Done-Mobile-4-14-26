@@ -135,14 +135,15 @@ export default function App() {
           <CoastalScene weather={weatherData.condition} />
           <div
             style={{
-              background: coastal.statusBarBg,
-              color: "#fff",
+              background: "#D8CEB4",
+              color: "#3E2F18",
               fontSize: isMobile ? 12 : 10,
               fontWeight: 700,
               padding: isMobile ? "7px 12px" : "6px 10px",
               display: "flex",
               justifyContent: "space-between",
               letterSpacing: ".06em",
+              borderTop: "1px solid #C0B495",
             }}
           >
             <span>{businessName}</span>
