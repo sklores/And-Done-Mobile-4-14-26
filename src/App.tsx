@@ -110,9 +110,6 @@ export default function App() {
           background: coastal.phoneBg,
           display: "flex",
           flexDirection: "column",
-          overflowY: "auto",
-          overscrollBehavior: "none",
-          paddingBottom: 50,
         } : {
           width: 375,
           maxWidth: "100%",
@@ -125,6 +122,13 @@ export default function App() {
           flexDirection: "column",
         }}
       >
+        {/* Scrollable content — fills all space above the pinned tab bar */}
+        <div style={isMobile ? {
+          flex: 1,
+          overflowY: "auto",
+          overscrollBehavior: "none",
+        } : {}}>
+
         {/* Framed painting with nameplate along the bottom of the frame */}
         <div
           style={{
@@ -187,7 +191,9 @@ export default function App() {
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed onLongPress={setOpenFeed} />
-        <BottomTabs onOpen={setOpenTab} fixed={isMobile} />
+
+        </div>{/* end scroll container */}
+        <BottomTabs onOpen={setOpenTab} />
       </div>
 
       {/* ── KPI drill-down modals ───────────────────── */}

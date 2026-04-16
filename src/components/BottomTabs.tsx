@@ -4,7 +4,6 @@ export type TabKey = "invoices" | "log" | "gizmo";
 
 type Props = {
   onOpen: (k: TabKey) => void;
-  fixed?: boolean;
 };
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -13,18 +12,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "gizmo",    label: "Gizmo"    },
 ];
 
-export function BottomTabs({ onOpen, fixed }: Props) {
+export function BottomTabs({ onOpen }: Props) {
   return (
-    <div style={{
-      background: coastal.tabs.bg,
-      ...(fixed ? {
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-      } : {}),
-    }}>
+    <div style={{ background: coastal.tabs.bg, flexShrink: 0 }}>
       <div
         style={{
           display: "flex",
