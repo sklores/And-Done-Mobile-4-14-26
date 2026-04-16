@@ -53,7 +53,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
     reviews: true,
     bank:    true,
     social:  true,
-    events:  false,
+    events:  true,
   });
   const [paused, setPaused] = useState(false);
 
