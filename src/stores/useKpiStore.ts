@@ -17,7 +17,10 @@ export type Kpi = {
 };
 
 export type LaborDetail = {
-  laborCost: number;
+  laborCost: number;       // grand total: hourly + salary + payroll tax
+  hourlyCost: number;      // raw Toast clock-in wages only
+  salaryCost: number;      // prorated daily salary for salaried staff
+  payrollTax: number;      // est. employer payroll taxes (FICA + FUTA + SUTA)
   hoursWorked: number;
   employeeCount: number;
   openCount: number;
@@ -96,6 +99,15 @@ function scoreStatus(score: number): string {
 
 const COGS_PCT_MOCK = 26.4;
 
+// ── Salaried staff (not tracked by Toast clock-in) ────────────────────────
+const SALARIED_STAFF = [
+  { name: "Elsie Zavala", dailyRate: 200 },
+];
+const DAILY_SALARY_COST = SALARIED_STAFF.reduce((s, e) => s + e.dailyRate, 0);
+
+// ── Employer payroll tax estimate (FICA 7.65% + FUTA 0.6% + DC SUTA 2.7%) ─
+const PAYROLL_TAX_RATE = 0.11;
+
 const placeholderTiles: Kpi[] = [
   { key: "cogs",    label: "COGS",       value: "26.4%", status: "Excellent", score: 8 },
   { key: "labor",   label: "Labor",      value: "--",    status: "Loading",   score: 5 },
@@ -158,11 +170,17 @@ export const useKpiStore = create<KpiState>((set) => ({
       let laborDetail: LaborDetail | null = s.laborDetail;
 
       if (laborResult) {
-        const hoursWorked = laborResult.totalHours;
-        const laborCost   = laborResult.totalLaborCost;
+        const hoursWorked  = laborResult.totalHours;
+        const hourlyCost   = laborResult.totalLaborCost;
+        const salaryCost   = DAILY_SALARY_COST;
+        const payrollTax   = Math.round((hourlyCost + salaryCost) * PAYROLL_TAX_RATE * 100) / 100;
+        const laborCost    = hourlyCost + salaryCost + payrollTax;
 
         laborDetail = {
           laborCost,
+          hourlyCost,
+          salaryCost,
+          payrollTax,
           hoursWorked,
           employeeCount: laborResult.employeeCount,
           openCount: laborResult.openCount,
@@ -188,10 +206,10 @@ export const useKpiStore = create<KpiState>((set) => ({
             status: scoreStatus(pScore), score: pScore,
           };
         } else if (laborCost > 0) {
-          laborTile = { key: "labor", label: "Labor", value: `$${laborCost.toFixed(0)}`, status: "No Sales", score: 2 };
+          laborTile = { key: "labor", label: "Labor", value: `$${Math.round(laborCost)}`, status: "No Sales", score: 2 };
           primeTile = { key: "prime", label: "Prime Cost", value: "No Sales", status: "Critical", score: 2 };
         } else {
-          laborTile = { key: "labor", label: "Labor", value: "--", status: "Idle", score: 5 };
+          laborTile = { key: "labor", label: "Labor", value: `$${Math.round(salaryCost + (salaryCost * PAYROLL_TAX_RATE))}`, status: "Idle", score: 5 };
           primeTile = { key: "prime", label: "Prime Cost", value: "--", status: "Idle", score: 5 };
         }
       }

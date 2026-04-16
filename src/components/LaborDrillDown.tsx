@@ -1,10 +1,26 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { coastal } from "../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
 
 function fmt$(n: number) { return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
 function fmtDec$(n: number) { return `$${n.toFixed(2)}`; }
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div style={{
+      padding: "10px 18px 4px", fontSize: 9, fontWeight: 700,
+      letterSpacing: ".1em", textTransform: "uppercase",
+      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      background: "#F2F7F6",
+      borderTop: "1px solid rgba(0,0,0,0.05)",
+      borderBottom: "1px solid rgba(0,0,0,0.05)",
+    }}>
+      {title}
+    </div>
+  );
+}
 
 export function LaborDrillDown({ open, onClose }: Props) {
   const laborTile = useKpiStore((s) => s.tiles.find((t) => t.key === "labor"));
@@ -21,6 +37,8 @@ export function LaborDrillDown({ open, onClose }: Props) {
       value={laborTile.value}
       status={laborTile.status}
     >
+      {/* ── Efficiency ─────────────────────────────── */}
+      <SectionHeader title="Efficiency" />
       <DrillRow
         label="Sales / Man Hour"
         value={detail?.salesPerManHour != null ? fmtDec$(detail.salesPerManHour) : "--"}
@@ -32,14 +50,37 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub={detail ? `${detail.openCount} active · ${detail.employeeCount} clocked in` : undefined}
       />
       <DrillRow
-        label="Labor Cost"
-        value={detail ? fmt$(detail.laborCost) : "--"}
-        sub={detail?.openCount ? "accruing (open shifts)" : undefined}
-      />
-      <DrillRow
         label="Tips"
         value={detail ? fmtDec$(detail.totalTips) : "--"}
         sub={detail?.tipPct != null ? `${detail.tipPct.toFixed(1)}% of net sales` : undefined}
+      />
+
+      {/* ── Cost breakdown ─────────────────────────── */}
+      <SectionHeader title="Cost Breakdown" />
+      <DrillRow
+        label="Hourly Wages"
+        value={detail ? fmt$(detail.hourlyCost) : "--"}
+        sub={detail?.openCount ? "accruing (open shifts)" : "clock-in wages · Toast"}
+      />
+      <DrillRow
+        label="Elsie Zavala"
+        value={detail ? fmt$(detail.salaryCost) : "$222"}
+        sub="salary · $200/day prorated"
+      />
+      <DrillRow
+        label="Est. Payroll Taxes"
+        value={detail ? fmt$(detail.payrollTax) : "--"}
+        sub="employer FICA + FUTA + DC SUTA · ~11%"
+      />
+
+      {/* ── Total ──────────────────────────────────── */}
+      <SectionHeader title="Total" />
+      <DrillRow
+        label="Total Labor Cost"
+        value={detail ? fmt$(detail.laborCost) : "--"}
+        sub={detail && detail.totalSales > 0
+          ? `${((detail.laborCost / detail.totalSales) * 100).toFixed(1)}% of net sales`
+          : undefined}
       />
       <DrillRow
         label="Net Sales"
