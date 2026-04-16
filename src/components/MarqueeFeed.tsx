@@ -91,14 +91,14 @@ export function MarqueeFeed({ onLongPress }: Props) {
   };
 
   return (
-    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope }}>
+    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope, marginTop: 8 }}>
       {/* Scrolling text */}
       <div
         onClick={() => setPaused((p) => !p)}
         style={{
           overflow: "hidden",
           whiteSpace: "nowrap",
-          padding: "11px 0",
+          padding: "8px 0",
           color: coastal.marquee.text,
           fontSize: 12,
           fontWeight: 500,
@@ -143,7 +143,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
               onClick={() => handleClick(k)}
               style={{
                 flex: 1,
-                height: 52,
+                height: 46,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
