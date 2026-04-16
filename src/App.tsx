@@ -106,6 +106,7 @@ export default function App() {
           overscrollBehavior: "none",
           display: "flex",
           flexDirection: "column",
+          background: coastal.tabs.bg,
         }}>
 
         {/* Framed painting with nameplate along the bottom of the frame */}
