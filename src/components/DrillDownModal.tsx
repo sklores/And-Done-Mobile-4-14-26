@@ -45,7 +45,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
           width: 375,
           maxWidth: "100vw",
-          background: coastal.phoneBg,
+          background: coastal.sheetBg,
           borderRadius: "18px 18px 0 0",
           overflow: "hidden",
           zIndex: 101,
@@ -91,7 +91,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
         </div>
 
         {/* Content rows — scrollable */}
-        <div style={{ padding: "8px 0 32px", background: coastal.phoneBg, overflowY: "auto", maxHeight: "55vh" }}>
+        <div style={{ padding: "8px 0 32px", background: coastal.sheetBg, overflowY: "auto", maxHeight: "55vh" }}>
           {children}
         </div>
       </div>

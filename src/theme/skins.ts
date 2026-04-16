@@ -11,6 +11,7 @@ export type TileStop = {
 export const coastal = {
   // Phone frame
   phoneBg: "#8A8E92",
+  sheetBg: "#F4F4F4",
   pageBg: "#f5f5f5",
   phoneBorder: "#ddd",
   phoneShadow: "0 20px 60px rgba(0,0,0,.12)",
