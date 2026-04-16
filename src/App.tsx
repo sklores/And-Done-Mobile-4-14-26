@@ -121,36 +121,7 @@ export default function App() {
           flexDirection: "column",
         }}
       >
-        {/* Status bar */}
-        <div
-          style={{
-            background: coastal.statusBarBg,
-            color: "#fff",
-            fontSize: isMobile ? 13 : 10,
-            fontWeight: 700,
-            padding: isMobile ? "10px 18px" : "6px 14px",
-            display: "flex",
-            justifyContent: "space-between",
-            letterSpacing: ".06em",
-          }}
-        >
-          <span>{businessName}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ opacity: 0.9 }}>
-              {weatherData.condition === "clear"  && "☀️"}
-              {weatherData.condition === "cloudy" && "⛅"}
-              {weatherData.condition === "rain"   && "🌧️"}
-              {weatherData.condition === "snow"   && "❄️"}
-              {weatherData.condition === "wind"   && "💨"}
-              {weatherData.tempF != null && ` ${weatherData.tempF}°`}
-            </span>
-            <span>
-              {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </span>
-        </div>
-
-        {/* Framed painting: sits inside the phone "wall" with border + shadow */}
+        {/* Framed painting with nameplate along the bottom of the frame */}
         <div
           style={{
             margin: "8px 12px 0",
@@ -162,6 +133,33 @@ export default function App() {
           }}
         >
           <CoastalScene weather={weatherData.condition} />
+          <div
+            style={{
+              background: coastal.statusBarBg,
+              color: "#fff",
+              fontSize: isMobile ? 12 : 10,
+              fontWeight: 700,
+              padding: isMobile ? "7px 12px" : "6px 10px",
+              display: "flex",
+              justifyContent: "space-between",
+              letterSpacing: ".06em",
+            }}
+          >
+            <span>{businessName}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ opacity: 0.9 }}>
+                {weatherData.condition === "clear"  && "☀️"}
+                {weatherData.condition === "cloudy" && "⛅"}
+                {weatherData.condition === "rain"   && "🌧️"}
+                {weatherData.condition === "snow"   && "❄️"}
+                {weatherData.condition === "wind"   && "💨"}
+                {weatherData.tempF != null && ` ${weatherData.tempF}°`}
+              </span>
+              <span>
+                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </span>
+          </div>
         </div>
         <KpiBar
           kind="sales"
