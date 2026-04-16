@@ -264,7 +264,7 @@ export const useKpiStore = create<KpiState>((set) => ({
       });
 
       // ── Net Profit ─────────────────────────────────────────────────
-      const laborCostFinal  = laborResult?.totalLaborCost ?? 0;
+      const laborCostFinal  = laborDetail?.laborCost ?? 0; // full cost: hourly + salary + payroll tax
       const cogsDollars     = cogsDollarsActual;
       const primeDollars    = laborCostFinal + cogsDollars;
       const netDollars      = totalSales - primeDollars - totalFixed;
