@@ -239,7 +239,7 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const dolphinSpd    = dolphinActive ? (socScore >= 6 ? 4.5 : socScore >= 4 ? 7.5 : 12) : 99
 
   return (
-    <div className="coastal-scene" style={{ width: '100%', aspectRatio: '375 / 175', overflow: 'hidden', display: 'block' }}>
+    <div className="coastal-scene" style={{ width: '100%', aspectRatio: '375 / 200', overflow: 'hidden', display: 'block' }}>
       <style>{SCENE_CSS}</style>
       <svg viewBox="0 0 375 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: 'block' }}>
         <defs>
