@@ -17,7 +17,7 @@ export function KpiGrid({ tiles, onTileClick }: Props) {
         minHeight: 0,
         gap: 6,
         padding: "8px 12px 0",
-        background: "#E4EDED",
+        background: "#8A8E92",
       }}
     >
       {tiles.map((k) => (
