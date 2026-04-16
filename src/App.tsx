@@ -112,6 +112,7 @@ export default function App() {
           flexDirection: "column",
           overflowY: "auto",
           overscrollBehavior: "none",
+          paddingBottom: 50,
         } : {
           width: 375,
           maxWidth: "100%",
@@ -186,7 +187,7 @@ export default function App() {
           onClick={() => setDrillKey("net" as KpiKey)}
         />
         <MarqueeFeed onLongPress={setOpenFeed} />
-        <BottomTabs onOpen={setOpenTab} />
+        <BottomTabs onOpen={setOpenTab} fixed={isMobile} />
       </div>
 
       {/* ── KPI drill-down modals ───────────────────── */}
