@@ -30,8 +30,8 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Pr
       style={{
         background: bg,
         borderRadius: 10,
-        margin: "8px 12px 0",
-        padding: "14px 16px",
+        margin: "8px 10px 0",
+        padding: "12px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
