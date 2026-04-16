@@ -14,7 +14,7 @@ type Props = {
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, score, isLast, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Props) {
   const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
 
