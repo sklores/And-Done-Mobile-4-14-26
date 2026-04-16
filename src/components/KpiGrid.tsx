@@ -12,8 +12,8 @@ export function KpiGrid({ tiles, onTileClick }: Props) {
       style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: 6,
-        padding: "8px 12px 0",
+        gap: 4,
+        padding: "6px 10px 0",
         background: "#8A8E92",
       }}
     >

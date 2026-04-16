@@ -239,9 +239,9 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const dolphinSpd    = dolphinActive ? (socScore >= 6 ? 4.5 : socScore >= 4 ? 7.5 : 12) : 99
 
   return (
-    <div className="coastal-scene" style={{ width: '100%', overflow: 'hidden', display: 'block' }}>
+    <div className="coastal-scene" style={{ width: '100%', aspectRatio: '375 / 175', overflow: 'hidden', display: 'block' }}>
       <style>{SCENE_CSS}</style>
-      <svg viewBox="0 0 375 200" width="100%" style={{ display: 'block' }}>
+      <svg viewBox="0 0 375 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: 'block' }}>
         <defs>
           <linearGradient id="cs-sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor={skyTop} />

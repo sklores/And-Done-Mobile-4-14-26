@@ -30,7 +30,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, isLast, onCli
       style={{
         background: bg,
         borderRadius: 10,
-        margin: isLast ? "8px 12px 8px" : "8px 12px 0",
+        margin: "8px 12px 0",
         padding: "14px 16px",
         display: "flex",
         alignItems: "center",
