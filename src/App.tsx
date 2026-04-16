@@ -6,7 +6,7 @@ import type { KpiKey } from "./stores/useKpiStore";
 import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
 import { CoastalScene, type WeatherCondition } from "./components/CoastalScene";
-import { MarqueeFeed } from "./components/MarqueeFeed";
+import { MarqueeFeed, type FeedKey } from "./components/MarqueeFeed";
 import { BottomTabs } from "./components/BottomTabs";
 import type { TabKey } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
@@ -17,6 +17,8 @@ import { NetDrillDown } from "./components/NetDrillDown";
 import { COGSDrillDown } from "./components/COGSDrillDown";
 import { ReviewsDrillDown } from "./components/ReviewsDrillDown";
 import { SocialDrillDown } from "./components/SocialDrillDown";
+import { BankDrillDown } from "./components/BankDrillDown";
+import { EventsDrillDown } from "./components/EventsDrillDown";
 import { InvoicesTab } from "./components/tabs/InvoicesTab";
 import { LogTab } from "./components/tabs/LogTab";
 import { GizmoTab } from "./components/tabs/GizmoTab";
@@ -44,10 +46,11 @@ export default function App() {
   const tiles        = useKpiStore((s) => s.tiles);
   const refresh      = useKpiStore((s) => s.refresh);
 
-  const [openTab, setOpenTab]   = useState<TabKey | null>(null);
+  const [openTab, setOpenTab]     = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
-  const [drillKey, setDrillKey] = useState<KpiKey | null>(null);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 600);
+  const [drillKey, setDrillKey]   = useState<KpiKey | null>(null);
+  const [openFeed, setOpenFeed]   = useState<FeedKey | null>(null);
+  const [isMobile, setIsMobile]   = useState(() => window.innerWidth <= 600);
 
   useEffect(() => {
     refresh();
@@ -182,19 +185,23 @@ export default function App() {
           isLast
           onClick={() => setDrillKey("net" as KpiKey)}
         />
-        <MarqueeFeed />
+        <MarqueeFeed onLongPress={setOpenFeed} />
         <BottomTabs onOpen={setOpenTab} />
       </div>
 
       {/* ── KPI drill-down modals ───────────────────── */}
-      <SalesDrillDown      open={drillKey === "sales"}   onClose={() => setDrillKey(null)} />
-      <LaborDrillDown      open={drillKey === "labor"}   onClose={() => setDrillKey(null)} />
-      <PrimeCostDrillDown  open={drillKey === "prime"}   onClose={() => setDrillKey(null)} />
-      <FixedCostDrillDown  open={drillKey === "fixed"}   onClose={() => setDrillKey(null)} />
-      <NetDrillDown        open={drillKey === "net"}     onClose={() => setDrillKey(null)} />
-      <COGSDrillDown       open={drillKey === "cogs"}    onClose={() => setDrillKey(null)} />
-      <ReviewsDrillDown    open={drillKey === "reviews"} onClose={() => setDrillKey(null)} />
-      <SocialDrillDown     open={drillKey === "social"}  onClose={() => setDrillKey(null)} />
+      <SalesDrillDown     open={drillKey === "sales"} onClose={() => setDrillKey(null)} />
+      <LaborDrillDown     open={drillKey === "labor"} onClose={() => setDrillKey(null)} />
+      <PrimeCostDrillDown open={drillKey === "prime"} onClose={() => setDrillKey(null)} />
+      <FixedCostDrillDown open={drillKey === "fixed"} onClose={() => setDrillKey(null)} />
+      <NetDrillDown       open={drillKey === "net"}   onClose={() => setDrillKey(null)} />
+      <COGSDrillDown      open={drillKey === "cogs"}  onClose={() => setDrillKey(null)} />
+
+      {/* ── Feed chip drill-downs (long-press) ──────── */}
+      <ReviewsDrillDown open={openFeed === "reviews"} onClose={() => setOpenFeed(null)} />
+      <SocialDrillDown  open={openFeed === "social"}  onClose={() => setOpenFeed(null)} />
+      <BankDrillDown    open={openFeed === "bank"}    onClose={() => setOpenFeed(null)} />
+      <EventsDrillDown  open={openFeed === "events"}  onClose={() => setOpenFeed(null)} />
 
       {/* ── Bottom tab panels ───────────────────────── */}
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />

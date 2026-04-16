@@ -1,10 +1,17 @@
-import { useState, useMemo } from "react";
-import { coastal } from "../theme/skins";
+import { useState, useMemo, useRef } from "react";
+import { coastal, tileForScore } from "../theme/skins";
 
-type FeedKey = "reviews" | "sales" | "social" | "events";
+export type FeedKey = "reviews" | "bank" | "social" | "events";
 
-// Pixels per character — controls scroll speed regardless of content length
 const PX_PER_CHAR = 7;
+
+// Mock scores — wire to real data sources when APIs are connected
+const FEED_SCORES: Record<FeedKey, number> = {
+  reviews: 8,   // 4.8★ excellent
+  bank:    6,   // normal transactions, nothing alarming
+  social:  4,   // below follower target — alert
+  events:  5,   // some events need attention
+};
 
 const FEEDS: Record<FeedKey, string[]> = {
   reviews: [
@@ -12,10 +19,11 @@ const FEEDS: Record<FeedKey, string[]> = {
     "★★★★★ \"Cozy vibe and fast service\" — Jon P.",
     "★★★★☆ \"Loved the tomato soup pairing\" — Aly R.",
   ],
-  sales: [
-    "Top item today: Classic Grilled Cheese",
-    "Bar mix holding steady at 22% of sales",
-    "Online orders up vs yesterday",
+  bank: [
+    "Toast deposit +$1,295",
+    "US Foods -$487",
+    "Toast payroll -$847",
+    "Unknown ACH -$890 ⚠",
   ],
   social: [
     "+142 followers this week",
@@ -23,20 +31,34 @@ const FEEDS: Record<FeedKey, string[]> = {
     "Mentioned by @dceats earlier today",
   ],
   events: [
-    "Patio brunch Saturday 10a",
-    "Live music Thursday night",
-    "Trivia Tuesday — 7pm",
+    "Patio brunch Sat 10a — staff confirmed",
+    "Live music Thu 7pm — performer not confirmed ⚠",
+    "Trivia Tuesday 7pm — host booked",
   ],
 };
 
-export function MarqueeFeed() {
+const FEED_LABELS: Record<FeedKey, string> = {
+  reviews: "Reviews",
+  bank:    "Bank",
+  social:  "Social",
+  events:  "Events",
+};
+
+type Props = {
+  onLongPress: (key: FeedKey) => void;
+};
+
+export function MarqueeFeed({ onLongPress }: Props) {
   const [active, setActive] = useState<Record<FeedKey, boolean>>({
     reviews: true,
-    sales: true,
-    social: true,
-    events: false,
+    bank:    true,
+    social:  true,
+    events:  false,
   });
   const [paused, setPaused] = useState(false);
+
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress   = useRef(false);
 
   const items: string[] = [];
   (Object.keys(active) as FeedKey[]).forEach((k) => {
@@ -44,17 +66,33 @@ export function MarqueeFeed() {
   });
   const line = items.length ? items.join("   •   ") : "No feeds selected";
 
-  // Duration scales with text length so speed stays constant
   const duration = useMemo(() => {
     const totalPx = line.length * PX_PER_CHAR;
-    const seconds = totalPx / 80; // 80px per second
+    const seconds = totalPx / 80;
     return `${Math.max(seconds, 8).toFixed(1)}s`;
   }, [line]);
 
   const toggle = (k: FeedKey) => setActive((a) => ({ ...a, [k]: !a[k] }));
 
+  const handlePointerDown = (k: FeedKey) => {
+    didLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      onLongPress(k);
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  const handleClick = (k: FeedKey) => {
+    if (!didLongPress.current) toggle(k);
+  };
+
   return (
-    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope, marginTop: 8 }}>
+    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope }}>
+      {/* Scrolling text */}
       <div
         onClick={() => setPaused((p) => !p)}
         style={{
@@ -80,28 +118,67 @@ export function MarqueeFeed() {
           {line}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 4, padding: "4px 6px 6px", justifyContent: "space-between" }}>
+
+      {/* Feed chips */}
+      <div style={{
+        display: "flex",
+        gap: 6,
+        padding: "4px 8px 8px",
+      }}>
         {(Object.keys(FEEDS) as FeedKey[]).map((k) => {
-          const on = active[k];
+          const on      = active[k];
+          const score   = FEED_SCORES[k];
+          const palette = tileForScore(score);
+          const statusLabels: Record<number, string> = {
+            8: "Excellent", 7: "Good", 6: "Watch",
+            5: "Caution",  4: "Alert", 3: "Bad", 2: "Critical", 1: "Critical",
+          };
           return (
             <button
               key={k}
-              onClick={() => toggle(k)}
+              onPointerDown={() => handlePointerDown(k)}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onContextMenu={(e) => e.preventDefault()}
+              onClick={() => handleClick(k)}
               style={{
                 flex: 1,
-                background: on ? coastal.toggle.onBg : coastal.toggle.offBg,
-                color: on ? coastal.toggle.onColor : coastal.toggle.offColor,
-                border: `1px solid ${on ? coastal.toggle.onBg : coastal.toggle.offBorder}`,
-                borderRadius: 6,
-                padding: "5px 0",
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: ".08em",
+                height: 52,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
+                background: on ? palette.bg : "#D4D8DC",
+                color: on ? palette.label : "#8A9C9C",
+                border: "none",
+                borderRadius: 8,
                 cursor: "pointer",
+                padding: 0,
+                transition: "background 0.15s ease, opacity 0.15s ease",
+                opacity: on ? 1 : 0.7,
+                WebkitTapHighlightColor: "transparent",
+                userSelect: "none",
               }}
             >
-              {k}
+              <span style={{
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                fontFamily: coastal.fonts.manrope,
+              }}>
+                {FEED_LABELS[k]}
+              </span>
+              <span style={{
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: ".05em",
+                textTransform: "uppercase",
+                opacity: on ? 0.75 : 0.5,
+              }}>
+                {statusLabels[score]}
+              </span>
             </button>
           );
         })}
