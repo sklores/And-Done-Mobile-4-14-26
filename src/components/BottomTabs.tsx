@@ -14,7 +14,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export function BottomTabs({ onOpen }: Props) {
   return (
-    <div style={{ background: coastal.tabs.bg, flexShrink: 0 }}>
+    <div style={{ background: coastal.phoneBg, flexShrink: 0 }}>
       <div
         style={{
           display: "flex",
