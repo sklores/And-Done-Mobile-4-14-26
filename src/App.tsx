@@ -81,22 +81,23 @@ export default function App() {
   return (
     <div
       style={{
-        height: "100dvh",
-        overflow: "hidden",
-        background: coastal.phoneBg,
+        minHeight: "100dvh",
+        background: coastal.pageBg,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
         fontFamily: coastal.fonts.manrope,
       }}
     >
       <div
-        className="mobile-app"
         style={{
           width: "100%",
           maxWidth: 480,
-          margin: "0 auto",
-          height: "100%",
+          minHeight: "100dvh",
           background: coastal.phoneBg,
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         {/* Scrollable content — fills all space above the pinned tab bar */}
@@ -106,7 +107,7 @@ export default function App() {
           overscrollBehavior: "none",
           display: "flex",
           flexDirection: "column",
-          background: coastal.tabs.bg,
+          background: coastal.phoneBg,
         }}>
 
         {/* Framed painting with nameplate along the bottom of the frame */}
