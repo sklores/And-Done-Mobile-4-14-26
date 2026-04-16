@@ -130,6 +130,7 @@ export default function App() {
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
             overflow: "hidden",
             background: "#B4B8BC",
+            flexShrink: 0,
           }}
         >
           <CoastalScene weather={weatherData.condition} />
