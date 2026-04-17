@@ -18,11 +18,17 @@ function getTimeOfDay(d = new Date()): TimeOfDay {
 }
 
 const SKY: Record<TimeOfDay, [string, string, string]> = {
-  dawn:      ['#E8956A', '#F4C090', '#F8DDB8'],
+  dawn:      ['#C87848', '#F4A870', '#F8DDB8'],
   morning:   ['#6AAED4', '#94CAE0', '#C0E0EE'],
   afternoon: ['#4A90C8', '#78B4D8', '#AADCEE'],
   sundown:   ['#C84828', '#E87840', '#F4A860'],
   night:     ['#080E1C', '#0C1428', '#101E38'],
+}
+
+// Extra deep-top color injected as a 4th gradient stop for sundown/dawn
+const SKY_DEEP_TOP: Partial<Record<TimeOfDay, string>> = {
+  dawn:    '#1E0E28',  // dark purple-navy before sunrise
+  sundown: '#3C1420',  // deep crimson-purple at the top
 }
 
 const HORIZON: Record<TimeOfDay, string> = {
@@ -50,7 +56,7 @@ const SUN: Record<TimeOfDay, { x: number; y: number; r: number; c: string; g: st
 }
 
 const CLOUD_OPACITY: Record<TimeOfDay, number> = {
-  dawn: .75, morning: .65, afternoon: .52, sundown: .8, night: .12,
+  dawn: .50, morning: .65, afternoon: .52, sundown: .36, night: .12,
 }
 
 const ROCK_COLORS: Record<TimeOfDay, [string, string, string]> = {
@@ -192,7 +198,10 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const sun = SUN[tod]
   const cOp = CLOUD_OPACITY[tod]
   const [rC, rM, rD] = ROCK_COLORS[tod]
-  const cc  = isNight ? '#1A2A3A' : weather === 'cloudy' ? '#8AAABB' : 'white'
+  // Clouds read warm-cream at golden hours so they don't go pink over orange sky
+  const cc  = isNight ? '#1A2A3A' : weather === 'cloudy' ? '#8AAABB' : (isSundown || isDawn) ? '#FFE8CC' : 'white'
+  // 4th sky gradient stop — dark purple crown for sundown/dawn
+  const skyDeepTop = SKY_DEEP_TOP[tod] ?? null
 
   // Sales → waves
   const amp   = wAmp(sales) + (isWind ? 8 : 0)
@@ -250,8 +259,9 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
       <svg viewBox="0 0 375 200" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style={{ display: 'block' }}>
         <defs>
           <linearGradient id="cs-sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={skyTop} />
-            <stop offset="52%"  stopColor={skyMid} />
+            {skyDeepTop && <stop offset="0%"  stopColor={skyDeepTop} />}
+            <stop offset={skyDeepTop ? "18%" : "0%"}  stopColor={skyTop} />
+            <stop offset={skyDeepTop ? "58%" : "52%"} stopColor={skyMid} />
             <stop offset="100%" stopColor={skyBot} />
           </linearGradient>
           <linearGradient id="cs-haze" x1="0" y1="0" x2="0" y2="1">
@@ -290,6 +300,17 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
             </>
           ) : (
             <>
+              {/* Extra wide atmospheric haze at golden hours */}
+              {(isSundown || isDawn) && (
+                <>
+                  <circle cx={sun.x} cy={sun.y} r={sun.r+55} fill={sun.c} opacity={.03} />
+                  <circle cx={sun.x} cy={sun.y} r={sun.r+35} fill={sun.c} opacity={.05} />
+                  <circle cx={sun.x} cy={sun.y} r={sun.r+20} fill={sun.g} opacity={.09} />
+                  {/* Horizon glow band */}
+                  <ellipse cx={sun.x} cy={WL} rx={120} ry={22} fill={sun.c} opacity={.10} />
+                  <ellipse cx={sun.x} cy={WL} rx={80}  ry={12} fill={sun.c} opacity={.08} />
+                </>
+              )}
               <circle cx={sun.x} cy={sun.y} r={sun.r+10} fill={sun.g} opacity={.14} />
               <circle cx={sun.x} cy={sun.y} r={sun.r+5}  fill={sun.g} opacity={.12} />
               <circle cx={sun.x} cy={sun.y} r={sun.r}    fill={sun.c} opacity={.95} />
@@ -491,18 +512,17 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Bottom water depth */}
           <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
 
-          {/* &done watermark — painter's signature ghosted into the scene */}
+          {/* &done — painter's signature, bottom-right corner */}
           <text
-            x="187.5"
-            y="100"
-            textAnchor="middle"
-            dominantBaseline="middle"
+            x="368"
+            y="193"
+            textAnchor="end"
             fill="#ffffff"
             fontFamily="'Manrope', sans-serif"
-            fontSize="28"
-            fontWeight="700"
-            letterSpacing="5"
-            style={{ animation: "cs-brand-fade 3s ease-out forwards" }}
+            fontSize="8"
+            fontWeight="600"
+            letterSpacing="1.5"
+            opacity={isNight ? 0.28 : 0.18}
           >
             &amp;done
           </text>
