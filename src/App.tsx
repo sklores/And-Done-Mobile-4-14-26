@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { coastal } from "./theme/skins";
+import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import type { KpiKey } from "./stores/useKpiStore";
@@ -142,6 +143,23 @@ export default function App() {
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
   const netScore   = scoreFromRange(netPctNum, -5, 15);
 
+  // ── Crisis-level pulse alerts ─────────────────────────────────────────────
+  const alertingKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const T = ALERT_THRESHOLDS;
+    if (sales.value < T.sales.below) keys.add("sales");
+    if (netPctNum   < T.net.below)   keys.add("net");
+    tiles.forEach((t) => {
+      const v = parseFloat(t.value);
+      if (!Number.isFinite(v)) return;
+      if (t.key === "cogs"  && v > T.cogs.above)  keys.add("cogs");
+      if (t.key === "labor" && v > T.labor.above)  keys.add("labor");
+      if (t.key === "prime" && v > T.prime.above)  keys.add("prime");
+      if (t.key === "fixed" && v > T.fixed.above)  keys.add("fixed");
+    });
+    return keys;
+  }, [sales.value, netPctNum, tiles]);
+
   // Pull indicator progress 0→1
   const pullProgress = Math.min(pullY / PULL_THRESHOLD, 1);
 
@@ -251,9 +269,10 @@ export default function App() {
             value={salesDisplay}
             sub={sales.sub}
             score={salesScore}
+            alerting={alertingKeys.has("sales")}
             onClick={() => setDrillKey("sales" as KpiKey)}
           />
-          <KpiGrid tiles={tiles} onTileClick={setDrillKey} />
+          <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} />
           <KpiBar
             kind="net"
             label={net.label}
@@ -262,6 +281,7 @@ export default function App() {
             sub="today"
             score={netScore}
             isLast
+            alerting={alertingKeys.has("net")}
             onClick={() => setDrillKey("net" as KpiKey)}
           />
           <MarqueeFeed onLongPress={setOpenFeed} />

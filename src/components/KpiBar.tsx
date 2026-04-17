@@ -11,10 +11,11 @@ type Props = {
   score?: number;
   /** Last stacked bar before the marquee — needs bottom margin for rhythm */
   isLast?: boolean;
+  alerting?: boolean;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, onClick }: Props) {
   const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
 
@@ -37,6 +38,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, onClick }: Pr
         justifyContent: "space-between",
         fontFamily: coastal.fonts.manrope,
         cursor: onClick ? "pointer" : undefined,
+        animation: alerting ? "kpiPulse 2s ease-in-out infinite" : undefined,
       }}
     >
       <div

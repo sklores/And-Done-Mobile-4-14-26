@@ -4,9 +4,10 @@ import type { Kpi, KpiKey } from "../stores/useKpiStore";
 type Props = {
   tiles: Kpi[];
   onTileClick?: (key: KpiKey) => void;
+  alertingKeys?: Set<string>;
 };
 
-export function KpiGrid({ tiles, onTileClick }: Props) {
+export function KpiGrid({ tiles, onTileClick, alertingKeys }: Props) {
   return (
     <div
       style={{
@@ -21,6 +22,7 @@ export function KpiGrid({ tiles, onTileClick }: Props) {
         <KpiTile
           key={k.key}
           kpi={k}
+          alerting={alertingKeys?.has(k.key)}
           onClick={onTileClick ? () => onTileClick(k.key) : undefined}
         />
       ))}

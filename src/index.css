@@ -27,3 +27,8 @@ button { font-family: inherit; }
   0%   { filter: brightness(1.4); }
   100% { filter: brightness(1); }
 }
+
+@keyframes kpiPulse {
+  0%, 100% { filter: brightness(1);   }
+  50%       { filter: brightness(1.3); }
+}
