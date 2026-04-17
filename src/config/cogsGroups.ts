@@ -27,8 +27,9 @@ export const GROUP_COGS_PCT: Record<CogsGroup, number> = {
 };
 
 const FOOD_CATS = new Set([
-  "Food","Sandwiches","Grilled Cheese","Soups","Sides",
-  "Appetizers","Appetizer","Kids","Dessert","Desserts",
+  "Food","Sandwiches","Grilled Cheese","Soups","Soup","Sides","Side",
+  "Appetizers","Appetizer","Kids","Dessert","Desserts","Other",
+  "Entrees","Entree","Mains","Salads","Salad","Snacks",
 ]);
 const BEV_CATS = new Set([
   "NA Beverage","Non-Alcoholic","Soft Drinks","Soda",

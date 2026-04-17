@@ -542,18 +542,24 @@ export async function getTodayCOGSDetail(creds) {
             if (v > 0) { voidValue += v; voidCount++; }
             continue;
           }
-          if (!sel.salesCategory) continue; // skip modifiers
-          const catName = (typeof sel.salesCategory === 'object'
-            ? sel.salesCategory.name
-            : sel.salesCategory) ?? 'Other';
           const rev = typeof sel.receiptLinePrice === 'number'
             ? sel.receiptLinePrice
             : (typeof sel.price === 'number' ? sel.price * (sel.quantity ?? 1) : 0);
-          if (rev > 0) {
-            const existing = categoryMap.get(catName);
-            if (existing) existing.revenue += rev;
-            else categoryMap.set(catName, { revenue: rev });
-          }
+          if (rev <= 0) continue; // skip $0 modifiers / comps
+
+          // Category resolution: salesCategory → menuGroup → item name keyword
+          let catName =
+            (typeof sel.salesCategory === 'object' ? sel.salesCategory?.name : sel.salesCategory)
+            || sel.itemGroup?.name
+            || sel.menuItem?.menuGroup?.name
+            || sel.menuItem?.menuItemGroup?.name
+            || sel.displayName
+            || sel.menuItem?.name
+            || 'Other';
+
+          const existing = categoryMap.get(catName);
+          if (existing) existing.revenue += rev;
+          else categoryMap.set(catName, { revenue: rev });
         }
       }
     }
