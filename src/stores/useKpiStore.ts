@@ -3,7 +3,7 @@ import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, f
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseReady } from "../lib/supabase";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -235,6 +235,10 @@ export const useKpiStore = create<KpiState>((set, get) => ({
 
   // ── Real-time subscription to kpi_snapshots ─────────────────────────────
   subscribeToSnapshots: () => {
+    if (!supabaseReady) {
+      console.warn("[supabase] Skipping subscription — env vars not set");
+      return () => {};
+    }
     // Load the latest snapshot immediately on subscribe
     supabase
       .from("kpi_snapshots")
