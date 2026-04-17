@@ -84,39 +84,48 @@ export function MarqueeFeed({ onLongPress }: Props) {
   };
 
   return (
-    <div style={{ background: coastal.marquee.bg, fontFamily: coastal.fonts.manrope }}>
-      {/* Scrolling text */}
-      <div
-        onClick={() => setPaused((p) => !p)}
-        style={{
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          padding: "8px 0",
-          color: coastal.marquee.text,
-          fontSize: 12,
-          fontWeight: 500,
-          cursor: "pointer",
-          userSelect: "none",
-          letterSpacing: ".01em",
-        }}
-      >
+    <div style={{ fontFamily: coastal.fonts.manrope }}>
+      {/* Scrolling text — framed in driftwood, same width as KpiBar */}
+      <div style={{
+        margin: "8px 10px 0",
+        border: "3px solid #C4B090",
+        borderRadius: 10,
+        overflow: "hidden",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+        background: coastal.marquee.bg,
+      }}>
         <div
+          onClick={() => setPaused((p) => !p)}
           style={{
-            display: "inline-block",
-            paddingLeft: "100%",
-            animation: `marquee ${duration} linear infinite`,
-            animationPlayState: paused ? "paused" : "running",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            padding: "8px 0",
+            color: coastal.marquee.text,
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: "pointer",
+            userSelect: "none",
+            letterSpacing: ".01em",
           }}
         >
-          {line}
+          <div
+            style={{
+              display: "inline-block",
+              paddingLeft: "100%",
+              animation: `marquee ${duration} linear infinite`,
+              animationPlayState: paused ? "paused" : "running",
+            }}
+          >
+            {line}
+          </div>
         </div>
       </div>
 
-      {/* Feed chips */}
+      {/* Feed chips — unframed, same side margins as KpiBar */}
       <div style={{
         display: "flex",
         gap: 6,
-        padding: "4px 8px 8px",
+        padding: "6px 10px 8px",
       }}>
         {(Object.keys(FEEDS) as FeedKey[]).map((k) => {
           const on      = active[k];
