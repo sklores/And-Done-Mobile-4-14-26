@@ -34,11 +34,11 @@ const HORIZON: Record<TimeOfDay, string> = {
 }
 
 const WATER: Record<TimeOfDay, [string, string, string]> = {
-  dawn:      ['#7A8898', '#4A5868', '#2A3848'],
-  morning:   ['#4A9AB8', '#2A7898', '#0E4E6E'],
-  afternoon: ['#3A88B0', '#1A6090', '#0A3860'],
-  sundown:   ['#8A5840', '#5A3828', '#2E1A14'],
-  night:     ['#0A1420', '#060C14', '#030608'],
+  dawn:      ['#5A7E98', '#2E5470', '#102840'],  // slate-blue pre-dawn
+  morning:   ['#4A9AB8', '#2A7898', '#0E4E6E'],  // clear bright teal-blue
+  afternoon: ['#3A8EB8', '#1A6898', '#0A4068'],  // deep clean blue
+  sundown:   ['#3A6A8A', '#1A4868', '#0A2848'],  // dusky navy — stays blue
+  night:     ['#0C1828', '#080E18', '#040810'],  // near-black deep blue
 }
 
 const SUN: Record<TimeOfDay, { x: number; y: number; r: number; c: string; g: string; moon: boolean }> = {
@@ -171,7 +171,6 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
 
   // KPI scores 1–8 (8 = excellent)
   const laborScore = tiles.find(t => t.key === 'labor')?.score    ?? 5
-  const cogsScore  = tiles.find(t => t.key === 'cogs')?.score     ?? 5
   const primeScore = tiles.find(t => t.key === 'prime')?.score    ?? 5
   const expScore   = tiles.find(t => t.key === 'fixed')?.score ?? 5
   const revScore   = tiles.find(t => t.key === 'reviews')?.score  ?? 5
@@ -215,8 +214,15 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   // Labor → birds: high labor % (bad score) = more birds. 3 (good) → 20 (bad).
   const birdCount = isNight ? 0 : Math.round(3 + (8 - laborScore) / 7 * 17)
 
-  // COGS → water clarity (murky tint when bad)
-  const murkyOp = Math.max(0, (5 - cogsScore) / 6) * 0.22
+  // Weather → water mood tint (always blue-family, layered over time-of-day base)
+  const WEATHER_WATER_TINT: Record<WeatherCondition, { color: string; op: number }> = {
+    clear:  { color: '#40C8E0', op: isNight ? 0 : (isSundown || isDawn ? 0.04 : 0.08) }, // bright Caribbean shimmer
+    cloudy: { color: '#2A4860', op: 0.14 }, // cool steel-blue, overcast flat
+    rain:   { color: '#1A3050', op: 0.22 }, // dark blue-gray, heavy
+    wind:   { color: '#0E2040', op: 0.20 }, // deep navy, foreboding
+    snow:   { color: '#B8D4F0', op: 0.16 }, // icy pale blue
+  }
+  const wt = WEATHER_WATER_TINT[weather]
 
   // Prime Cost → lighthouse beam intensity
   const primeNorm = (primeScore - 1) / 7
@@ -371,9 +377,9 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           <rect x="0" y={WL} width="375" height={200-WL} fill="url(#cs-water)" />
           <rect x="0" y={WL} width="375" height={24}     fill="url(#cs-sheen)" />
 
-          {/* COGS → murky water overlay (brown tint when COGS is bad) */}
-          {murkyOp > 0.01 && (
-            <rect x="0" y={WL} width="375" height={200-WL} fill="#7B4F18" opacity={murkyOp} />
+          {/* Weather → water mood tint (always blue-family) */}
+          {wt.op > 0.01 && (
+            <rect x="0" y={WL} width="375" height={200-WL} fill={wt.color} opacity={wt.op} />
           )}
 
           {/* Sun/dawn reflection on water */}
