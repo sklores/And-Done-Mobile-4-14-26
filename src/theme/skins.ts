@@ -98,7 +98,7 @@ export const coastal = {
 
   // Bottom tabs
   tabs: {
-    bg: "#E8EDEC",
+    bg: "#C4B090",
     inactive: "#8A9C9C",
     activeGizmo: "#1A8C6B",
   },

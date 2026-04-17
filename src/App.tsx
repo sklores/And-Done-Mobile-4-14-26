@@ -225,7 +225,10 @@ export default function App() {
           <div
             style={{
               margin: "8px 12px 0",
-              border: "3px solid #C4B090",
+              borderTop: "6px solid #C4B090",
+              borderLeft: "6px solid #C4B090",
+              borderRight: "6px solid #C4B090",
+              borderBottom: "3px solid #C4B090",
               borderRadius: 8,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               overflow: "hidden",
