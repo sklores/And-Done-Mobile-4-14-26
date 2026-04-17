@@ -9,6 +9,8 @@ import {
   RENT_PCT,
   dailyFixed,
   dailyLineItem,
+  hourlyAmortized,
+  getAmortizationFactor,
 } from "../config/fixedCostConfig";
 
 type Props = { open: boolean; onClose: () => void };
@@ -128,9 +130,18 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
   if (!fixedTile) return null;
 
   const rentCost      = salesVal * RENT_PCT;
-  const amortized     = dailyFixed();
+  const amortized     = hourlyAmortized();
+  const dailyTotal    = dailyFixed();
+  const factor        = getAmortizationFactor();
   const totalFixed    = rentCost + amortized + todayMR;
   const fixedPct      = salesVal > 0 ? (totalFixed / salesVal) * 100 : null;
+
+  // Progress label for the amortization window
+  const progressLabel = factor >= 1
+    ? "100% — window closed (after 4 PM)"
+    : factor === 0
+    ? "0% — window opens at 10 AM"
+    : `${Math.round(factor * 100)}% of day earned (10 AM – 4 PM)`;
 
   return (
     <DrillDownModal
@@ -158,24 +169,25 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
 
       {/* ── Monthly fixed amortized ────────────────────── */}
       <SectionHeader
-        title="Fixed — Amortized Daily"
+        title="Overhead — Hourly (10 AM – 4 PM)"
         right={`${fmt$(MONTHLY_FIXED_TOTAL)}/mo`}
       />
       {FIXED_LINE_ITEMS.map((item) => {
         const daily = dailyLineItem(item);
+        const earned = daily * factor;
         return (
           <DrillRow
             key={item.key}
             label={item.label}
-            value={fmtDec$(daily)}
-            sub={`${fmt$(item.monthlyAmount)}/mo${item.note ? ` · ${item.note}` : ""}`}
+            value={fmtDec$(earned)}
+            sub={`daily target: ${fmtDec$(daily)} · ${fmt$(item.monthlyAmount)}/mo${item.note ? ` · ${item.note}` : ""}`}
           />
         );
       })}
       <DrillRow
-        label="Daily Fixed Total"
+        label="Overhead Earned So Far"
         value={fmtDec$(amortized)}
-        sub="all line items combined"
+        sub={`${progressLabel} · daily full: ${fmtDec$(dailyTotal)}`}
         dimmed
       />
 

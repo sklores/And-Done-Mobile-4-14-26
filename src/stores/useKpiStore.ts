@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toastAdapter";
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
-import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
+import { RENT_PCT, hourlyAmortized, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
 import { supabase, supabaseReady } from "../lib/supabase";
 
@@ -163,7 +163,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     // Fixed costs (still computed locally)
     const todayMR       = getTodayMRTotal();
     const rentCost      = totalSales * RENT_PCT;
-    const amortizedCost = dailyFixed();
+    const amortizedCost = hourlyAmortized(); // drips 10 AM → 4 PM ET
     const totalFixed    = rentCost + amortizedCost + todayMR;
 
     const laborCost = snap.labor_total ?? 0;
@@ -374,7 +374,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
       // ── Fixed Cost ─────────────────────────────────────────────────
       const todayMR       = getTodayMRTotal();
       const rentCost      = totalSales * RENT_PCT;
-      const amortizedCost = dailyFixed();
+      const amortizedCost = hourlyAmortized(); // drips 10 AM → 4 PM ET
       const totalFixed    = rentCost + amortizedCost + todayMR;
 
       let fixedTile: Kpi;
