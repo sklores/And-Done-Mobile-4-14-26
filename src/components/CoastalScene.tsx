@@ -116,8 +116,7 @@ const SCENE_CSS = `
 @keyframes cs-sprayl{0%{opacity:0;transform:translateY(0)}30%{opacity:.5}100%{opacity:0;transform:translateY(-12px) scaleX(1.3)}}
 @keyframes cs-dolphin{0%,22%,100%{transform:translateY(0) rotate(0deg);opacity:0} 7%{transform:translateY(-26px) rotate(-22deg);opacity:1} 14%{transform:translateY(-14px) rotate(12deg);opacity:0.8} 18%{transform:translateY(0) rotate(0deg);opacity:0}}
 @keyframes cs-dolphin2{0%,24%,100%{transform:translateY(0) rotate(0deg);opacity:0} 8%{transform:translateY(-20px) rotate(-18deg);opacity:0.85} 15%{transform:translateY(-8px) rotate(10deg);opacity:0.6} 20%{transform:translateY(0) rotate(0deg);opacity:0}}
-@keyframes cs-amp-in{0%{opacity:0;transform:scale(0.78)}14%{opacity:0.92;transform:scale(1.0)}55%{opacity:0.88;transform:scale(1.0)}78%{opacity:0.88;transform:scale(1.0)}100%{opacity:0;transform:scale(1.06)}}
-@keyframes cs-amp-glow{0%{opacity:0}14%{opacity:0.18}55%{opacity:0.10}78%{opacity:0.10}100%{opacity:0}}
+@keyframes cs-amp-draw{0%{stroke-dashoffset:520}52%{stroke-dashoffset:0}72%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
 `
 
 const STARS: [number, number][] = [
@@ -513,25 +512,26 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Bottom water depth */}
           <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
 
-          {/* & — load-in intro, fades to nothing and stays gone */}
-          <g style={{ transformOrigin: '187.5px 95px' }}>
-            {/* Glow bloom behind the ampersand */}
-            <ellipse cx="187.5" cy="95" rx="68" ry="52"
-              fill="white"
-              style={{ animation: 'cs-amp-glow 4.2s ease-out forwards' }} />
-            {/* The ampersand itself */}
-            <text
-              x="187.5"
-              y="118"
-              textAnchor="middle"
-              fill="white"
-              fontFamily="'Manrope', sans-serif"
-              fontSize="96"
-              fontWeight="800"
-              style={{ animation: 'cs-amp-in 4.2s ease-out forwards' }}
-            >
-              &amp;
-            </text>
+          {/* & — self-drawing stroke intro, fades completely, never returns */}
+          {/* Path traces the & shape in one continuous pen stroke */}
+          <g>
+            {/* Soft glow: wide stroke, low opacity, same path */}
+            <path
+              d="M208,82 C208,63 196,52 181,52 C164,52 151,65 151,82 C151,100 164,110 183,117 L152,150 C145,163 153,174 168,174 C183,174 193,162 193,149 C193,136 181,125 200,112 L227,91"
+              fill="none" stroke="white" strokeWidth="20"
+              strokeLinecap="round" strokeLinejoin="round"
+              strokeDasharray="520" strokeDashoffset="520"
+              opacity="0.13"
+              style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
+            />
+            {/* Main stroke — the actual drawing */}
+            <path
+              d="M208,82 C208,63 196,52 181,52 C164,52 151,65 151,82 C151,100 164,110 183,117 L152,150 C145,163 153,174 168,174 C183,174 193,162 193,149 C193,136 181,125 200,112 L227,91"
+              fill="none" stroke="white" strokeWidth="5.5"
+              strokeLinecap="round" strokeLinejoin="round"
+              strokeDasharray="520" strokeDashoffset="520"
+              style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
+            />
           </g>
 
           {/* &done — painter's signature, bottom-right corner, always there */}
