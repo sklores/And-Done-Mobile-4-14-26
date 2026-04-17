@@ -8,11 +8,39 @@ const BASE = "https://ws-api.toasttab.com";
 
 let cachedToken = null;
 
+// All date math uses America/New_York so Vercel (UTC) doesn't roll the
+// business date over at 8 PM Eastern during summer (EDT = UTC-4).
+
+function easternDateStr(d = new Date()) {
+  // en-CA locale gives "YYYY-MM-DD" — cleanest format for further use
+  return d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+/** Returns the ET offset string (e.g. "-04:00" for EDT, "-05:00" for EST). */
+function easternOffsetStr(d = new Date()) {
+  // Check what hour noon-UTC falls on in ET — gives us the offset reliably
+  const dateStr = easternDateStr(d);
+  const noonUTC  = new Date(`${dateStr}T12:00:00Z`);
+  const etHour   = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", hour: "numeric", hour12: false,
+    }).format(noonUTC),
+    10,
+  );
+  const offset = etHour - 12; // EDT → 8-12 = -4, EST → 7-12 = -5
+  return `${offset < 0 ? "-" : "+"}${String(Math.abs(offset)).padStart(2, "0")}:00`;
+}
+
+/** Midnight Eastern tonight as a UTC Date object. */
+function easternStartOfDay(d = new Date()) {
+  const dateStr  = easternDateStr(d);
+  const offsetStr = easternOffsetStr(d);
+  return new Date(`${dateStr}T00:00:00${offsetStr}`);
+}
+
 export function todayBusinessDate(d = new Date()) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}${mm}${dd}`;
+  // YYYYMMDD in Eastern Time
+  return easternDateStr(d).replace(/-/g, "");
 }
 
 async function getToken(creds) {
@@ -116,11 +144,10 @@ export async function getTodayLabor(creds) {
     // the hourlyWage field on the time entry (if present)
   }
 
-  // ── Toast labor API — time entries for today ─────────────────────────────
+  // ── Toast labor API — time entries for today (Eastern Time) ─────────────
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const startISO = startOfDay.toISOString();
-  const endISO = now.toISOString();
+  const startISO = easternStartOfDay(now).toISOString();
+  const endISO   = now.toISOString();
 
   const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startISO)}&endDate=${encodeURIComponent(endISO)}`;
   const res = await fetch(url, { headers: authHeaders });
@@ -251,10 +278,9 @@ export async function getTodayLaborDetail(creds) {
     }),
   ]);
 
-  // ── Fetch today's time entries ───────────────────────────────────────────
+  // ── Fetch today's time entries (Eastern Time) ────────────────────────────
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startOfDay.toISOString())}&endDate=${encodeURIComponent(now.toISOString())}`;
+  const url = `${BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(easternStartOfDay(now).toISOString())}&endDate=${encodeURIComponent(now.toISOString())}`;
   const res = await fetch(url, { headers: authHeaders });
   if (!res.ok) throw new Error(`toast labor ${res.status}`);
   const entries = await res.json();
