@@ -42,14 +42,38 @@ const ALCOHOL_CATS = new Set([
 ]);
 
 export function categoryGroup(name: string): CogsGroup {
+  // Exact-match sets (for category-level names)
   if (ALCOHOL_CATS.has(name)) return "Alcohol";
   if (BEV_CATS.has(name))     return "Beverage";
   if (FOOD_CATS.has(name))    return "Food";
-  // fuzzy fallback
+
+  // Keyword matching for individual item names (e.g. "Port City Hazy IPA 16oz")
   const n = name.toLowerCase();
-  if (n.includes("beer") || n.includes("wine") || n.includes("cocktail") ||
-      n.includes("spirit") || n.includes("liquor") || n.includes("alcohol")) return "Alcohol";
-  if (n.includes("beverage") || n.includes("drink") || n.includes("soda") ||
-      n.includes("coffee") || n.includes("tea") || n.includes("juice"))      return "Beverage";
+
+  // Root beer / ginger beer are NOT alcohol — check first
+  const isRootOrGinger = n.includes("root beer") || n.includes("ginger beer");
+
+  if (!isRootOrGinger && (
+    n.includes("ipa") || n.includes("hazy") || n.includes("lager") ||
+    n.includes("ale") || n.includes("stout") || n.includes("porter") ||
+    n.includes("draft") || n.includes("bottle beer") ||
+    n.includes("wine") || n.includes("chardonnay") || n.includes("cabernet") ||
+    n.includes("merlot") || n.includes("pinot") || n.includes("rosé") || n.includes("rose") ||
+    n.includes("cocktail") || n.includes("spirit") || n.includes("liquor") ||
+    n.includes("whiskey") || n.includes("bourbon") || n.includes("vodka") ||
+    n.includes("tequila") || n.includes("rum") || n.includes("gin") ||
+    n.includes("alcohol") || n.includes("bar")
+  )) return "Alcohol";
+
+  if (
+    n.includes("coke") || n.includes("cola") || n.includes("water") ||
+    n.includes("soda") || n.includes("lemonade") || n.includes("tea") ||
+    n.includes("juice") || n.includes("coffee") || n.includes("espresso") ||
+    n.includes("latte") || n.includes("cappuccino") || n.includes("sparkling") ||
+    n.includes("pellegrino") || n.includes("perrier") || n.includes("drink") ||
+    n.includes("beverage") || n.includes("dr pepper") || n.includes("sprite") ||
+    n.includes("orange juice") || n.includes("apple juice") || isRootOrGinger
+  ) return "Beverage";
+
   return "Food";
 }

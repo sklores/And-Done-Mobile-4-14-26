@@ -117,22 +117,6 @@ export function COGSDrillDown({ open, onClose }: Props) {
         <DrillRow label="Loading…" value="--" />
       )}
 
-      {/* ── Sales by Toast category ───────────────────────── */}
-      <SectionHeader
-        title="By Sales Category"
-        right={detail ? `${detail.categoryCOGSPct.toFixed(1)}% est. COGS` : "loading…"}
-      />
-      {detail ? detail.categorySales.map((cat) => (
-        <DrillRow
-          key={cat.name}
-          label={cat.name}
-          value={fmt$(cat.revenue)}
-          sub={`${cat.revenuePct}% of sales · ${cat.cogsPct}% COGS = ${fmtDec$(cat.cogsDollars)}`}
-        />
-      )) : (
-        <DrillRow label="Loading categories…" value="--" />
-      )}
-
       {/* ── Packaging ─────────────────────────────────────── */}
       <SectionHeader title="Packaging" right={detail ? fmtDec$(detail.totalPaper) : undefined} />
       <DrillRow
@@ -201,12 +185,6 @@ export function COGSDrillDown({ open, onClose }: Props) {
         </div>
       )}
 
-      {/* Temp debug — remove once category names are confirmed */}
-      {detail?._debugCategoryNames && detail._debugCategoryNames.length > 0 && (
-        <div style={{ padding: "10px 18px", fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C" }}>
-          <strong>Toast categories:</strong> {detail._debugCategoryNames.join(", ")}
-        </div>
-      )}
     </DrillDownModal>
   );
 }

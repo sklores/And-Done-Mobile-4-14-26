@@ -465,23 +465,66 @@ export async function getTodaySalesDetail(creds) {
 }
 
 // ── COGS detail (category sales, paper, 3P commission, comps, voids) ─────────
-// COGS % by group — Food 26%, Beverage 20%, Alcohol 22%
-const CATEGORY_COGS_PCT = {
-  // Food — 26%
-  'Food': 26, 'Sandwiches': 26, 'Grilled Cheese': 26, 'Soups': 26,
-  'Sides': 26, 'Appetizers': 26, 'Appetizer': 26, 'Kids': 26,
-  'Dessert': 26, 'Desserts': 26,
+// Keyword-based COGS % — works for both category names and individual item names.
+// Food 26% (default) | Beverage 20% | Alcohol 22%
+const DEFAULT_COGS_PCT = 26;
+
+function getGroupForItem(name) {
+  const n = name.toLowerCase();
+  const isRootOrGinger = n.includes('root beer') || n.includes('ginger beer');
+  if (!isRootOrGinger && (
+    n.includes('ipa') || n.includes('hazy') || n.includes('pale ale') ||
+    n.includes('stout') || n.includes('porter') || n.includes('lager') ||
+    n.includes('pilsner') || n.includes('draft') || n.includes(' beer') ||
+    n.startsWith('beer') ||
+    n.includes('wine') || n.includes('rosé') || n.includes('rose') ||
+    n.includes('cocktail') || n.includes('margarita') || n.includes('mojito') ||
+    n.includes('whiskey') || n.includes('bourbon') || n.includes('vodka') ||
+    n.includes('rum') || n.includes('gin') || n.includes('tequila') ||
+    n.includes('mezcal') || n.includes('spirit') || n.includes('liquor') ||
+    n.includes('hard seltzer') || n.includes('white claw') || n.includes('truly')
+  )) return 'Alcohol';
+  if (n.includes('coke') || n.includes('cola') || n.includes('pepsi') ||
+      n.includes('sprite') || n.includes('fanta') || n.includes('dr pepper') ||
+      isRootOrGinger ||
+      n.includes('water') || n.includes('pellegrino') || n.includes('la croix') || n.includes('perrier') ||
+      n.includes('tea') || n.includes('lemonade') || n.includes('limeade') ||
+      n.includes('juice') || n.includes('coffee') || n.includes('espresso') || n.includes('latte') ||
+      n.includes('smoothie') || n.includes('shake') || n.includes('soda') ||
+      n.includes('sparkling') || n.includes('still water') || n.includes('bottled water')
+  ) return 'Beverage';
+  return 'Food';
+}
+
+function getCogsPctForItem(name) {
+  const n = name.toLowerCase();
+  // Alcohol — check first (exclude root beer / ginger beer)
+  const isRootOrGinger = n.includes('root beer') || n.includes('ginger beer');
+  if (!isRootOrGinger && (
+    n.includes('ipa') || n.includes('hazy') || n.includes('pale ale') ||
+    n.includes('stout') || n.includes('porter') || n.includes('lager') ||
+    n.includes('pilsner') || n.includes('draft') || n.includes(' beer') ||
+    n.startsWith('beer') ||
+    n.includes('wine') || n.includes('rosé') || n.includes('rose') ||
+    n.includes('cocktail') || n.includes('margarita') || n.includes('mojito') ||
+    n.includes('whiskey') || n.includes('bourbon') || n.includes('vodka') ||
+    n.includes('rum') || n.includes('gin') || n.includes('tequila') ||
+    n.includes('mezcal') || n.includes('spirit') || n.includes('liquor') ||
+    n.includes('hard seltzer') || n.includes('white claw') || n.includes('truly')
+  )) return 22;
   // Beverage (non-alcoholic) — 20%
-  'NA Beverage': 20, 'Non-Alcoholic': 20, 'Soft Drinks': 20, 'Soda': 20,
-  'Coffee': 20, 'Tea': 20, 'Juice': 20, 'Beverages': 20, 'Beverage': 20,
-  // Alcohol — 22%
-  'Beer': 22, 'Draft Beer': 22, 'Bottle Beer': 22, 'Bottled Beer': 22,
-  'Wine': 22, 'Bottle Wine': 22, 'Wines': 22,
-  'Cocktails': 22, 'Cocktail': 22, 'Spirits': 22, 'Liquor': 22, 'Bar': 22,
-  // Other
-  'Merchandise': 40, 'Retail': 40,
-};
-const DEFAULT_COGS_PCT = 26; // default to food rate
+  if (n.includes('coke') || n.includes('cola') || n.includes('pepsi') ||
+      n.includes('sprite') || n.includes('fanta') || n.includes('dr pepper') ||
+      n.includes('root beer') || n.includes('ginger beer') ||
+      n.includes('water') || n.includes('pellegrino') || n.includes('la croix') || n.includes('perrier') ||
+      n.includes('tea') || n.includes('lemonade') || n.includes('limeade') ||
+      n.includes('juice') || n.includes('coffee') || n.includes('espresso') || n.includes('latte') ||
+      n.includes('smoothie') || n.includes('shake') || n.includes('soda') ||
+      n.includes('sparkling') || n.includes('still water') || n.includes('bottled water')
+  ) return 20;
+  // Food — 26% (default)
+  return DEFAULT_COGS_PCT;
+}
 const PAPER_DINEIN_PCT      = 0.01;  // 1%
 const PAPER_TAKEOUT_PCT     = 0.04;  // 4% (takeout + delivery)
 const THIRD_PARTY_COMM_PCT  = 0.18;  // 18%
@@ -557,23 +600,22 @@ export async function getTodayCOGSDetail(creds) {
             || sel.menuItem?.name
             || 'Other';
 
-          const existing = categoryMap.get(catName);
+          // Group by Food / Beverage / Alcohol (item names, not Toast categories)
+          const group = getGroupForItem(catName);
+          const existing = categoryMap.get(group);
           if (existing) existing.revenue += rev;
-          else categoryMap.set(catName, { revenue: rev });
+          else categoryMap.set(group, { revenue: rev });
         }
       }
     }
   }
-
-  // Debug: log what category names Toast actually returned
-  console.log("[COGS] category names from Toast:", Array.from(categoryMap.keys()));
 
   // Build category breakdown with per-category COGS estimate
   let categoryCOGS = 0;
   const categorySales = Array.from(categoryMap.entries())
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .map(([name, data]) => {
-      const cogsPct = CATEGORY_COGS_PCT[name] ?? DEFAULT_COGS_PCT;
+      const cogsPct = getCogsPctForItem(name);
       const cogsDollars = data.revenue * (cogsPct / 100);
       categoryCOGS += cogsDollars;
       return {
@@ -606,7 +648,6 @@ export async function getTodayCOGSDetail(creds) {
 
   return {
     categorySales,
-    _debugCategoryNames: Array.from(categoryMap.keys()), // temp: remove after debugging
     totalRevenue:       r2(totalRevenue),
     categoryCOGS:       r2(categoryCOGS),
     categoryCOGSPct:    totalRevenue > 0 ? r2((categoryCOGS / totalRevenue) * 100) : 0,

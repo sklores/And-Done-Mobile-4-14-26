@@ -120,7 +120,6 @@ export type COGSDetailResult = {
   effectiveCOGS: number;
   effectiveCOGSPct: number;
   fetchedAt: string;
-  _debugCategoryNames?: string[]; // temp debug field
 };
 
 export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
