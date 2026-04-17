@@ -1,7 +1,8 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
-import { COGS_CATEGORIES, PRIME_TARGET_PCT } from "../config/cogsConfig";
+import { PRIME_TARGET_PCT } from "../config/cogsConfig";
+import { buildGroups, GROUP_COGS_PCT, type CogsGroup } from "../config/cogsGroups";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -103,18 +104,22 @@ function TargetRow({ actual, target }: { actual: number; target: number }) {
 
 export function PrimeCostDrillDown({ open, onClose }: Props) {
   const primeTile       = useKpiStore((s) => s.tiles.find((t) => t.key === "prime"));
-  const laborDetail     = useKpiStore((s) => s.laborDetail);      // summary (sales %, tips etc)
-  const laborDetailRich = useKpiStore((s) => s.laborDetailRich);  // hourly/salary/FOH/BOH
+  const laborDetail     = useKpiStore((s) => s.laborDetail);
+  const laborDetailRich = useKpiStore((s) => s.laborDetailRich);
+  const cogsDetail      = useKpiStore((s) => s.cogsDetail);
   const salesVal        = useKpiStore((s) => s.sales.value);
 
   if (!primeTile) return null;
 
-  // Parse prime cost % from tile value
   const primePct = parseFloat(primeTile.value) || 0;
   const laborPct = laborDetail && salesVal > 0
     ? (laborDetail.laborCost / salesVal) * 100
     : 0;
-  const cogsPct = COGS_CATEGORIES.reduce((s, c) => s + c.mockPct, 0); // 26.4% mock
+  // Use live effective COGS % — falls back to 26% (food default) if no data yet
+  const cogsPct = cogsDetail?.effectiveCOGSPct ?? 26;
+
+  // Food/Bev/Alcohol breakdown from live category data
+  const groups = cogsDetail ? buildGroups(cogsDetail.categorySales) : null;
 
   return (
     <DrillDownModal
@@ -187,21 +192,24 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
         />
       )}
 
-      {/* ── COGS Breakdown (mocked) ────────────────────── */}
-      <SectionHeader title="COGS" right="mocked · connect inventory" />
-
-      {COGS_CATEGORIES.map((cat) => {
-        const actual$ = salesVal > 0 ? (cat.mockPct / 100) * salesVal : null;
-        const overTarget = cat.mockPct > cat.targetPct;
-        return (
+      {/* ── COGS Breakdown ────────────────────────────── */}
+      <SectionHeader
+        title="COGS"
+        right={cogsDetail ? `${cogsDetail.effectiveCOGSPct.toFixed(1)}% effective` : "loading…"}
+      />
+      {groups ? (
+        (["Food", "Beverage", "Alcohol"] as CogsGroup[]).map((g) => (
           <DrillRow
-            key={cat.key}
-            label={cat.label}
-            value={actual$ != null ? fmt$(actual$) : "--"}
-            sub={`${cat.mockPct.toFixed(1)}% · target ${cat.targetPct.toFixed(1)}%${overTarget ? " ▲" : ""}`}
+            key={g}
+            label={`${g} (${GROUP_COGS_PCT[g]}%)`}
+            value={`$${groups[g].cost.toFixed(2)}`}
+            sub={`$${groups[g].revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} sales`}
+            dimmed={groups[g].revenue === 0}
           />
-        );
-      })}
+        ))
+      ) : (
+        <DrillRow label="Loading COGS data…" value="--" />
+      )}
 
     </DrillDownModal>
   );

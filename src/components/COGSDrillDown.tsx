@@ -1,7 +1,7 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
-import type { COGSDetailResult } from "../data/toastAdapter";
+import { buildGroups, GROUP_COGS_PCT, type CogsGroup } from "../config/cogsGroups";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -29,26 +29,34 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
   );
 }
 
-/** Mini horizontal bar showing each category's % of revenue */
-function CategoryBar({ cats, total }: { cats: COGSDetailResult["categorySales"]; total: number }) {
+/** Mini horizontal bar: Food / Beverage / Alcohol */
+const GROUP_COLORS: Record<CogsGroup, string> = {
+  Food:     "#4A9B8E",
+  Beverage: "#6B8FBF",
+  Alcohol:  "#BFA96B",
+};
+
+function GroupBar({ groups, total }: {
+  groups: Record<CogsGroup, { revenue: number; cost: number }>;
+  total: number;
+}) {
   if (!total) return null;
-  const colors = ["#4A9B8E","#6B8FBF","#8BBF6B","#BFA96B","#BF6B6B","#9B7ABF","#4A7C6F"];
+  const order: CogsGroup[] = ["Food", "Beverage", "Alcohol"];
   return (
     <div style={{ padding: "14px 18px 10px" }}>
       <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", height: 10 }}>
-        {cats.map((c, i) => (
-          <div key={c.name}
-            style={{ width: `${(c.revenue / total) * 100}%`, background: colors[i % colors.length] }}
-            title={`${c.name}: ${c.revenuePct}%`}
+        {order.map((g) => (
+          <div key={g}
+            style={{ width: `${(groups[g].revenue / total) * 100}%`, background: GROUP_COLORS[g] }}
           />
         ))}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
-        {cats.map((c, i) => (
-          <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: colors[i % colors.length] }} />
+      <div style={{ display: "flex", gap: "6px 14px", marginTop: 6, flexWrap: "wrap" }}>
+        {order.map((g) => (
+          <div key={g} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: GROUP_COLORS[g] }} />
             <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, color: "#8A9C9C", fontWeight: 700 }}>
-              {c.name} {c.revenuePct}%
+              {g} {total > 0 ? ((groups[g].revenue / total) * 100).toFixed(0) : 0}%
             </span>
           </div>
         ))}
@@ -56,6 +64,7 @@ function CategoryBar({ cats, total }: { cats: COGSDetailResult["categorySales"];
     </div>
   );
 }
+
 
 export function COGSDrillDown({ open, onClose }: Props) {
   const cogsTile = useKpiStore((s) => s.tiles.find((t) => t.key === "cogs"));
@@ -65,6 +74,10 @@ export function COGSDrillDown({ open, onClose }: Props) {
   if (!cogsTile) return null;
 
   const hasReal = !!detail && salesVal > 0;
+  const groups  = detail ? buildGroups(detail.categorySales) : null;
+  const groupTotal = groups
+    ? groups.Food.revenue + groups.Beverage.revenue + groups.Alcohol.revenue
+    : 0;
 
   return (
     <DrillDownModal
@@ -75,12 +88,34 @@ export function COGSDrillDown({ open, onClose }: Props) {
       value={cogsTile.value}
       status={hasReal ? `${detail.effectiveCOGSPct.toFixed(1)}% effective · ${fmt$(detail.effectiveCOGS)}` : cogsTile.status}
     >
-      {/* ── Category revenue bar ──────────────────────── */}
-      {detail && detail.categorySales.length > 0 && (
-        <CategoryBar cats={detail.categorySales} total={detail.totalRevenue} />
+      {/* ── Food / Beverage / Alcohol breakdown ──────────── */}
+      {groups && groupTotal > 0 && (
+        <GroupBar groups={groups} total={groupTotal} />
       )}
 
-      {/* ── Sales by category with COGS estimate ──────── */}
+      <SectionHeader
+        title="By Type"
+        right={groups && groupTotal > 0
+          ? fmtDec$(groups.Food.cost + groups.Beverage.cost + groups.Alcohol.cost)
+          : "loading…"}
+      />
+
+      {groups && groupTotal > 0 ? (
+        (["Food", "Beverage", "Alcohol"] as CogsGroup[]).map((g) => (
+          <DrillRow
+            key={g}
+            label={`${g} (${GROUP_COGS_PCT[g]}% COGS)`}
+            value={fmtDec$(groups[g].cost)}
+            sub={`${fmt$(groups[g].revenue)} sales · ${groupTotal > 0
+              ? ((groups[g].revenue / groupTotal) * 100).toFixed(0)
+              : 0}% of mix`}
+          />
+        ))
+      ) : (
+        <DrillRow label="Loading…" value="--" />
+      )}
+
+      {/* ── Sales by Toast category ───────────────────────── */}
       <SectionHeader
         title="By Sales Category"
         right={detail ? `${detail.categoryCOGSPct.toFixed(1)}% est. COGS` : "loading…"}
@@ -90,13 +125,13 @@ export function COGSDrillDown({ open, onClose }: Props) {
           key={cat.name}
           label={cat.name}
           value={fmt$(cat.revenue)}
-          sub={`${cat.revenuePct}% of sales · est. ${cat.cogsPct}% COGS = ${fmtDec$(cat.cogsDollars)}`}
+          sub={`${cat.revenuePct}% of sales · ${cat.cogsPct}% COGS = ${fmtDec$(cat.cogsDollars)}`}
         />
       )) : (
         <DrillRow label="Loading categories…" value="--" />
       )}
 
-      {/* ── Packaging ─────────────────────────────────── */}
+      {/* ── Packaging ─────────────────────────────────────── */}
       <SectionHeader title="Packaging" right={detail ? fmtDec$(detail.totalPaper) : undefined} />
       <DrillRow
         label="Dine-In (1%)"
@@ -111,7 +146,7 @@ export function COGSDrillDown({ open, onClose }: Props) {
         dimmed
       />
 
-      {/* ── 3rd Party Commissions ─────────────────────── */}
+      {/* ── 3rd Party Commissions ─────────────────────────── */}
       <SectionHeader
         title="3rd Party Commissions (18%)"
         right={detail ? fmtDec$(detail.thirdPartyCommission) : undefined}
@@ -132,7 +167,7 @@ export function COGSDrillDown({ open, onClose }: Props) {
         <DrillRow label="No 3rd party orders today" value="$0" dimmed />
       )}
 
-      {/* ── Comps & Voids ─────────────────────────────── */}
+      {/* ── Comps & Voids ─────────────────────────────────── */}
       <SectionHeader title="Comps & Voids" />
       <DrillRow
         label="Comps / Discounts"
@@ -147,12 +182,14 @@ export function COGSDrillDown({ open, onClose }: Props) {
           : undefined}
       />
 
-      {/* ── Effective COGS total ──────────────────────── */}
+      {/* ── Effective COGS total ──────────────────────────── */}
       <SectionHeader title="= Effective COGS" />
       <DrillRow
         label="Total COGS"
         value={detail ? fmtDec$(detail.effectiveCOGS) : "--"}
-        sub={detail ? `${detail.effectiveCOGSPct.toFixed(1)}% of net sales` : "category est. + paper + commissions + comps + voids"}
+        sub={detail
+          ? `${detail.effectiveCOGSPct.toFixed(1)}% of net sales`
+          : "type COGS + paper + commissions + comps + voids"}
       />
 
       {!detail && (

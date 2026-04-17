@@ -439,16 +439,23 @@ export async function getTodaySalesDetail(creds) {
 }
 
 // ── COGS detail (category sales, paper, 3P commission, comps, voids) ─────────
+// COGS % by group — Food 26%, Beverage 20%, Alcohol 22%
 const CATEGORY_COGS_PCT = {
-  'Food': 30, 'Dessert': 30, 'Appetizer': 30, 'Sides': 30, 'Kids': 30,
-  'Beer': 25, 'Draft Beer': 25, 'Bottle Beer': 25, 'Bottled Beer': 25,
-  'Wine': 35, 'Bottle Wine': 35, 'Wines': 35,
-  'Cocktails': 18, 'Cocktail': 18, 'Spirits': 18, 'Liquor': 18, 'Bar': 18,
+  // Food — 26%
+  'Food': 26, 'Sandwiches': 26, 'Grilled Cheese': 26, 'Soups': 26,
+  'Sides': 26, 'Appetizers': 26, 'Appetizer': 26, 'Kids': 26,
+  'Dessert': 26, 'Desserts': 26,
+  // Beverage (non-alcoholic) — 20%
   'NA Beverage': 20, 'Non-Alcoholic': 20, 'Soft Drinks': 20, 'Soda': 20,
-  'Coffee': 25, 'Tea': 20, 'Juice': 20, 'Beverages': 20,
+  'Coffee': 20, 'Tea': 20, 'Juice': 20, 'Beverages': 20, 'Beverage': 20,
+  // Alcohol — 22%
+  'Beer': 22, 'Draft Beer': 22, 'Bottle Beer': 22, 'Bottled Beer': 22,
+  'Wine': 22, 'Bottle Wine': 22, 'Wines': 22,
+  'Cocktails': 22, 'Cocktail': 22, 'Spirits': 22, 'Liquor': 22, 'Bar': 22,
+  // Other
   'Merchandise': 40, 'Retail': 40,
 };
-const DEFAULT_COGS_PCT = 30;
+const DEFAULT_COGS_PCT = 26; // default to food rate
 const PAPER_DINEIN_PCT      = 0.01;  // 1%
 const PAPER_TAKEOUT_PCT     = 0.04;  // 4% (takeout + delivery)
 const THIRD_PARTY_COMM_PCT  = 0.18;  // 18%
