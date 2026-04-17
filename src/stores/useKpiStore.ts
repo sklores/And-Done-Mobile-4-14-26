@@ -3,6 +3,7 @@ import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, f
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { RENT_PCT, dailyFixed, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
+import { supabase } from "../lib/supabase";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -55,6 +56,29 @@ function netScore(pct: number): number {
   return 2; // losing money
 }
 
+// Shape of a kpi_snapshots row from Supabase
+type KpiSnapshot = {
+  sales_total: number;
+  sales_tips: number;
+  sales_instore: number;
+  sales_takeout: number;
+  sales_delivery: number;
+  check_average: number | null;
+  covers: number | null;
+  labor_total: number;
+  labor_pct: number;
+  worked_hours: number | null;
+  cogs_total: number;
+  cogs_pct: number;
+  cogs_food: number | null;
+  cogs_beverage: number | null;
+  cogs_alcohol: number | null;
+  prime_cost_pct: number;
+  net_profit: number;
+  net_profit_pct: number;
+  captured_at: string;
+};
+
 type KpiState = {
   sales: { value: number; label: string; sub: string };
   net: { value: string; dollars: number; label: string; sub: string; score: number };
@@ -66,7 +90,10 @@ type KpiState = {
   cogsDetail: COGSDetailResult | null;
   lastRefresh: number | null;
   lastError: string | null;
+  lastSnapshotAt: string | null;
   refresh: () => Promise<void>;
+  applySnapshot: (snap: KpiSnapshot) => void;
+  subscribeToSnapshots: () => () => void;
 };
 
 function laborScore(pct: number): number {
@@ -115,7 +142,7 @@ const placeholderTiles: Kpi[] = [
   { key: "fixed",   label: "Fixed Cost", value: "--",    status: "Loading",   score: 5 },
 ];
 
-export const useKpiStore = create<KpiState>((set) => ({
+export const useKpiStore = create<KpiState>((set, get) => ({
   sales: { value: 0, label: "Sales", sub: "Today" },
   net: { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 },
   netDetail: null,
@@ -126,6 +153,115 @@ export const useKpiStore = create<KpiState>((set) => ({
   cogsDetail: null,
   lastRefresh: null,
   lastError: null,
+  lastSnapshotAt: null,
+
+  // ── Apply a kpi_snapshots row to the store ──────────────────────────────
+  applySnapshot: (snap: KpiSnapshot) => {
+    const totalSales = snap.sales_total ?? 0;
+    if (totalSales <= 0) return;
+
+    // Fixed costs (still computed locally)
+    const todayMR       = getTodayMRTotal();
+    const rentCost      = totalSales * RENT_PCT;
+    const amortizedCost = dailyFixed();
+    const totalFixed    = rentCost + amortizedCost + todayMR;
+
+    const laborCost = snap.labor_total ?? 0;
+    const cogsDollars = snap.cogs_total ?? 0;
+    const netDollars = totalSales - cogsDollars - laborCost - totalFixed;
+    const netPct     = (netDollars / totalSales) * 100;
+    const nScore     = netScore(netPct);
+
+    function cogsScore(pct: number) {
+      if (pct <= 25) return 8; if (pct <= 28) return 7; if (pct <= 31) return 6;
+      if (pct <= 34) return 5; if (pct <= 37) return 4; if (pct <= 42) return 3;
+      return 2;
+    }
+    const cogsPct  = snap.cogs_pct  ?? 0;
+    const laborPct = snap.labor_pct ?? 0;
+    const primePct = snap.prime_cost_pct ?? 0;
+    const fixedPct = (totalFixed / totalSales) * 100;
+
+    const updatedTiles = get().tiles.map((t) => {
+      if (t.key === "cogs") {
+        const s = cogsScore(cogsPct);
+        return { key: "cogs" as const, label: "COGS", value: `${cogsPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
+      }
+      if (t.key === "labor") {
+        const s = laborScore(laborPct);
+        return { key: "labor" as const, label: "Labor", value: `${laborPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
+      }
+      if (t.key === "prime") {
+        const s = primeScore(primePct);
+        return { key: "prime" as const, label: "Prime Cost", value: `${primePct.toFixed(1)}%`, status: scoreStatus(s), score: s };
+      }
+      if (t.key === "fixed") {
+        const s = fixedScore(fixedPct);
+        return { key: "fixed" as const, label: "Fixed Cost", value: `${fixedPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
+      }
+      return t;
+    });
+
+    const netDetail: NetDetail = {
+      salesDollars:     totalSales,
+      laborDollars:     Math.round(laborCost * 100) / 100,
+      cogsDollars:      Math.round(cogsDollars * 100) / 100,
+      primeDollars:     Math.round((laborCost + cogsDollars) * 100) / 100,
+      primePct:         primePct,
+      fixedDollars:     Math.round(totalFixed * 100) / 100,
+      fixedPct:         fixedPct,
+      rentDollars:      Math.round(rentCost * 100) / 100,
+      amortizedDollars: Math.round(amortizedCost * 100) / 100,
+      mrDollars:        Math.round(todayMR * 100) / 100,
+      netDollars:       Math.round(netDollars * 100) / 100,
+      netPct:           Math.round(netPct * 10) / 10,
+    };
+
+    set({
+      sales: { value: totalSales, label: "Sales", sub: "Today" },
+      tiles: updatedTiles,
+      net: {
+        value:   `${netPct.toFixed(1)}%`,
+        dollars: Math.round(netDollars),
+        label:   "Net Profit",
+        sub:     `$${Math.round(netDollars).toLocaleString()} today`,
+        score:   nScore,
+      },
+      netDetail,
+      lastSnapshotAt: snap.captured_at,
+      lastRefresh: Date.now(),
+    });
+  },
+
+  // ── Real-time subscription to kpi_snapshots ─────────────────────────────
+  subscribeToSnapshots: () => {
+    // Load the latest snapshot immediately on subscribe
+    supabase
+      .from("kpi_snapshots")
+      .select("*")
+      .order("captured_at", { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) get().applySnapshot(data as KpiSnapshot);
+      });
+
+    // Subscribe to real-time inserts
+    const channel = supabase
+      .channel("kpi-snapshots-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "kpi_snapshots" },
+        (payload) => {
+          console.log("[supabase] new snapshot received");
+          get().applySnapshot(payload.new as KpiSnapshot);
+        },
+      )
+      .subscribe();
+
+    // Return unsubscribe function
+    return () => { supabase.removeChannel(channel); };
+  },
 
   refresh: async () => {
     const [salesResult, laborResult, salesDetailResult, laborDetailRich, cogsDetailResult] = await Promise.all([

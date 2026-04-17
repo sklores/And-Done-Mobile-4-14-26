@@ -43,11 +43,12 @@ async function fetchWeather(): Promise<WeatherData> {
 const PULL_THRESHOLD = 70; // px needed to trigger refresh
 
 export default function App() {
-  const businessName = useAppStore((s) => s.businessName);
-  const sales        = useKpiStore((s) => s.sales);
-  const net          = useKpiStore((s) => s.net);
-  const tiles        = useKpiStore((s) => s.tiles);
-  const refresh      = useKpiStore((s) => s.refresh);
+  const businessName          = useAppStore((s) => s.businessName);
+  const sales                 = useKpiStore((s) => s.sales);
+  const net                   = useKpiStore((s) => s.net);
+  const tiles                 = useKpiStore((s) => s.tiles);
+  const refresh               = useKpiStore((s) => s.refresh);
+  const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
 
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
@@ -84,6 +85,13 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [drillKey, openTab, openFeed]);
 
+  // ── Supabase real-time subscription (primary data source) ────────────────
+  useEffect(() => {
+    const unsubscribe = subscribeToSnapshots();
+    return unsubscribe;
+  }, [subscribeToSnapshots]);
+
+  // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 5 * 60 * 1000);
