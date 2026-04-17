@@ -225,26 +225,26 @@ export default function App() {
           <div
             style={{
               margin: "8px 12px 0",
-              border: "3px solid #B4B8BC",
+              border: "3px solid #C4B090",
               borderRadius: 8,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               overflow: "hidden",
-              background: "#B4B8BC",
+              background: "#C4B090",
               flexShrink: 0,
             }}
           >
             <CoastalScene weather={weatherData.condition} />
             <div
               style={{
-                background: "#B4B8BC",
-                color: "#1F2124",
+                background: "#C4B090",
+                color: "#3A2A10",
                 fontSize: 12,
                 fontWeight: 700,
                 padding: "7px 12px",
                 display: "flex",
                 justifyContent: "space-between",
                 letterSpacing: ".06em",
-                borderTop: "1px solid #9EA2A4",
+                borderTop: "1px solid #A89070",
               }}
             >
               <span>{businessName}</span>
