@@ -600,6 +600,7 @@ export async function getTodayCOGSDetail(creds) {
 
   return {
     categorySales,
+    _debugCategoryNames: Array.from(categoryMap.keys()), // temp: remove after debugging
     totalRevenue:       r2(totalRevenue),
     categoryCOGS:       r2(categoryCOGS),
     categoryCOGSPct:    totalRevenue > 0 ? r2((categoryCOGS / totalRevenue) * 100) : 0,

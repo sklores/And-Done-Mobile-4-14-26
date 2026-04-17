@@ -200,6 +200,13 @@ export function COGSDrillDown({ open, onClose }: Props) {
           Waiting for order data…
         </div>
       )}
+
+      {/* Temp debug — remove once category names are confirmed */}
+      {detail?._debugCategoryNames && detail._debugCategoryNames.length > 0 && (
+        <div style={{ padding: "10px 18px", fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C" }}>
+          <strong>Toast categories:</strong> {detail._debugCategoryNames.join(", ")}
+        </div>
+      )}
     </DrillDownModal>
   );
 }
