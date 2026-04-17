@@ -287,7 +287,17 @@ export default function App() {
             alerting={alertingKeys.has("net")}
             onClick={() => setDrillKey("net" as KpiKey)}
           />
-          <MarqueeFeed onLongPress={setOpenFeed} />
+          {/* Framed marquee — same width as KpiBar */}
+          <div style={{
+            margin: "8px 10px 8px",
+            border: "3px solid #C4B090",
+            borderRadius: 10,
+            overflow: "hidden",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+            flexShrink: 0,
+          }}>
+            <MarqueeFeed onLongPress={setOpenFeed} />
+          </div>
         </div>{/* end scroll container */}
         </div>{/* end relative wrapper */}
 
