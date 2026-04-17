@@ -559,6 +559,9 @@ export async function getTodayCOGSDetail(creds) {
     }
   }
 
+  // Debug: log what category names Toast actually returned
+  console.log("[COGS] category names from Toast:", Array.from(categoryMap.keys()));
+
   // Build category breakdown with per-category COGS estimate
   let categoryCOGS = 0;
   const categorySales = Array.from(categoryMap.entries())

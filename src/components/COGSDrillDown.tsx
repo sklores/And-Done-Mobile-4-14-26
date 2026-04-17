@@ -111,6 +111,8 @@ export function COGSDrillDown({ open, onClose }: Props) {
               : 0}% of mix`}
           />
         ))
+      ) : detail ? (
+        <DrillRow label="No category data from Toast" value="--" sub="Sales categories may not be configured in Toast" dimmed />
       ) : (
         <DrillRow label="Loading…" value="--" />
       )}
