@@ -54,7 +54,7 @@ const SUN: Record<TimeOfDay, { x: number; y: number; r: number; c: string; g: st
   morning:   { x: 290, y: 28, r: 17, c: '#FFFDE0', g: '#FFF0A0', moon: false },
   afternoon: { x: 230, y: 20, r: 16, c: '#FFF8C0', g: '#FFFDE0', moon: false },
   sundown:   { x: 34,  y: 62, r: 20, c: '#FF6622', g: '#FF4400', moon: false },
-  night:     { x: 318, y: 26, r: 11, c: '#E8E4D4', g: '#D0CCB8', moon: true  },
+  night:     { x: 316, y: 30, r: 15, c: '#F7E49A', g: '#F4D472', moon: true  },
 }
 
 const CLOUD_OPACITY: Record<TimeOfDay, number> = {
@@ -514,7 +514,7 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Stars (night only) — skip any that fall inside/near the moon disc */}
           {isNight && STARS.filter(([x, y]) => {
             const dx = x - sun.x, dy = y - sun.y
-            return Math.sqrt(dx*dx + dy*dy) > sun.r + 4
+            return Math.sqrt(dx*dx + dy*dy) > sun.r + 6
           }).map(([x, y], i) => (
             <circle key={i} cx={x} cy={y}
               r={i % 6 === 0 ? 1.2 : .75} fill="white"
@@ -525,31 +525,49 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Sun / Moon */}
           {sun.moon ? (
             <g>
+              {/* Crescent mask — subtract upper-left offset disc from main disc */}
+              <defs>
+                <mask id="cs-moon-crescent" maskUnits="userSpaceOnUse">
+                  <rect x={sun.x-sun.r-4} y={sun.y-sun.r-4} width={sun.r*2+8} height={sun.r*2+8} fill="black" />
+                  <circle cx={sun.x} cy={sun.y} r={sun.r} fill="white" />
+                  <circle cx={sun.x-sun.r*0.55} cy={sun.y-sun.r*0.38} r={sun.r*0.92} fill="black" />
+                </mask>
+                <radialGradient id="cs-moon-grad" cx="65%" cy="60%" r="70%">
+                  <stop offset="0%"  stopColor="#FFF4C0" />
+                  <stop offset="55%" stopColor={sun.c} />
+                  <stop offset="100%" stopColor={sun.g} />
+                </radialGradient>
+              </defs>
+
               {/* Wide warm corona — pulses gently */}
-              <circle cx={sun.x} cy={sun.y} r={sun.r+28}
-                fill="#F8F4D8"
+              <circle cx={sun.x} cy={sun.y} r={sun.r+24}
+                fill="#F8E8A8"
                 style={{ animation: 'cs-moon-halo 6s ease-in-out infinite', transformOrigin: `${sun.x}px ${sun.y}px` }} />
               {/* Mid glow */}
-              <circle cx={sun.x} cy={sun.y} r={sun.r+14} fill="#F0E8C8" opacity={.12} />
+              <circle cx={sun.x} cy={sun.y} r={sun.r+12} fill="#F4DC90" opacity={.14} />
               {/* Inner glow — pulses */}
-              <circle cx={sun.x} cy={sun.y} r={sun.r+6}  fill="#FFF8D8"
+              <circle cx={sun.x} cy={sun.y} r={sun.r+5}  fill="#FFF0B8"
                 style={{ animation: 'cs-moon-glow 4s ease-in-out infinite' }} />
-              {/* Shadow underside (darker bottom-right for dimension) */}
-              <circle cx={sun.x+2} cy={sun.y+2} r={sun.r} fill="#9A9480" opacity={.45} />
-              {/* Main moon body */}
-              <circle cx={sun.x} cy={sun.y} r={sun.r} fill={sun.c} opacity={.96} />
-              {/* Highlight — bright upper-left */}
-              <ellipse cx={sun.x-3} cy={sun.y-3} rx={sun.r*.62} ry={sun.r*.48}
-                fill="#FFFDF0" opacity={.35} />
-              {/* Craters — soft dimples */}
-              <circle cx={sun.x-3}   cy={sun.y+1}   r={1.8} fill="#B8B4A0" opacity={.42} />
-              <circle cx={sun.x+3}   cy={sun.y-4}   r={1.2} fill="#B8B4A0" opacity={.38} />
-              <circle cx={sun.x+4.5} cy={sun.y+3}   r={1.4} fill="#B8B4A0" opacity={.4}  />
-              <circle cx={sun.x-5}   cy={sun.y-2}   r={0.9} fill="#B8B4A0" opacity={.32} />
-              <circle cx={sun.x-1}   cy={sun.y+5}   r={1.0} fill="#B8B4A0" opacity={.34} />
-              {/* Crater highlight rims */}
-              <circle cx={sun.x-3}   cy={sun.y+0.3} r={0.4} fill="#FFFDF0" opacity={.5} />
-              <circle cx={sun.x+4.5} cy={sun.y+2.3} r={0.3} fill="#FFFDF0" opacity={.45} />
+
+              {/* Crescent body */}
+              <g mask="url(#cs-moon-crescent)">
+                <circle cx={sun.x} cy={sun.y} r={sun.r} fill="url(#cs-moon-grad)" />
+                {/* Soft inner shadow on the concave edge */}
+                <circle cx={sun.x-sun.r*0.45} cy={sun.y-sun.r*0.28} r={sun.r*0.98}
+                  fill="#C49A3A" opacity={.28} />
+                {/* Craters along the bulge */}
+                <circle cx={sun.x+sun.r*0.35} cy={sun.y-sun.r*0.10} r={1.6} fill="#C89A30" opacity={.38} />
+                <circle cx={sun.x+sun.r*0.55} cy={sun.y+sun.r*0.30} r={1.9} fill="#C89A30" opacity={.40} />
+                <circle cx={sun.x+sun.r*0.18} cy={sun.y+sun.r*0.55} r={1.3} fill="#C89A30" opacity={.35} />
+                <circle cx={sun.x+sun.r*0.05} cy={sun.y+sun.r*0.15} r={0.9} fill="#C89A30" opacity={.30} />
+                <circle cx={sun.x+sun.r*0.65} cy={sun.y-sun.r*0.05} r={0.8} fill="#C89A30" opacity={.28} />
+                {/* Crater highlights */}
+                <circle cx={sun.x+sun.r*0.55} cy={sun.y+sun.r*0.22} r={0.35} fill="#FFF6D8" opacity={.55} />
+                <circle cx={sun.x+sun.r*0.35} cy={sun.y-sun.r*0.18} r={0.3}  fill="#FFF6D8" opacity={.5} />
+                {/* Rim highlight along the outer curve */}
+                <circle cx={sun.x+0.6} cy={sun.y+0.6} r={sun.r-0.4} fill="none"
+                  stroke="#FFF8D8" strokeWidth={0.6} opacity={.35} />
+              </g>
             </g>
           ) : (
             <>
