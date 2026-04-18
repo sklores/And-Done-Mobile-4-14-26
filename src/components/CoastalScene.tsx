@@ -513,23 +513,21 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
 
           {/* & — self-drawing stroke intro, fades completely, never returns */}
-          {/* Path traces the & shape in one continuous pen stroke */}
+          {/* One bowl + crossing diagonal = classic & (no second loop) */}
           <g>
-            {/* Soft glow: wide stroke, low opacity, same path */}
             <path
-              d="M208,82 C208,63 196,52 181,52 C164,52 151,65 151,82 C151,100 164,110 183,117 L152,150 C145,163 153,174 168,174 C183,174 193,162 193,149 C193,136 181,125 200,112 L227,91"
-              fill="none" stroke="white" strokeWidth="20"
+              d="M208,76 C208,57 196,47 181,47 C163,47 150,61 150,78 C150,96 163,108 183,113 C200,120 228,138 226,147"
+              fill="none" stroke="white" strokeWidth="22"
               strokeLinecap="round" strokeLinejoin="round"
-              strokeDasharray="520" strokeDashoffset="520"
+              strokeDasharray="360" strokeDashoffset="360"
               opacity="0.13"
               style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
             />
-            {/* Main stroke — the actual drawing */}
             <path
-              d="M208,82 C208,63 196,52 181,52 C164,52 151,65 151,82 C151,100 164,110 183,117 L152,150 C145,163 153,174 168,174 C183,174 193,162 193,149 C193,136 181,125 200,112 L227,91"
+              d="M208,76 C208,57 196,47 181,47 C163,47 150,61 150,78 C150,96 163,108 183,113 C200,120 228,138 226,147"
               fill="none" stroke="white" strokeWidth="5.5"
               strokeLinecap="round" strokeLinejoin="round"
-              strokeDasharray="520" strokeDashoffset="520"
+              strokeDasharray="360" strokeDashoffset="360"
               style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
             />
           </g>
