@@ -68,33 +68,40 @@ async function getToken(creds) {
 export async function getTodaySales(creds) {
   const token = await getToken(creds);
   const businessDate = todayBusinessDate();
-  const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Toast-Restaurant-External-ID": creds.guid,
-    },
-  });
-  if (!res.ok) throw new Error(`toast orders ${res.status}`);
-  const orders = await res.json();
+  const authHeaders = {
+    Authorization: `Bearer ${token}`,
+    "Toast-Restaurant-External-ID": creds.guid,
+  };
+
+  // Toast's ordersBulk endpoint defaults to pageSize=100, page=1. Busy days
+  // spill onto page 2+, so we paginate until we get a short page.
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 20; // safety cap → 2,000 orders/day ceiling
+  const orders = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}&pageSize=${PAGE_SIZE}&page=${page}`;
+    const res = await fetch(url, { headers: authHeaders });
+    if (!res.ok) throw new Error(`toast orders p${page} ${res.status}`);
+    const batch = await res.json();
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    orders.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
 
   // Sum `check.amount` — net sales, pre-tax, pre-tip. Matches POS "Sales".
   let total = 0;
   let checkCount = 0;
-  let orderCount = 0;
+  let orderCount = orders.length;
   let totalTips = 0;
-  if (Array.isArray(orders)) {
-    orderCount = orders.length;
-    for (const o of orders) {
-      for (const c of o.checks ?? []) {
-        if (c.voided) continue;
-        if (typeof c.amount === "number") {
-          total += c.amount;
-          checkCount++;
-        }
-        for (const p of c.payments ?? []) {
-          if (typeof p.tipAmount === "number") totalTips += p.tipAmount;
-        }
+  for (const o of orders) {
+    for (const c of o.checks ?? []) {
+      if (c.voided) continue;
+      if (typeof c.amount === "number") {
+        total += c.amount;
+        checkCount++;
+      }
+      for (const p of c.payments ?? []) {
+        if (typeof p.tipAmount === "number") totalTips += p.tipAmount;
       }
     }
   }

@@ -131,16 +131,33 @@ Deno.serve(async (_req) => {
     const businessDate = todayBusinessDate(now);
     const startISO = easternStartOfDay(now).toISOString();
 
-    // ── Fetch orders + time entries in parallel ───────────────────────────
-    const [ordersRes, laborRes] = await Promise.all([
-      fetch(`${TOAST_BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`, { headers: authHeaders }),
+    // ── Fetch orders (paginated) + time entries in parallel ───────────────
+    // Toast's ordersBulk endpoint defaults to pageSize=100, page=1. On busy
+    // days GCDC exceeds one page once you count every 3p ticket, so we
+    // walk pages until Toast returns a short page.
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 20; // safety cap → 2,000 orders/day ceiling
+    async function fetchAllOrders(): Promise<unknown[]> {
+      const all: unknown[] = [];
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const url = `${TOAST_BASE}/orders/v2/ordersBulk?businessDate=${businessDate}&pageSize=${PAGE_SIZE}&page=${page}`;
+        const r = await fetch(url, { headers: authHeaders });
+        if (!r.ok) throw new Error(`Toast orders p${page}: ${r.status}`);
+        const batch = await r.json();
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        all.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+      }
+      return all;
+    }
+
+    const [orders, laborRes] = await Promise.all([
+      fetchAllOrders(),
       fetch(`${TOAST_BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startISO)}&endDate=${encodeURIComponent(now.toISOString())}`, { headers: authHeaders }),
     ]);
 
-    if (!ordersRes.ok) throw new Error(`Toast orders: ${ordersRes.status}`);
-    if (!laborRes.ok)  throw new Error(`Toast labor: ${laborRes.status}`);
+    if (!laborRes.ok) throw new Error(`Toast labor: ${laborRes.status}`);
 
-    const orders  = await ordersRes.json();
     const entries = await laborRes.json();
 
     // ── Process orders ────────────────────────────────────────────────────
