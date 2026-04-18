@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useKpiStore } from '../stores/useKpiStore'
+import { tileForScore } from '../theme/skins'
+import { FEED_SCORES } from '../data/feedScores'
 
 type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'sundown' | 'night'
 export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'snow' | 'wind'
@@ -119,6 +121,8 @@ const SCENE_CSS = `
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 @keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
+@keyframes cs-moon-glow{0%,100%{opacity:.14}50%{opacity:.26}}
+@keyframes cs-moon-halo{0%,100%{opacity:.05;transform:scale(1)}50%{opacity:.09;transform:scale(1.06)}}
 `
 
 const STARS: [number, number][] = [
@@ -460,6 +464,11 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const bx      = 195
   const by      = Math.round(14 + (1 - revNorm) * 44)  // 14 (excellent) → 58 (critical)
 
+  // Reviews → balloon color (tracks Reviews chip color in MarqueeFeed)
+  const reviewsPalette = tileForScore(FEED_SCORES.reviews)
+  const balloonBody    = reviewsPalette.bg     // main fabric color
+  const balloonShade   = reviewsPalette.label  // darker underside / shadow
+
   // Expenses → sharks: 0 = good (no sharks), 5 = bad (5 sharks).
   const SHARK_COUNT_MAP = [0, 5, 5, 4, 3, 2, 1, 0, 0]
   const sharkCount = SHARK_COUNT_MAP[expScore] ?? 0
@@ -502,8 +511,11 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Sky */}
           <rect width="375" height="200" fill="url(#cs-sky)" />
 
-          {/* Stars (night only) */}
-          {isNight && STARS.map(([x, y], i) => (
+          {/* Stars (night only) — skip any that fall inside/near the moon disc */}
+          {isNight && STARS.filter(([x, y]) => {
+            const dx = x - sun.x, dy = y - sun.y
+            return Math.sqrt(dx*dx + dy*dy) > sun.r + 4
+          }).map(([x, y], i) => (
             <circle key={i} cx={x} cy={y}
               r={i % 6 === 0 ? 1.2 : .75} fill="white"
               opacity={.5 + .3 * (i % 3) / 2}
@@ -512,10 +524,33 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
 
           {/* Sun / Moon */}
           {sun.moon ? (
-            <>
-              <circle cx={sun.x} cy={sun.y} r={sun.r}       fill={sun.c} opacity={.9} />
-              <circle cx={sun.x+5} cy={sun.y-3} r={sun.r-2} fill={s1} />
-            </>
+            <g>
+              {/* Wide warm corona — pulses gently */}
+              <circle cx={sun.x} cy={sun.y} r={sun.r+28}
+                fill="#F8F4D8"
+                style={{ animation: 'cs-moon-halo 6s ease-in-out infinite', transformOrigin: `${sun.x}px ${sun.y}px` }} />
+              {/* Mid glow */}
+              <circle cx={sun.x} cy={sun.y} r={sun.r+14} fill="#F0E8C8" opacity={.12} />
+              {/* Inner glow — pulses */}
+              <circle cx={sun.x} cy={sun.y} r={sun.r+6}  fill="#FFF8D8"
+                style={{ animation: 'cs-moon-glow 4s ease-in-out infinite' }} />
+              {/* Shadow underside (darker bottom-right for dimension) */}
+              <circle cx={sun.x+2} cy={sun.y+2} r={sun.r} fill="#9A9480" opacity={.45} />
+              {/* Main moon body */}
+              <circle cx={sun.x} cy={sun.y} r={sun.r} fill={sun.c} opacity={.96} />
+              {/* Highlight — bright upper-left */}
+              <ellipse cx={sun.x-3} cy={sun.y-3} rx={sun.r*.62} ry={sun.r*.48}
+                fill="#FFFDF0" opacity={.35} />
+              {/* Craters — soft dimples */}
+              <circle cx={sun.x-3}   cy={sun.y+1}   r={1.8} fill="#B8B4A0" opacity={.42} />
+              <circle cx={sun.x+3}   cy={sun.y-4}   r={1.2} fill="#B8B4A0" opacity={.38} />
+              <circle cx={sun.x+4.5} cy={sun.y+3}   r={1.4} fill="#B8B4A0" opacity={.4}  />
+              <circle cx={sun.x-5}   cy={sun.y-2}   r={0.9} fill="#B8B4A0" opacity={.32} />
+              <circle cx={sun.x-1}   cy={sun.y+5}   r={1.0} fill="#B8B4A0" opacity={.34} />
+              {/* Crater highlight rims */}
+              <circle cx={sun.x-3}   cy={sun.y+0.3} r={0.4} fill="#FFFDF0" opacity={.5} />
+              <circle cx={sun.x+4.5} cy={sun.y+2.3} r={0.3} fill="#FFFDF0" opacity={.45} />
+            </g>
           ) : (
             <>
               {/* Extra wide atmospheric haze at golden hours */}
@@ -580,12 +615,12 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
               style={{ animation: `cs-wind ${1.2+i*.3}s ease-in-out infinite ${i*.4}s` }} />
           ))}
 
-          {/* Balloon — altitude = Reviews score */}
+          {/* Balloon — altitude = Reviews score, color = Reviews chip color */}
           <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
-             opacity={isNight ? .4 : .88}>
-            <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill="#7BBFAA" />
-            <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill="#5BA090" opacity={.55} />
-            <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill="#4A9080" opacity={.38} />
+             opacity={isNight ? .82 : .92}>
+            <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill={balloonBody} />
+            <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill={balloonShade} opacity={.32} />
+            <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill={balloonShade} opacity={.48} />
             <line x1={bx-19} y1={by+13} x2={bx+19} y2={by+13} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
             <line x1={bx}    y1={by-9}  x2={bx}    y2={by+36} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
             <line x1={bx-13} y1={by+34} x2={bx-8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
