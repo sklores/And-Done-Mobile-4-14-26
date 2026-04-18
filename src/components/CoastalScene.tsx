@@ -516,7 +516,7 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* pathLength="1" normalizes so dasharray/offset math is unit-based */}
           <g>
             <path
-              d="M208,76 C208,57 196,47 181,47 C163,47 150,61 150,78 C150,96 163,108 183,113 C200,120 228,138 226,147"
+              d="M206,70 C206,55 195,46 180,46 C163,46 150,60 150,77 C150,93 162,102 180,108 C195,115 158,130 152,150 C148,166 160,176 176,176 C195,176 214,164 213,147 C218,140 225,133 232,126"
               pathLength="1"
               fill="none" stroke="white" strokeWidth="22"
               strokeLinecap="round" strokeLinejoin="round"
@@ -525,7 +525,7 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
               style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
             />
             <path
-              d="M208,76 C208,57 196,47 181,47 C163,47 150,61 150,78 C150,96 163,108 183,113 C200,120 228,138 226,147"
+              d="M206,70 C206,55 195,46 180,46 C163,46 150,60 150,77 C150,93 162,102 180,108 C195,115 158,130 152,150 C148,166 160,176 176,176 C195,176 214,164 213,147 C218,140 225,133 232,126"
               pathLength="1"
               fill="none" stroke="white" strokeWidth="5.5"
               strokeLinecap="round" strokeLinejoin="round"
