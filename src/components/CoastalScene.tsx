@@ -123,6 +123,9 @@ const SCENE_CSS = `
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
 @keyframes cs-moon-glow{0%,100%{opacity:.14}50%{opacity:.26}}
 @keyframes cs-moon-halo{0%,100%{opacity:.05;transform:scale(1)}50%{opacity:.09;transform:scale(1.06)}}
+@keyframes cs-sun-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+@keyframes cs-sun-pulse{0%,100%{opacity:.18;transform:scale(1)}50%{opacity:.32;transform:scale(1.08)}}
+@keyframes cs-sun-shimmer{0%,100%{opacity:.55}50%{opacity:.95}}
 `
 
 const STARS: [number, number][] = [
@@ -582,9 +585,52 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
                   <ellipse cx={sun.x} cy={WL} rx={80}  ry={12} fill={sun.c} opacity={.08} />
                 </>
               )}
+
+              {/* Bright-day sun rays — morning/afternoon + clear weather only */}
+              {weather === 'clear' && !isNight && !isSundown && !isDawn && (
+                <g style={{
+                  transformOrigin: `${sun.x}px ${sun.y}px`,
+                  animation: 'cs-sun-spin 140s linear infinite',
+                }}>
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const angle = (i * Math.PI) / 6
+                    const long = i % 2 === 0
+                    const inner = sun.r + 6
+                    const outer = sun.r + (long ? 26 : 18)
+                    const x1 = sun.x + Math.cos(angle) * inner
+                    const y1 = sun.y + Math.sin(angle) * inner
+                    const x2 = sun.x + Math.cos(angle) * outer
+                    const y2 = sun.y + Math.sin(angle) * outer
+                    return (
+                      <line
+                        key={i}
+                        x1={x1} y1={y1} x2={x2} y2={y2}
+                        stroke={sun.c}
+                        strokeWidth={long ? 2.2 : 1.4}
+                        strokeLinecap="round"
+                        opacity={long ? .55 : .38}
+                        style={{ animation: `cs-sun-shimmer ${2.4 + (i % 4) * 0.3}s ease-in-out infinite ${i * 0.13}s` }}
+                      />
+                    )
+                  })}
+                </g>
+              )}
+
+              {/* Warm corona — breathes gently on sunny days */}
+              {weather === 'clear' && !isNight && (
+                <circle cx={sun.x} cy={sun.y} r={sun.r+18} fill={sun.c}
+                  style={{
+                    transformOrigin: `${sun.x}px ${sun.y}px`,
+                    animation: 'cs-sun-pulse 5s ease-in-out infinite',
+                  }} />
+              )}
+
               <circle cx={sun.x} cy={sun.y} r={sun.r+10} fill={sun.g} opacity={.14} />
-              <circle cx={sun.x} cy={sun.y} r={sun.r+5}  fill={sun.g} opacity={.12} />
-              <circle cx={sun.x} cy={sun.y} r={sun.r}    fill={sun.c} opacity={.95} />
+              <circle cx={sun.x} cy={sun.y} r={sun.r+5}  fill={sun.g} opacity={.22} />
+              <circle cx={sun.x} cy={sun.y} r={sun.r}    fill={sun.c} opacity={.96} />
+              {/* Bright inner core highlight */}
+              <circle cx={sun.x-sun.r*0.2} cy={sun.y-sun.r*0.2} r={sun.r*0.55}
+                fill="#FFFDF0" opacity={.45} />
             </>
           )}
 
