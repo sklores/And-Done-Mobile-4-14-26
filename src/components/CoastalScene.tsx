@@ -177,7 +177,7 @@ const BOAT_Y_OFFSET: Record<BoatKey, number> = {
   speedboat: 1, kayak: 2, fishing_boat: 0, jet_ski: 1,
 }
 
-function renderBoat(key: BoatKey, isNight: boolean): JSX.Element {
+function renderBoat(key: BoatKey, isNight: boolean) {
   switch (key) {
     case 'sailboat':
       return (
@@ -583,10 +583,9 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Balloon — altitude = Reviews score */}
           <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
              opacity={isNight ? .4 : .88}>
-            {/* DEPLOY DIAGNOSTIC: balloon is magenta. If you see green, deploy is stale. */}
-            <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill="#E040A0" />
-            <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill="#C02080" opacity={.55} />
-            <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill="#A01060" opacity={.38} />
+            <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill="#7BBFAA" />
+            <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill="#5BA090" opacity={.55} />
+            <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill="#4A9080" opacity={.38} />
             <line x1={bx-19} y1={by+13} x2={bx+19} y2={by+13} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
             <line x1={bx}    y1={by-9}  x2={bx}    y2={by+36} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
             <line x1={bx-13} y1={by+34} x2={bx-8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
