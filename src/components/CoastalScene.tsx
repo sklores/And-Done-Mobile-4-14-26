@@ -116,7 +116,7 @@ const SCENE_CSS = `
 @keyframes cs-sprayl{0%{opacity:0;transform:translateY(0)}30%{opacity:.5}100%{opacity:0;transform:translateY(-12px) scaleX(1.3)}}
 @keyframes cs-dolphin{0%,22%,100%{transform:translateY(0) rotate(0deg);opacity:0} 7%{transform:translateY(-26px) rotate(-22deg);opacity:1} 14%{transform:translateY(-14px) rotate(12deg);opacity:0.8} 18%{transform:translateY(0) rotate(0deg);opacity:0}}
 @keyframes cs-dolphin2{0%,24%,100%{transform:translateY(0) rotate(0deg);opacity:0} 8%{transform:translateY(-20px) rotate(-18deg);opacity:0.85} 15%{transform:translateY(-8px) rotate(10deg);opacity:0.6} 20%{transform:translateY(0) rotate(0deg);opacity:0}}
-@keyframes cs-amp-draw{0%{stroke-dashoffset:1;opacity:1}52%{stroke-dashoffset:0;opacity:1}72%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 `
 
 const STARS: [number, number][] = [
@@ -512,27 +512,20 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
           {/* Bottom water depth */}
           <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
 
-          {/* & — self-drawing stroke intro, fades completely, never returns */}
-          {/* pathLength="1" normalizes so dasharray/offset math is unit-based */}
-          <g>
-            <path
-              d="M206,70 C206,55 195,46 180,46 C163,46 150,60 150,77 C150,93 162,102 180,108 C195,115 158,130 152,150 C148,166 160,176 176,176 C195,176 214,164 213,147 C218,140 225,133 232,126"
-              pathLength="1"
-              fill="none" stroke="white" strokeWidth="22"
-              strokeLinecap="round" strokeLinejoin="round"
-              strokeDasharray="1" strokeDashoffset="1"
-              opacity="0.13"
-              style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
-            />
-            <path
-              d="M206,70 C206,55 195,46 180,46 C163,46 150,60 150,77 C150,93 162,102 180,108 C195,115 158,130 152,150 C148,166 160,176 176,176 C195,176 214,164 213,147 C218,140 225,133 232,126"
-              pathLength="1"
-              fill="none" stroke="white" strokeWidth="5.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              strokeDasharray="1" strokeDashoffset="1"
-              style={{ animation: 'cs-amp-draw 3.8s ease-in-out forwards' }}
-            />
-          </g>
+          {/* & — bold italic serif, fades in then fades out, never returns */}
+          <text
+            x="187.5"
+            y="128"
+            textAnchor="middle"
+            fill="white"
+            fontFamily="Georgia, 'Times New Roman', serif"
+            fontStyle="italic"
+            fontWeight="900"
+            fontSize="110"
+            style={{ animation: 'cs-amp-fade 3.2s ease-in-out forwards' }}
+          >
+            &amp;
+          </text>
 
           {/* &done — painter's signature, bottom-right corner, always there */}
           <text
