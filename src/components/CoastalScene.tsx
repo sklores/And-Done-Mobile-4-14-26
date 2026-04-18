@@ -117,6 +117,8 @@ const SCENE_CSS = `
 @keyframes cs-dolphin{0%,22%,100%{transform:translateY(0) rotate(0deg);opacity:0} 7%{transform:translateY(-26px) rotate(-22deg);opacity:1} 14%{transform:translateY(-14px) rotate(12deg);opacity:0.8} 18%{transform:translateY(0) rotate(0deg);opacity:0}}
 @keyframes cs-dolphin2{0%,24%,100%{transform:translateY(0) rotate(0deg);opacity:0} 8%{transform:translateY(-20px) rotate(-18deg);opacity:0.85} 15%{transform:translateY(-8px) rotate(10deg);opacity:0.6} 20%{transform:translateY(0) rotate(0deg);opacity:0}}
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
+@keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
+@keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
 `
 
 const STARS: [number, number][] = [
@@ -162,6 +164,209 @@ const SHARK_DEFS = [
   { x: 340, fy: WL+22, ty: WL+15, hw: 8,  rx: 9,  ry: 3.0, anim: 'cs-shark5', dur: 10, dl: 5 },
 ]
 
+// ─── Boats ──────────────────────────────────────────────────────────
+type BoatKey =
+  | 'sailboat' | 'cruise_ship' | 'yacht' | 'pirate_ship' | 'ghost_ship'
+  | 'oil_tanker' | 'cargo_freighter' | 'crowded_rowboat' | 'party_boat'
+  | 'speedboat' | 'kayak' | 'fishing_boat' | 'jet_ski'
+
+// Positive = sits deeper; negative = rides higher on water
+const BOAT_Y_OFFSET: Record<BoatKey, number> = {
+  sailboat: 0, cruise_ship: -3, yacht: 0, pirate_ship: -2, ghost_ship: -2,
+  oil_tanker: -4, cargo_freighter: -3, crowded_rowboat: 2, party_boat: -1,
+  speedboat: 1, kayak: 2, fishing_boat: 0, jet_ski: 1,
+}
+
+function renderBoat(key: BoatKey, isNight: boolean): JSX.Element {
+  switch (key) {
+    case 'sailboat':
+      return (
+        <g>
+          <rect x={-12} y={1} width={24} height={8} rx={3.5} fill="#C09870" opacity={.88} />
+          <line x1={0} y1={1} x2={0} y2={-19} stroke="#8A6840" strokeWidth={1.3} />
+          <path d="M0,-17 L15,-3 L0,1 Z" fill="#F0EDE4" opacity={.92} />
+          <path d="M0,-14 L-13,-3 L0,1 Z" fill="#E4E0D8" opacity={.65} />
+        </g>
+      )
+    case 'cruise_ship':
+      return (
+        <g>
+          <rect x={-35} y={0} width={70} height={7} rx={2} fill="#F8F8F4" />
+          <rect x={-32} y={-9} width={60} height={9} fill="#FFFFFF" />
+          <rect x={-24} y={-16} width={40} height={7} fill="#F0F0EA" />
+          {Array.from({ length: 10 }).map((_, i) => (
+            <rect key={i} x={-30 + i * 6} y={-6} width={3} height={2} fill="#2A6090" />
+          ))}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <rect key={`t${i}`} x={-22 + i * 6} y={-13} width={3} height={2} fill="#2A6090" />
+          ))}
+          <rect x={8}  y={-22} width={3} height={6} fill="#C04040" />
+          <rect x={14} y={-22} width={3} height={6} fill="#C04040" />
+          <rect x={-32} y={7} width={64} height={2} fill="#2A3A4A" opacity={.6} />
+        </g>
+      )
+    case 'yacht':
+      return (
+        <g>
+          <path d="M-18,1 L17,1 L14,8 L-14,8 Z" fill="#F8F6EE" />
+          <rect x={-10} y={-6} width={18} height={7} rx={1} fill="#E8E4D8" />
+          <rect x={-7} y={-4} width={3} height={3} fill="#6090B0" />
+          <rect x={-2} y={-4} width={3} height={3} fill="#6090B0" />
+          <rect x={3}  y={-4} width={3} height={3} fill="#6090B0" />
+          <line x1={-2} y1={-6} x2={-2} y2={-14} stroke="#888" strokeWidth={.8} />
+        </g>
+      )
+    case 'pirate_ship':
+      return (
+        <g>
+          <path d="M-20,1 Q-22,8 -14,10 L14,10 Q22,8 20,1 Z" fill="#3A2818" />
+          <rect x={-18} y={-2} width={36} height={4} fill="#5A3A24" />
+          <line x1={-8} y1={-2} x2={-8} y2={-26} stroke="#2A1808" strokeWidth={1.3} />
+          <line x1={8}  y1={-2} x2={8}  y2={-22} stroke="#2A1808" strokeWidth={1.3} />
+          <path d="M-8,-24 L-18,-11 L-8,-8 Z" fill="#1A1A1A" opacity={.88} />
+          <path d="M8,-20 L17,-9 L8,-6 Z" fill="#2A1A1A" opacity={.88} />
+          <rect x={-9} y={-26} width={6} height={4} fill="#1A1A1A" />
+          <circle cx={-6} cy={-24} r={1} fill="#FFF" />
+        </g>
+      )
+    case 'ghost_ship':
+      return (
+        <g opacity={isNight ? .7 : .5}>
+          <path d="M-20,1 Q-22,8 -14,10 L14,10 Q22,8 20,1 Z" fill="#9AB8C8" />
+          <line x1={-6} y1={1} x2={-6} y2={-22} stroke="#B8CCD8" strokeWidth={1.1} />
+          <line x1={8}  y1={1} x2={8}  y2={-18} stroke="#B8CCD8" strokeWidth={1.1} />
+          <path d="M-6,-20 L-16,-8 L-6,-6 Z" fill="#E0EAF0" opacity={.55} />
+          <path d="M8,-16 L16,-6 L8,-4 Z"    fill="#E0EAF0" opacity={.55} />
+          <ellipse cx={0} cy={3} rx={22} ry={3} fill="#C8D8E0" opacity={.35} />
+        </g>
+      )
+    case 'oil_tanker':
+      return (
+        <g>
+          <rect x={-42} y={0} width={84} height={9} fill="#1E1E1E" />
+          <rect x={-40} y={-4} width={80} height={4} fill="#2E2E2E" />
+          <circle cx={-24} cy={-7} r={4} fill="#555" />
+          <circle cx={-10} cy={-7} r={4} fill="#555" />
+          <circle cx={4}   cy={-7} r={4} fill="#555" />
+          <circle cx={18}  cy={-7} r={4} fill="#555" />
+          <rect x={28} y={-16} width={10} height={12} fill="#404040" />
+          <rect x={30} y={-23} width={3}  height={7}  fill="#1A1A1A" />
+          <rect x={30} y={-23} width={3}  height={2}  fill="#6A6A6A" />
+          <rect x={-40} y={9}  width={80} height={2}  fill="#0A0A0A" opacity={.6} />
+        </g>
+      )
+    case 'cargo_freighter':
+      return (
+        <g>
+          <rect x={-32} y={0}   width={64} height={9} fill="#8A3020" />
+          <rect x={-30} y={-10} width={60} height={10} fill="#A04030" />
+          {['#4080A0','#A05050','#508060','#C0A040','#804080','#607080','#B08030'].map((c, i) => (
+            <rect key={i} x={-28 + i * 8} y={-17} width={7} height={7} fill={c} />
+          ))}
+          <rect x={24} y={-24} width={7}  height={7} fill="#D8D0C0" />
+          <rect x={26} y={-30} width={2}  height={6} fill="#1A1A1A" />
+        </g>
+      )
+    case 'crowded_rowboat':
+      return (
+        <g>
+          <path d="M-14,1 Q-16,8 -10,9 L10,9 Q16,8 14,1 Z" fill="#8A6840" />
+          <rect x={-12} y={-1} width={24} height={2} fill="#6A4828" />
+          <rect x={-10} y={-4} width={20} height={3} fill="#2A2A28" />
+          <circle cx={-8} cy={-5}  r={2.2} fill="#2A2A28" />
+          <circle cx={-3} cy={-6}  r={2.2} fill="#2A2A28" />
+          <circle cx={2}  cy={-5}  r={2.2} fill="#2A2A28" />
+          <circle cx={7}  cy={-6}  r={2.2} fill="#2A2A28" />
+          <line x1={-14} y1={-1} x2={-21} y2={4} stroke="#6A4828" strokeWidth={1} />
+          <line x1={14}  y1={-1} x2={21}  y2={4} stroke="#6A4828" strokeWidth={1} />
+        </g>
+      )
+    case 'party_boat':
+      return (
+        <g>
+          <path d="M-18,1 L18,1 L15,9 L-15,9 Z" fill="#F5D060" />
+          <rect x={-14} y={-8} width={28} height={9} rx={1} fill="#F8E890" />
+          <rect x={-16} y={-12} width={32} height={3} fill="#E04060" />
+          {['#FF4060','#FFD040','#40D0A0','#4080FF','#D040D0'].map((c, i) => (
+            <circle key={i} cx={-12 + i * 6} cy={-9.5} r={1} fill={c} />
+          ))}
+          <rect x={-10} y={-6} width={4} height={4} fill="#2A3A50" />
+          <rect x={-3}  y={-6} width={4} height={4} fill="#2A3A50" />
+          <rect x={4}   y={-6} width={4} height={4} fill="#2A3A50" />
+        </g>
+      )
+    case 'speedboat':
+      return (
+        <g>
+          <path d="M-14,1 L16,1 L18,4 L14,7 L-10,7 Z" fill="#D03030" />
+          <rect x={-10} y={-3} width={16} height={4} rx={1} fill="#F8F8F8" />
+          <path d="M-10,-3 L-4,-3 L-4,1 L-10,1 Z" fill="#2A3040" opacity={.7} />
+          <path d="M-14,4 Q-22,3 -28,5" stroke="white" strokeWidth={1}   fill="none" opacity={.7} />
+          <path d="M-14,6 Q-22,7 -30,7" stroke="white" strokeWidth={.8}  fill="none" opacity={.5} />
+        </g>
+      )
+    case 'kayak':
+      return (
+        <g>
+          <path d="M-14,3 Q-16,6 -10,7 L10,7 Q16,6 14,3 Q0,4 -14,3 Z" fill="#E07030" />
+          <circle cx={0} cy={-2} r={2.5} fill="#2A4060" />
+          <rect x={-1} y={-1} width={2} height={4} fill="#2A4060" />
+          <line x1={-9} y1={-5} x2={9} y2={1} stroke="#6A4828" strokeWidth={.9} />
+        </g>
+      )
+    case 'fishing_boat':
+      return (
+        <g>
+          <path d="M-16,1 Q-18,8 -12,9 L12,9 Q18,8 16,1 Z" fill="#4A6878" />
+          <rect x={-6} y={-7} width={10} height={8} fill="#D8D0B8" />
+          <rect x={-4} y={-5} width={3}  height={3} fill="#3A5060" />
+          <line x1={4}  y1={-7} x2={14} y2={-15} stroke="#2A2A28" strokeWidth={.8} />
+          <line x1={14} y1={-15} x2={16} y2={4}  stroke="#2A2A28" strokeWidth={.5} />
+        </g>
+      )
+    case 'jet_ski':
+      return (
+        <g>
+          <path d="M-10,1 L12,1 L14,4 L10,6 L-8,6 Z" fill="#4080D0" />
+          <rect x={-4} y={-3} width={6} height={4} fill="#2A3040" />
+          <circle cx={-1} cy={-1} r={1.5} fill="#E0C040" />
+          <path d="M-10,4 Q-16,3 -22,5" stroke="white" strokeWidth={.8} fill="none" opacity={.6} />
+        </g>
+      )
+  }
+}
+
+function pickHero(netScore: number, sales: number): BoatKey {
+  if (sales <= 0)       return 'ghost_ship'
+  if (netScore >= 7)    return 'cruise_ship'
+  if (netScore >= 6)    return 'yacht'
+  if (netScore >= 5)    return 'party_boat'
+  if (netScore >= 4)    return 'sailboat'
+  if (netScore >= 3)    return 'fishing_boat'
+  return 'pirate_ship'
+}
+
+function pickSecondary(scores: {
+  labor: number; prime: number; fixed: number; cogs: number
+}): BoatKey {
+  const entries = (Object.entries(scores) as [keyof typeof scores, number][])
+    .sort((a, b) => a[1] - b[1])
+  const [worstKey, worstScore] = entries[0]
+  if (worstScore >= 6) return 'kayak'
+  if (worstKey === 'labor') return 'crowded_rowboat'
+  if (worstKey === 'cogs')  return 'cargo_freighter'
+  if (worstKey === 'fixed') return 'oil_tanker'
+  if (worstKey === 'prime') return 'ghost_ship'
+  return 'kayak'
+}
+
+const AMBIENT_POOL: BoatKey[] = [
+  'speedboat', 'jet_ski', 'kayak', 'fishing_boat', 'sailboat', 'yacht',
+]
+function pickAmbient(): BoatKey {
+  return AMBIENT_POOL[Math.floor(Date.now() / 60000) % AMBIENT_POOL.length]
+}
+
 const SNOW_FLAKES: [number, number][] = [
   [45,5],[100,12],[160,3],[220,8],[280,14],[335,6],
   [70,20],[130,25],[190,18],[250,22],[305,28],
@@ -173,12 +378,25 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
   const [tod, setTod] = useState<TimeOfDay>(getTimeOfDay())
   const salesRaw = useKpiStore(s => s.sales)
   const tiles    = useKpiStore(s => s.tiles)
+  const netSt    = useKpiStore(s => s.net)
   const sales    = salesRaw?.value ?? 0
 
   // KPI scores 1–8 (8 = excellent)
   const laborScore = tiles.find(t => t.key === 'labor')?.score    ?? 5
   const primeScore = tiles.find(t => t.key === 'prime')?.score    ?? 5
   const expScore   = tiles.find(t => t.key === 'fixed')?.score ?? 5
+  const cogsScoreT = tiles.find(t => t.key === 'cogs')?.score  ?? 5
+  const netProfitScore = netSt?.score ?? 5
+
+  // Boat slot selections (hero/secondary/ambient)
+  const heroBoat      = pickHero(netProfitScore, sales)
+  const secondaryBoat = pickSecondary({
+    labor: laborScore,
+    prime: primeScore,
+    fixed: expScore,
+    cogs:  cogsScoreT,
+  })
+  const ambientBoat   = pickAmbient()
   const revScore   = tiles.find(t => t.key === 'reviews')?.score  ?? 5
   const socScore   = tiles.find(t => t.key === 'social')?.score   ?? 5
 
@@ -435,12 +653,32 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
             </g>
           ))}
 
-          {/* Sailboat */}
-          <g style={{ animation: `cs-bob 5.5s ease-in-out infinite` }}>
-            <rect x="148" y={WL+9}  width="24" height="8" rx="3.5" fill="#C09870" opacity={.88} />
-            <line x1="159" y1={WL+9} x2="159" y2={WL-10} stroke="#8A6840" strokeWidth="1.3" />
-            <path d={`M159,${WL-8} L174,${WL+5} L159,${WL+9}Z`}  fill="#F0EDE4" opacity={.9} />
-            <path d={`M159,${WL-5} L146,${WL+5} L159,${WL+9}Z`}  fill="#E4E0D8" opacity={.65} />
+          {/* Drifting boats — hero (profit), secondary (worst cost KPI), ambient (rotation) */}
+          {/* Ambient — furthest back, rides highest on waterline. Seeded at ~75% across. */}
+          <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
+            <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
+              <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite' }}>
+                {renderBoat(ambientBoat, isNight)}
+              </g>
+            </g>
+          </g>
+
+          {/* Hero — profit-driven, middle band, L→R. Seeded at ~40% across. */}
+          <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
+            <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
+              <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite' }}>
+                {renderBoat(heroBoat, isNight)}
+              </g>
+            </g>
+          </g>
+
+          {/* Secondary — worst non-profit KPI, front band, R→L. Seeded at ~40% from right. */}
+          <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
+            <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
+              <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite' }}>
+                {renderBoat(secondaryBoat, isNight)}
+              </g>
+            </g>
           </g>
 
           {/* Dolphins — Social score (active + frequency when good) */}
