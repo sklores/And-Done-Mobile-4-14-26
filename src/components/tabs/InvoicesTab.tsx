@@ -221,10 +221,11 @@ export function InvoicesTab({ open, onClose }: Props) {
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       // Row will stream in via realtime, but also prepend optimistically
-      if (data.invoice) {
+      const newRow = data.invoice;
+      if (newRow) {
         setInvoices((cur) => {
-          if (cur.some((r) => r.id === data.invoice.id)) return cur;
-          return [data.invoice as InvoiceRow, ...cur];
+          if (cur.some((r) => r.id === newRow.id)) return cur;
+          return [newRow, ...cur];
         });
       }
     } catch (err) {
