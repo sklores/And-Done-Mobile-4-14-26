@@ -89,17 +89,17 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub="hours × hourly rate · pre-tax"
       />
       {schedule && detail && schedule.hours > 0 && (() => {
-        const variance  = detail.hoursWorked - schedule.hours;       // + over, - under
-        const accuracy  = Math.max(0, 100 - Math.abs(variance / schedule.hours) * 100);
+        const pct      = (detail.hoursWorked / schedule.hours) * 100; // 100 = exact, >100 = over, <100 = under
+        const variance = detail.hoursWorked - schedule.hours;
         const direction = Math.abs(variance) < 0.1
           ? "on schedule"
           : variance > 0
-            ? `${variance.toFixed(1)} hrs over schedule`
-            : `${Math.abs(variance).toFixed(1)} hrs under schedule`;
+            ? `+${variance.toFixed(1)} hrs over schedule`
+            : `${variance.toFixed(1)} hrs under schedule`;
         return (
           <DrillRow
             label="Schedule Accuracy"
-            value={`${accuracy.toFixed(0)}%`}
+            value={`${pct.toFixed(0)}%`}
             sub={`${detail.hoursWorked.toFixed(1)} worked / ${schedule.hours.toFixed(1)} scheduled · ${direction}`}
           />
         );
