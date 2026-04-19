@@ -133,7 +133,9 @@ const SCENE_CSS = `
 @keyframes cs-wv2{0%,100%{transform:translateX(-16px)}50%{transform:translateX(18px)}}
 @keyframes cs-wv3{0%,100%{transform:translateX(10px)}50%{transform:translateX(-14px)}}
 @keyframes cs-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3.5px)}}
-@keyframes cs-beam{0%,100%{opacity:.5;transform:rotate(-18deg)}50%{opacity:.1;transform:rotate(18deg)}}
+@keyframes cs-beam{0%,100%{transform:rotate(-72deg)}50%{transform:rotate(-8deg)}}
+@keyframes cs-beam-core{0%,100%{transform:rotate(-70deg)}50%{transform:rotate(-10deg)}}
+@keyframes cs-beam-pulse{0%,100%{opacity:.9}50%{opacity:1}}
 @keyframes cs-drift1{0%,100%{transform:translateX(0)}50%{transform:translateX(12px)}}
 @keyframes cs-drift2{0%,100%{transform:translateX(0)}50%{transform:translateX(-10px)}}
 @keyframes cs-bfly{0%{transform:translateX(-30px)}100%{transform:translateX(420px)}}
@@ -543,6 +545,17 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
             <stop offset="0%"   stopColor="white" stopOpacity={isWind ? .14 : .07} />
             <stop offset="100%" stopColor="white" stopOpacity={0} />
           </linearGradient>
+          <linearGradient id="cs-beam-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stopColor="#FFFDE8" stopOpacity={1} />
+            <stop offset="35%"  stopColor="#FFFDE0" stopOpacity={0.55} />
+            <stop offset="75%"  stopColor="#FFFDE0" stopOpacity={0.15} />
+            <stop offset="100%" stopColor="#FFFDE0" stopOpacity={0} />
+          </linearGradient>
+          <radialGradient id="cs-beam-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#FFFDE0" stopOpacity={0.9} />
+            <stop offset="60%"  stopColor="#FFFDE0" stopOpacity={0.2} />
+            <stop offset="100%" stopColor="#FFFDE0" stopOpacity={0} />
+          </radialGradient>
           <clipPath id="cs-clip"><rect width="375" height="200" /></clipPath>
         </defs>
         <g clipPath="url(#cs-clip)">
@@ -878,10 +891,36 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
 
           {/* Lighthouse — beam intensity = Prime Cost score */}
           <g>
-            <g style={{ transformOrigin: `${lx}px ${lBase}px`, animation: `cs-beam 4s ease-in-out infinite` }}>
-              <path d={`M${lx},${lBase} L${lx-36},${lBase-38} L${lx+36},${lBase-38}Z`}
-                fill="#FFFDE0" opacity={beamOp} />
+            {/* Outer soft beam cone — sweeps across sky, originates at lamp */}
+            <g style={{
+              transformOrigin: `${lx}px ${lBase-30}px`,
+              animation: `cs-beam 7s ease-in-out infinite`,
+              opacity: Math.min(1, beamOp * 3.2),
+              mixBlendMode: 'screen',
+            }}>
+              <path
+                d={`M${lx},${lBase-30} L${lx+180},${lBase-30-34} Q${lx+186},${lBase-30} ${lx+180},${lBase-30+34} Z`}
+                fill="url(#cs-beam-grad)"
+              />
             </g>
+            {/* Inner bright beam core — tighter, slightly different timing */}
+            <g style={{
+              transformOrigin: `${lx}px ${lBase-30}px`,
+              animation: `cs-beam-core 7s ease-in-out infinite`,
+              opacity: Math.min(1, beamOp * 4.5),
+              mixBlendMode: 'screen',
+            }}>
+              <path
+                d={`M${lx},${lBase-30} L${lx+150},${lBase-30-10} L${lx+150},${lBase-30+10} Z`}
+                fill="url(#cs-beam-grad)"
+              />
+            </g>
+            {/* Lamp halo bloom */}
+            <ellipse cx={lx} cy={lBase-30} rx="12" ry="10"
+              fill="url(#cs-beam-glow)"
+              opacity={Math.min(1, 0.35 + beamOp * 2)}
+              style={{ animation: `cs-beam-pulse 2.4s ease-in-out infinite`, mixBlendMode: 'screen' }}
+            />
             <path d={`M${lx-8},${lBase} L${lx-6},${lBase-36} L${lx+6},${lBase-36} L${lx+8},${lBase}Z`} fill="#D0C8B0" />
             <rect x={lx-7}  y={lBase-7}  width="14" height="8"  fill="#C0B8A8" />
             <rect x={lx-6}  y={lBase-14} width="12" height="8"  fill="#C8C0B0" />
