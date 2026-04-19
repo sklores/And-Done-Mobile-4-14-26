@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toastAdapter";
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
+import { fetchTodayScheduled } from "../data/scheduleAdapter";
+import type { ScheduledLaborResult } from "../data/scheduleAdapter";
 import { RENT_PCT, hourlyAmortized, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
 import { supabase, supabaseReady } from "../lib/supabase";
@@ -88,6 +90,7 @@ type KpiState = {
   salesDetail: SalesDetailResult | null;
   laborDetailRich: LaborDetailResult | null;
   cogsDetail: COGSDetailResult | null;
+  scheduleDetail: ScheduledLaborResult | null;
   lastRefresh: number | null;
   lastError: string | null;
   lastSnapshotAt: string | null;
@@ -151,6 +154,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   salesDetail: null,
   laborDetailRich: null,
   cogsDetail: null,
+  scheduleDetail: null,
   lastRefresh: null,
   lastError: null,
   lastSnapshotAt: null,
@@ -268,12 +272,13 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   },
 
   refresh: async () => {
-    const [salesResult, laborResult, salesDetailResult, laborDetailRich, cogsDetailResult] = await Promise.all([
+    const [salesResult, laborResult, salesDetailResult, laborDetailRich, cogsDetailResult, scheduledResult] = await Promise.all([
       fetchTodaySales(),
       fetchTodayLabor(),
       fetchSalesDetail(),
       fetchLaborDetail(),
       fetchCOGSDetail(),
+      fetchTodayScheduled(),
     ]);
 
     set((s) => {
@@ -445,6 +450,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
         salesDetail: salesDetailResult ?? s.salesDetail,
         laborDetailRich: laborDetailRich ?? s.laborDetailRich,
         cogsDetail: cogsDetailResult ?? s.cogsDetail,
+        scheduleDetail: scheduledResult ?? s.scheduleDetail,
         lastRefresh: Date.now(),
         lastError: null,
       };

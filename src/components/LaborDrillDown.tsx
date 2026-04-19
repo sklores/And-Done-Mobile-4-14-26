@@ -25,6 +25,7 @@ function SectionHeader({ title }: { title: string }) {
 export function LaborDrillDown({ open, onClose }: Props) {
   const laborTile = useKpiStore((s) => s.tiles.find((t) => t.key === "labor"));
   const detail    = useKpiStore((s) => s.laborDetail);
+  const schedule  = useKpiStore((s) => s.scheduleDetail);
 
   if (!laborTile) return null;
 
@@ -72,6 +73,29 @@ export function LaborDrillDown({ open, onClose }: Props) {
         value={detail ? fmt$(detail.payrollTax) : "--"}
         sub="employer FICA + FUTA + DC SUTA · ~11%"
       />
+
+      {/* ── Scheduled (from shift scheduling app) ──── */}
+      <SectionHeader title="Scheduled (Today)" />
+      <DrillRow
+        label="Scheduled Hours"
+        value={schedule ? `${schedule.hours.toFixed(1)} hrs` : "--"}
+        sub={schedule
+          ? `${schedule.employeeCount} ${schedule.employeeCount === 1 ? "employee" : "employees"} on the schedule`
+          : "no schedule data"}
+      />
+      <DrillRow
+        label="Scheduled Labor Cost"
+        value={schedule ? fmt$(schedule.cost) : "--"}
+        sub="hours × hourly rate · pre-tax"
+      />
+      {schedule && detail && schedule.hours > 0 && (
+        <DrillRow
+          label="Worked vs Scheduled"
+          value={`${((detail.hoursWorked / schedule.hours) * 100).toFixed(0)}%`}
+          sub={`${detail.hoursWorked.toFixed(1)} worked / ${schedule.hours.toFixed(1)} scheduled`}
+          dimmed
+        />
+      )}
 
       {/* ── Total ──────────────────────────────────── */}
       <SectionHeader title="Total" />
