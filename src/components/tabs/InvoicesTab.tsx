@@ -197,11 +197,29 @@ export function InvoicesTab({ open, onClose }: Props) {
 
     try {
       const { base64, mime } = await fileToBase64(file);
-      const { data, error } = await supabase.functions.invoke("parse-invoice", {
-        body: { image_base64: base64, mime_type: mime },
+      // Direct fetch instead of supabase.functions.invoke so we can read
+      // the actual error body on non-2xx (invoke masks it as "non-2xx status code").
+      const url = import.meta.env.VITE_SUPABASE_URL as string;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const res = await fetch(`${url}/functions/v1/parse-invoice`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+          apikey: key,
+        },
+        body: JSON.stringify({ image_base64: base64, mime_type: mime }),
       });
-      if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.error || "parse failed");
+      const text = await res.text();
+      let data: { ok?: boolean; error?: string; invoice?: InvoiceRow } = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`bad response (${res.status}): ${text.slice(0, 200)}`);
+      }
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
       // Row will stream in via realtime, but also prepend optimistically
       if (data.invoice) {
         setInvoices((cur) => {
