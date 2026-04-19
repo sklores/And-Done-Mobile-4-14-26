@@ -41,10 +41,10 @@ function getTimeOfDay(d = new Date()): TimeOfDay {
   if (h >= sunrise - 1    && h < sunrise + 1  ) return 'dawn'
   // Morning: post-dawn through noon
   if (h >= sunrise + 1    && h < 12           ) return 'morning'
-  // Afternoon: noon until golden hour kicks in (~1h45m before sunset)
-  if (h >= 12             && h < sunset - 1.75) return 'afternoon'
+  // Afternoon: noon until golden hour kicks in (~1h before sunset)
+  if (h >= 12             && h < sunset - 1   ) return 'afternoon'
   // Sundown: golden hour + first 30min of civil twilight
-  if (h >= sunset - 1.75  && h < sunset + 0.5 ) return 'sundown'
+  if (h >= sunset - 1     && h < sunset + 0.5 ) return 'sundown'
   return 'night'
 }
 
