@@ -88,14 +88,22 @@ export function LaborDrillDown({ open, onClose }: Props) {
         value={schedule ? fmt$(schedule.cost) : "--"}
         sub="hours × hourly rate · pre-tax"
       />
-      {schedule && detail && schedule.hours > 0 && (
-        <DrillRow
-          label="Worked vs Scheduled"
-          value={`${((detail.hoursWorked / schedule.hours) * 100).toFixed(0)}%`}
-          sub={`${detail.hoursWorked.toFixed(1)} worked / ${schedule.hours.toFixed(1)} scheduled`}
-          dimmed
-        />
-      )}
+      {schedule && detail && schedule.hours > 0 && (() => {
+        const variance  = detail.hoursWorked - schedule.hours;       // + over, - under
+        const accuracy  = Math.max(0, 100 - Math.abs(variance / schedule.hours) * 100);
+        const direction = Math.abs(variance) < 0.1
+          ? "on schedule"
+          : variance > 0
+            ? `${variance.toFixed(1)} hrs over schedule`
+            : `${Math.abs(variance).toFixed(1)} hrs under schedule`;
+        return (
+          <DrillRow
+            label="Schedule Accuracy"
+            value={`${accuracy.toFixed(0)}%`}
+            sub={`${detail.hoursWorked.toFixed(1)} worked / ${schedule.hours.toFixed(1)} scheduled · ${direction}`}
+          />
+        );
+      })()}
 
       {/* ── Total ──────────────────────────────────── */}
       <SectionHeader title="Total" />
