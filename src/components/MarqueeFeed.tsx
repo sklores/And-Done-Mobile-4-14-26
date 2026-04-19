@@ -69,11 +69,15 @@ export function MarqueeFeed({ onLongPress }: Props) {
   const dragging    = useRef(false);
   const dragStartX  = useRef(0);
   const dragStartPos = useRef(0);
+  const maxDragDist = useRef(0);     // how far the pointer moved during this press — distinguishes tap vs drag
+  const userPaused  = useRef(false); // sticky pause toggled by tap
+
+  const TAP_SLOP_PX = 5;             // movement under this = tap, not drag
 
   const scheduleResume = () => {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
     resumeTimer.current = setTimeout(() => {
-      pausedRef.current = false;
+      if (!userPaused.current) pausedRef.current = false;
     }, RESUME_AFTER_MS);
   };
 
@@ -113,6 +117,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
     dragging.current = true;
     dragStartX.current = e.clientX;
     dragStartPos.current = posRef.current;
+    maxDragDist.current = 0;
     pausedRef.current = true;
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
     viewportRef.current?.setPointerCapture(e.pointerId);
@@ -120,6 +125,8 @@ export function MarqueeFeed({ onLongPress }: Props) {
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return;
     const dx = e.clientX - dragStartX.current;
+    const absDx = Math.abs(dx);
+    if (absDx > maxDragDist.current) maxDragDist.current = absDx;
     posRef.current = wrap(dragStartPos.current - dx);
     applyTransform();
   };
@@ -127,7 +134,15 @@ export function MarqueeFeed({ onLongPress }: Props) {
     if (!dragging.current) return;
     dragging.current = false;
     viewportRef.current?.releasePointerCapture(e.pointerId);
-    scheduleResume();
+    // Tap (barely moved) → toggle sticky pause
+    if (maxDragDist.current < TAP_SLOP_PX) {
+      userPaused.current = !userPaused.current;
+      pausedRef.current = userPaused.current;
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    } else {
+      // Was a drag → resume auto after a beat (unless user has sticky-paused)
+      scheduleResume();
+    }
   };
 
   const toggle = (k: FeedKey) => setActive((a) => ({ ...a, [k]: !a[k] }));
