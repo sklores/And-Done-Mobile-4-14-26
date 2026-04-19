@@ -68,6 +68,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
   const dragStartX  = useRef(0);
   const dragStartScroll = useRef(0);
   const isAutoScrolling = useRef(false); // suppresses our own scroll-event pauses
+  const scrollPos   = useRef(0);          // float accumulator (scrollLeft rounds to int in some browsers)
 
   const schedulePause = () => {
     pausedRef.current = true;
@@ -89,17 +90,18 @@ export function MarqueeFeed({ onLongPress }: Props) {
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
-      const dt = (t - last) / 1000;
+      const dt = Math.min((t - last) / 1000, 0.1); // clamp so tab-backgrounding doesn't jump
       last = t;
-      if (!pausedRef.current && !dragging.current) {
-        const half = track.scrollWidth / 2;
-        if (half > 0) {
-          isAutoScrolling.current = true;
-          let next = el.scrollLeft + PX_PER_SEC * dt;
-          if (next >= half) next -= half;
-          el.scrollLeft = next;
-          isAutoScrolling.current = false;
-        }
+      const half = track.scrollWidth / 2;
+      if (pausedRef.current || dragging.current) {
+        // user is in control — keep accumulator in sync with real scroll position
+        scrollPos.current = el.scrollLeft;
+      } else if (half > 0) {
+        scrollPos.current += PX_PER_SEC * dt;
+        if (scrollPos.current >= half) scrollPos.current -= half;
+        isAutoScrolling.current = true;
+        el.scrollLeft = scrollPos.current;
+        isAutoScrolling.current = false;
       }
       raf = requestAnimationFrame(tick);
     };
