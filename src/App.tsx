@@ -63,6 +63,9 @@ export default function App() {
   const [pullY, setPullY]           = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Bump to retrigger the lighthouse sweep (mount, KPI refresh, pull-to-refresh)
+  const [beamPulseKey, setBeamPulseKey] = useState(0);
+
   // ── Back-button: push history entry when any modal opens ─────────────────
   const anyOpen = drillKey !== null || openTab !== null || openFeed !== null;
   const prevAnyOpen = useRef(false);
@@ -100,8 +103,12 @@ export default function App() {
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 5 * 60 * 1000);
+    const doRefresh = () => {
+      refresh();
+      setBeamPulseKey((k) => k + 1);
+    };
+    doRefresh();
+    const id = setInterval(doRefresh, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [refresh]);
 
@@ -133,6 +140,7 @@ export default function App() {
     if (pullY >= PULL_THRESHOLD && !isRefreshing) {
       setIsRefreshing(true);
       setPullY(0);
+      setBeamPulseKey((k) => k + 1);
       await Promise.all([
         refresh(),
         fetchWeather().then(setWeatherData),
@@ -251,7 +259,7 @@ export default function App() {
               flexShrink: 0,
             }}
           >
-            <CoastalScene weather={weatherData.condition} />
+            <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
               style={{
                 background: "#C4B090",

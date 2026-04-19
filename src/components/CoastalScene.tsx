@@ -8,6 +8,8 @@ export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'snow' | 'wind'
 
 interface CoastalSceneProps {
   weather?: WeatherCondition
+  /** Bump this number to retrigger the big lighthouse sweep (mount, KPI refresh, pull-to-refresh). */
+  beamPulseKey?: number
 }
 
 function getTimeOfDay(d = new Date()): TimeOfDay {
@@ -136,6 +138,7 @@ const SCENE_CSS = `
 @keyframes cs-beam{0%,100%{transform:rotate(-72deg)}50%{transform:rotate(-8deg)}}
 @keyframes cs-beam-core{0%,100%{transform:rotate(-70deg)}50%{transform:rotate(-10deg)}}
 @keyframes cs-beam-pulse{0%,100%{opacity:.9}50%{opacity:1}}
+@keyframes cs-beam-fade{0%,70%{opacity:1}100%{opacity:0}}
 @keyframes cs-drift1{0%,100%{transform:translateX(0)}50%{transform:translateX(12px)}}
 @keyframes cs-drift2{0%,100%{transform:translateX(0)}50%{transform:translateX(-10px)}}
 @keyframes cs-bfly{0%{transform:translateX(-30px)}100%{transform:translateX(420px)}}
@@ -419,7 +422,16 @@ const SNOW_FLAKES: [number, number][] = [
   [50,50],[115,55],[175,48],[235,52],
 ]
 
-export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
+export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSceneProps) {
+  // Lighthouse sweep plays on mount + whenever beamPulseKey changes, then fades
+  // back to just the gentle lamp bloom so it isn't distracting in the background.
+  const [beamSweeping, setBeamSweeping] = useState(true)
+  useEffect(() => {
+    setBeamSweeping(true)
+    const id = setTimeout(() => setBeamSweeping(false), 14000) // ~2 full 7s cycles
+    return () => clearTimeout(id)
+  }, [beamPulseKey])
+
   const [tod, setTod] = useState<TimeOfDay>(getTimeOfDay())
   const salesRaw = useKpiStore(s => s.sales)
   const tiles    = useKpiStore(s => s.tiles)
@@ -891,30 +903,34 @@ export function CoastalScene({ weather = 'clear' }: CoastalSceneProps) {
 
           {/* Lighthouse — beam intensity = Prime Cost score */}
           <g>
-            {/* Outer soft beam cone — sweeps across sky, originates at lamp */}
-            <g style={{
-              transformOrigin: `${lx}px ${lBase-30}px`,
-              animation: `cs-beam 7s ease-in-out infinite`,
-              opacity: Math.min(1, beamOp * 3.2),
-              mixBlendMode: 'screen',
-            }}>
-              <path
-                d={`M${lx},${lBase-30} L${lx+180},${lBase-30-34} Q${lx+186},${lBase-30} ${lx+180},${lBase-30+34} Z`}
-                fill="url(#cs-beam-grad)"
-              />
-            </g>
-            {/* Inner bright beam core — tighter, slightly different timing */}
-            <g style={{
-              transformOrigin: `${lx}px ${lBase-30}px`,
-              animation: `cs-beam-core 7s ease-in-out infinite`,
-              opacity: Math.min(1, beamOp * 4.5),
-              mixBlendMode: 'screen',
-            }}>
-              <path
-                d={`M${lx},${lBase-30} L${lx+150},${lBase-30-10} L${lx+150},${lBase-30+10} Z`}
-                fill="url(#cs-beam-grad)"
-              />
-            </g>
+            {beamSweeping && (
+              <>
+                {/* Outer soft beam cone — sweeps across sky, originates at lamp */}
+                <g style={{
+                  transformOrigin: `${lx}px ${lBase-30}px`,
+                  animation: `cs-beam 7s ease-in-out infinite, cs-beam-fade 14s ease-out forwards`,
+                  opacity: Math.min(1, beamOp * 3.2),
+                  mixBlendMode: 'screen',
+                }}>
+                  <path
+                    d={`M${lx},${lBase-30} L${lx+180},${lBase-30-34} Q${lx+186},${lBase-30} ${lx+180},${lBase-30+34} Z`}
+                    fill="url(#cs-beam-grad)"
+                  />
+                </g>
+                {/* Inner bright beam core — tighter, slightly different timing */}
+                <g style={{
+                  transformOrigin: `${lx}px ${lBase-30}px`,
+                  animation: `cs-beam-core 7s ease-in-out infinite, cs-beam-fade 14s ease-out forwards`,
+                  opacity: Math.min(1, beamOp * 4.5),
+                  mixBlendMode: 'screen',
+                }}>
+                  <path
+                    d={`M${lx},${lBase-30} L${lx+150},${lBase-30-10} L${lx+150},${lBase-30+10} Z`}
+                    fill="url(#cs-beam-grad)"
+                  />
+                </g>
+              </>
+            )}
             {/* Lamp halo bloom */}
             <ellipse cx={lx} cy={lBase-30} rx="12" ry="10"
               fill="url(#cs-beam-glow)"
