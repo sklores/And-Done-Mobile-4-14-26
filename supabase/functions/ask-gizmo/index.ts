@@ -184,10 +184,15 @@ async function runTool(
         .gte("captured_at", since)
         .order("captured_at", { ascending: true });
       if (error) return { error: error.message };
-      // Collapse to one row per calendar day (last snapshot of the day wins).
+      // Collapse to one row per ET calendar day (last snapshot of the day wins).
+      // We use ET-local date because the business "day" is Eastern Time —
+      // a snapshot captured at 11:59 PM ET is Apr 18 business, even though
+      // its UTC stamp rolls to Apr 19.
       const byDay = new Map<string, number>();
       for (const r of data ?? []) {
-        const day = (r.captured_at as string).slice(0, 10);
+        const day = new Date(r.captured_at as string).toLocaleDateString("en-CA", {
+          timeZone: "America/New_York",
+        });
         byDay.set(day, Number(r.sales_total ?? 0));
       }
       return {
@@ -206,7 +211,9 @@ async function runTool(
       if (error) return { error: error.message };
       const byDay = new Map<string, number>();
       for (const r of data ?? []) {
-        const day = (r.captured_at as string).slice(0, 10);
+        const day = new Date(r.captured_at as string).toLocaleDateString("en-CA", {
+          timeZone: "America/New_York",
+        });
         byDay.set(day, Number(r.labor_pct ?? 0));
       }
       return {
@@ -264,11 +271,33 @@ Deno.serve(async (req: Request) => {
       mode?: "chat" | "opening_summary";
     };
 
-    // Inject today's date as the first system-aware user note so Claude never
-    // uses a stale training-cutoff date when reasoning about "today" or ranges.
-    const today = new Date().toISOString().slice(0, 10);
+    // Inject today's ET date + day-of-week + a short calendar strip so Claude
+    // never guesses which day of the week a given date is. Claude's training
+    // data is imperfect for future dates; we hand it the truth.
+    const nowET = new Date();
+    const todayET = nowET.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const todayWeekday = nowET.toLocaleDateString("en-US", {
+      weekday: "long",
+      timeZone: "America/New_York",
+    });
+
+    // Build a 14-day calendar strip (today + 13 prior days) with real weekdays.
+    const calendarLines: string[] = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(nowET.getTime() - i * 86400_000);
+      const iso = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+      const dow = d.toLocaleDateString("en-US", {
+        weekday: "short",
+        timeZone: "America/New_York",
+      });
+      calendarLines.push(`${iso} = ${dow}`);
+    }
+
     const datePrefix =
-      `[System note — always trust over training data: today's date is ${today} (${new Date().toUTCString()}). When the user says "today", "this week", "last week", etc., anchor from this date.]`;
+      `[System note — always trust over training data.\n` +
+      `Today (ET) is ${todayWeekday}, ${todayET}.\n` +
+      `Recent calendar (most recent first):\n${calendarLines.join("\n")}\n` +
+      `When the user says "today", "this week", "last week", "Saturday", etc., use THIS calendar — do not guess days-of-week from training data.]`;
 
     // Build the outbound message array for Claude.
     // For opening_summary we synthesize a single user turn.
