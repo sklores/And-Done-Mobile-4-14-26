@@ -12,12 +12,39 @@ interface CoastalSceneProps {
   beamPulseKey?: number
 }
 
+// NOAA-style sunrise/sunset in local clock hours. DST-aware via
+// getTimezoneOffset. Good to within a few minutes for DC at our scale —
+// way better than hardcoded 5pm–8pm sundown year-round.
+const GCDC_LAT =  38.90
+const GCDC_LON = -77.04
+function sunTimes(date: Date, lat = GCDC_LAT, lon = GCDC_LON): { sunrise: number; sunset: number } {
+  const rad = Math.PI / 180
+  const deg = 180 / Math.PI
+  const yearStart = new Date(date.getFullYear(), 0, 0).getTime()
+  const n = Math.floor((date.getTime() - yearStart) / 86400000)           // day of year
+  const decl = 23.44 * Math.sin(rad * (360 / 365.25) * (n - 81))          // solar declination
+  const cosH = -Math.tan(rad * lat) * Math.tan(rad * decl)
+  if (cosH > 1)  return { sunrise: 24, sunset: 24 }                       // polar night
+  if (cosH < -1) return { sunrise: 0,  sunset: 24 }                       // midnight sun
+  const hourAngle = Math.acos(cosH) * deg / 15                            // half-day length in hours
+  const B = rad * (360 / 365) * (n - 81)
+  const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B) // equation of time, min
+  const noonUTC = 12 - lon / 15
+  const noonLocal = noonUTC - eot / 60 - date.getTimezoneOffset() / 60
+  return { sunrise: noonLocal - hourAngle, sunset: noonLocal + hourAngle }
+}
+
 function getTimeOfDay(d = new Date()): TimeOfDay {
-  const h = d.getHours()
-  if (h >= 5 && h < 7) return 'dawn'
-  if (h >= 7 && h < 12) return 'morning'
-  if (h >= 12 && h < 17) return 'afternoon'
-  if (h >= 17 && h < 20) return 'sundown'
+  const h = d.getHours() + d.getMinutes() / 60
+  const { sunrise, sunset } = sunTimes(d)
+  // Dawn: 1h before sunrise → 1h after (the warm glow window)
+  if (h >= sunrise - 1    && h < sunrise + 1  ) return 'dawn'
+  // Morning: post-dawn through noon
+  if (h >= sunrise + 1    && h < 12           ) return 'morning'
+  // Afternoon: noon until golden hour kicks in (~1h45m before sunset)
+  if (h >= 12             && h < sunset - 1.75) return 'afternoon'
+  // Sundown: golden hour + first 30min of civil twilight
+  if (h >= sunset - 1.75  && h < sunset + 0.5 ) return 'sundown'
   return 'night'
 }
 

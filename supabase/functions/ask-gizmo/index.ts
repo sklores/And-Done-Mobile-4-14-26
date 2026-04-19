@@ -46,6 +46,23 @@ TOOLS
 - query_labor_history: daily labor % for the last N days.
 - add_log_note: insert a timestamped note into the activity log. Use when the user explicitly says "log", "note", "remind me", "record that", etc. Never invoke speculatively.
 
+SCHEDULE WRITES (the app has a scheduling module — these tools mutate it)
+- mark_unavailable: block an employee off for a date range (sick, PTO, blackout).
+- add_shift: create a new shift for an employee on a specific date.
+- update_shift_times: change start/end of an existing shift.
+- remove_shift: delete a shift entirely.
+
+All three follow a strict preview-then-confirm pattern:
+1. FIRST call the tool with confirm=false (or omitted). It returns a "preview" with a plan + any conflict warnings. Do NOT assume the write happened.
+2. Relay the plan to the user in plain English and ASK for explicit confirmation ("Want me to do it?").
+3. ONLY after the user says yes/confirm/do it, call the tool AGAIN with confirm=true. That's when the write actually happens.
+
+Never call a schedule-write tool with confirm=true on the first call — even if the user's request sounds definitive. The preview step exists so the user can catch wrong employees, wrong dates, and conflicts before they hit the database.
+
+If resolveEmployee returns an ambiguity error (multiple matches), relay the list and ask the user which person they mean. Same for findSingleShift when an employee has multiple shifts on a given date.
+
+When a preview surfaces conflicts (e.g. mark_unavailable overlaps an existing shift), explicitly mention them to the user before they confirm — offer to also remove those shifts if that's what they want.
+
 When the user opens the tab for the first time, you will be asked to produce a short opening summary. Pull get_current_kpis and write 1–2 sentences covering the standouts. End with "What do you want to look at?" or similar.
 
 TODAY'S DATE will be injected as a user-visible system note at the top of every conversation — always trust that, never use a date from your training data.
@@ -138,7 +155,192 @@ const TOOLS = [
       required: ["text"],
     },
   },
+
+  // ── Schedule-writing tools ────────────────────────────────────────────────
+  // All three use the preview-then-confirm pattern: first call with
+  // confirm=false to get a preview (including any conflict warnings),
+  // then second call with confirm=true to actually write.
+  {
+    name: "mark_unavailable",
+    description:
+      "Add an availability block (unavailable / PTO / blackout) for an employee across a date range. Always call FIRST with confirm=false to preview; then on user's explicit 'yes/confirm', call again with confirm=true. The preview surfaces any conflicting shifts already on the schedule — the block itself does NOT remove those shifts.",
+    input_schema: {
+      type: "object",
+      properties: {
+        employee_name: { type: "string", description: "Employee's first or full name (matched case-insensitively against shift_employees.name where is_active=true)." },
+        starts_on: { type: "string", description: "YYYY-MM-DD (Eastern Time). First day unavailable, inclusive." },
+        ends_on:   { type: "string", description: "YYYY-MM-DD (Eastern Time). Last day unavailable, inclusive. Must be >= starts_on." },
+        reason:    { type: "string", description: "Optional short reason (e.g. 'sick', 'vacation'). Empty string if not provided." },
+        confirm:   { type: "boolean", description: "false = preview only (default); true = write." },
+      },
+      required: ["employee_name", "starts_on", "ends_on"],
+    },
+  },
+  {
+    name: "update_shift_times",
+    description:
+      "Change the start_time and/or end_time on an existing shift, identified by employee + shift_date. Always preview first (confirm=false) then write (confirm=true). Times are America/New_York local. end_time must be > start_time (overnight shifts not supported). If the employee has multiple shifts that day, returns an ambiguity error — the user must clarify.",
+    input_schema: {
+      type: "object",
+      properties: {
+        employee_name:  { type: "string", description: "Employee's first or full name." },
+        shift_date:     { type: "string", description: "YYYY-MM-DD of the shift to edit." },
+        new_start_time: { type: "string", description: "HH:MM (24-hour, ET). Omit to leave unchanged." },
+        new_end_time:   { type: "string", description: "HH:MM (24-hour, ET). Omit to leave unchanged." },
+        confirm:        { type: "boolean", description: "false = preview only (default); true = write." },
+      },
+      required: ["employee_name", "shift_date"],
+    },
+  },
+  {
+    name: "add_shift",
+    description:
+      "Create a new shift for an employee on a specific date. Always preview first (confirm=false) then write (confirm=true). Times are America/New_York local, HH:MM 24-hour. end_time must be > start_time (overnight shifts not supported). Preview surfaces warnings if the employee already has a shift that day or an availability block covering the date.",
+    input_schema: {
+      type: "object",
+      properties: {
+        employee_name: { type: "string", description: "Employee's first or full name." },
+        shift_date:    { type: "string", description: "YYYY-MM-DD of the new shift." },
+        start_time:    { type: "string", description: "HH:MM (24-hour, ET)." },
+        end_time:      { type: "string", description: "HH:MM (24-hour, ET). Must be after start_time." },
+        note:          { type: "string", description: "Optional free-text note attached to the shift. Empty string if not provided." },
+        confirm:       { type: "boolean", description: "false = preview only (default); true = write." },
+      },
+      required: ["employee_name", "shift_date", "start_time", "end_time"],
+    },
+  },
+  {
+    name: "remove_shift",
+    description:
+      "Hard-delete an existing shift for an employee on a specific date. Always preview first (confirm=false) then write (confirm=true). If the employee has multiple shifts that day, returns an ambiguity error.",
+    input_schema: {
+      type: "object",
+      properties: {
+        employee_name: { type: "string", description: "Employee's first or full name." },
+        shift_date:    { type: "string", description: "YYYY-MM-DD of the shift to remove." },
+        confirm:       { type: "boolean", description: "false = preview only (default); true = write." },
+      },
+      required: ["employee_name", "shift_date"],
+    },
+  },
 ];
+
+// ── Schedule helpers ─────────────────────────────────────────────────────────
+// Used by mark_unavailable / update_shift_times / remove_shift.
+
+// Levenshtein edit distance — tolerates typos like "Oliva" vs "Olivia".
+function editDistance(a: string, b: string): number {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[] = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+type EmpResolved = { id: string; name: string } | { error: string };
+async function resolveEmployee(
+  supabase: SupabaseClient,
+  nameQuery: string,
+): Promise<EmpResolved> {
+  const q = nameQuery.trim();
+  if (!q) return { error: "employee name is empty" };
+
+  // Pull the full active roster — it's tiny (tens of rows) so a client-side
+  // fuzzy pass is cheaper than fighting pg_trgm.
+  const { data, error } = await supabase
+    .from("shift_employees")
+    .select("id, name")
+    .eq("is_active", true);
+  if (error) return { error: error.message };
+  const roster = (data ?? []) as Array<{ id: string; name: string }>;
+  if (roster.length === 0) return { error: "no active employees" };
+
+  const qLower = q.toLowerCase();
+
+  // Pass 1: substring match on full name or any whitespace-split token.
+  const substring = roster.filter((r) => {
+    const n = r.name.toLowerCase();
+    if (n.includes(qLower)) return true;
+    return n.split(/\s+/).some((tok) => tok.includes(qLower));
+  });
+
+  if (substring.length === 1) return { id: substring[0].id, name: substring[0].name };
+  if (substring.length > 1) {
+    return {
+      error: `"${q}" matches ${substring.length} active employees: ${substring.map((r) => r.name).join(", ")}. Ask the user which one.`,
+    };
+  }
+
+  // Pass 2: fuzzy — compare q against full name and each token, pick the
+  // smallest edit distance per employee. Threshold scales with query length:
+  // up to 2 edits for short names, 3 for longer ones.
+  const threshold = q.length <= 4 ? 1 : q.length <= 7 ? 2 : 3;
+  const scored = roster
+    .map((r) => {
+      const n = r.name.toLowerCase();
+      const tokens = [n, ...n.split(/\s+/)];
+      const best = Math.min(...tokens.map((t) => editDistance(qLower, t)));
+      return { ...r, distance: best };
+    })
+    .filter((r) => r.distance <= threshold)
+    .sort((a, b) => a.distance - b.distance);
+
+  if (scored.length === 0) {
+    return { error: `no active employee matches "${q}"` };
+  }
+  // If the top score is clearly better than runner-up, take it.
+  if (scored.length === 1 || scored[0].distance < scored[1].distance) {
+    return { id: scored[0].id, name: scored[0].name };
+  }
+  // Tie at the top — ambiguous.
+  const tied = scored.filter((r) => r.distance === scored[0].distance);
+  return {
+    error: `"${q}" is close to ${tied.length} employees: ${tied.map((r) => r.name).join(", ")}. Ask the user which one.`,
+  };
+}
+
+type ShiftResolved =
+  | { id: string; start_time: string; end_time: string }
+  | { error: string };
+async function findSingleShift(
+  supabase: SupabaseClient,
+  employeeId: string,
+  shiftDate: string,
+): Promise<ShiftResolved> {
+  const { data, error } = await supabase
+    .from("shift_shifts")
+    .select("id, start_time, end_time")
+    .eq("employee_id", employeeId)
+    .eq("shift_date", shiftDate);
+  if (error) return { error: error.message };
+  const rows = data ?? [];
+  if (rows.length === 0) return { error: `no shift found on ${shiftDate} for that employee` };
+  if (rows.length > 1) {
+    return {
+      error: `${rows.length} shifts found on ${shiftDate} (${rows.map((r) => `${r.start_time}–${r.end_time}`).join(", ")}). Ask the user which one.`,
+    };
+  }
+  const r = rows[0];
+  return { id: r.id as string, start_time: r.start_time as string, end_time: r.end_time as string };
+}
+
+async function logScheduleChange(supabase: SupabaseClient, message: string): Promise<void> {
+  await supabase.from("activity_log").insert({ text: message, type: "gizmo", source: "gizmo" });
+}
 
 // ── Tool implementations ─────────────────────────────────────────────────────
 async function runTool(
@@ -236,6 +438,201 @@ async function runTool(
       return { ok: true, id: data.id, text: data.text, created_at: data.created_at };
     }
 
+    // ── Schedule writes ───────────────────────────────────────────────────
+    case "mark_unavailable": {
+      const nameQ    = String(input.employee_name ?? "").trim();
+      const startsOn = String(input.starts_on ?? "").trim();
+      const endsOn   = String(input.ends_on ?? "").trim();
+      const reason   = String(input.reason ?? "").trim();
+      const confirm  = input.confirm === true;
+      if (!nameQ || !startsOn || !endsOn) return { error: "employee_name, starts_on, ends_on are required" };
+      if (endsOn < startsOn) return { error: "ends_on must be >= starts_on" };
+
+      const emp = await resolveEmployee(supabase, nameQ);
+      if ("error" in emp) return emp;
+
+      // Find any existing shifts inside the range (warn, don't block)
+      const { data: conflicts } = await supabase
+        .from("shift_shifts")
+        .select("id, shift_date, start_time, end_time")
+        .eq("employee_id", emp.id)
+        .gte("shift_date", startsOn)
+        .lte("shift_date", endsOn)
+        .order("shift_date", { ascending: true });
+
+      const warnings = (conflicts ?? []).map((c) =>
+        `${c.shift_date}: existing shift ${c.start_time}–${c.end_time} (not removed by this block)`
+      );
+
+      if (!confirm) {
+        return {
+          status: "preview",
+          action: "mark_unavailable",
+          plan: `Will block ${emp.name} unavailable from ${startsOn} through ${endsOn}${reason ? ` (reason: ${reason})` : ""}.`,
+          conflicts: warnings,
+          employee_id: emp.id,
+        };
+      }
+
+      const { data: block, error } = await supabase
+        .from("shift_availability_blocks")
+        .insert({ employee_id: emp.id, starts_on: startsOn, ends_on: endsOn, reason })
+        .select()
+        .single();
+      if (error) return { error: error.message };
+
+      await logScheduleChange(
+        supabase,
+        `Gizmo: marked ${emp.name} unavailable ${startsOn}${startsOn !== endsOn ? `→${endsOn}` : ""}${reason ? ` (${reason})` : ""}`,
+      );
+      return { status: "done", action: "mark_unavailable", block_id: block.id, employee: emp.name, starts_on: startsOn, ends_on: endsOn, conflicts: warnings };
+    }
+
+    case "update_shift_times": {
+      const nameQ      = String(input.employee_name ?? "").trim();
+      const shiftDate  = String(input.shift_date ?? "").trim();
+      const newStart   = input.new_start_time ? String(input.new_start_time).trim() : null;
+      const newEnd     = input.new_end_time   ? String(input.new_end_time).trim()   : null;
+      const confirm    = input.confirm === true;
+      if (!nameQ || !shiftDate) return { error: "employee_name and shift_date are required" };
+      if (!newStart && !newEnd) return { error: "at least one of new_start_time or new_end_time must be provided" };
+
+      const emp = await resolveEmployee(supabase, nameQ);
+      if ("error" in emp) return emp;
+
+      const shift = await findSingleShift(supabase, emp.id, shiftDate);
+      if ("error" in shift) return shift;
+
+      const finalStart = newStart ?? shift.start_time;
+      const finalEnd   = newEnd   ?? shift.end_time;
+      if (finalEnd <= finalStart) {
+        return { error: `end_time (${finalEnd}) must be after start_time (${finalStart}); overnight shifts aren't supported.` };
+      }
+
+      if (!confirm) {
+        return {
+          status: "preview",
+          action: "update_shift_times",
+          plan: `Will change ${emp.name}'s shift on ${shiftDate} from ${shift.start_time}–${shift.end_time} to ${finalStart}–${finalEnd}.`,
+          shift_id: shift.id,
+        };
+      }
+
+      const patch: Record<string, string> = {};
+      if (newStart) patch.start_time = newStart;
+      if (newEnd)   patch.end_time   = newEnd;
+      const { error } = await supabase.from("shift_shifts").update(patch).eq("id", shift.id);
+      if (error) return { error: error.message };
+
+      await logScheduleChange(
+        supabase,
+        `Gizmo: changed ${emp.name}'s shift on ${shiftDate} to ${finalStart}–${finalEnd} (was ${shift.start_time}–${shift.end_time})`,
+      );
+      return { status: "done", action: "update_shift_times", shift_id: shift.id, employee: emp.name, shift_date: shiftDate, new_start_time: finalStart, new_end_time: finalEnd };
+    }
+
+    case "add_shift": {
+      const nameQ     = String(input.employee_name ?? "").trim();
+      const shiftDate = String(input.shift_date ?? "").trim();
+      const startT    = String(input.start_time ?? "").trim();
+      const endT      = String(input.end_time ?? "").trim();
+      const note      = String(input.note ?? "").trim();
+      const confirm   = input.confirm === true;
+      if (!nameQ || !shiftDate || !startT || !endT) {
+        return { error: "employee_name, shift_date, start_time, end_time are required" };
+      }
+      if (endT <= startT) {
+        return { error: `end_time (${endT}) must be after start_time (${startT}); overnight shifts aren't supported.` };
+      }
+
+      const emp = await resolveEmployee(supabase, nameQ);
+      if ("error" in emp) return emp;
+
+      // Warn if there's already a shift that day
+      const { data: existing } = await supabase
+        .from("shift_shifts")
+        .select("id, start_time, end_time")
+        .eq("employee_id", emp.id)
+        .eq("shift_date", shiftDate);
+
+      // Warn if date falls inside an availability block
+      const { data: blocks } = await supabase
+        .from("shift_availability_blocks")
+        .select("id, starts_on, ends_on, reason")
+        .eq("employee_id", emp.id)
+        .lte("starts_on", shiftDate)
+        .gte("ends_on", shiftDate);
+
+      const warnings: string[] = [];
+      for (const s of existing ?? []) {
+        warnings.push(`${emp.name} already has a shift on ${shiftDate}: ${s.start_time}–${s.end_time}`);
+      }
+      for (const b of blocks ?? []) {
+        warnings.push(`${emp.name} is marked unavailable ${b.starts_on}→${b.ends_on}${b.reason ? ` (${b.reason})` : ""} — this shift falls inside that block.`);
+      }
+
+      if (!confirm) {
+        return {
+          status: "preview",
+          action: "add_shift",
+          plan: `Will add a new shift for ${emp.name} on ${shiftDate}, ${startT}–${endT}${note ? ` — note: "${note}"` : ""}.`,
+          warnings,
+          employee_id: emp.id,
+        };
+      }
+
+      const row: Record<string, unknown> = {
+        employee_id: emp.id,
+        shift_date: shiftDate,
+        start_time: startT,
+        end_time: endT,
+      };
+      if (note) row.note = note;
+      const { data: inserted, error } = await supabase
+        .from("shift_shifts")
+        .insert(row)
+        .select()
+        .single();
+      if (error) return { error: error.message };
+
+      await logScheduleChange(
+        supabase,
+        `Gizmo: added shift for ${emp.name} on ${shiftDate} ${startT}–${endT}${note ? ` — ${note}` : ""}`,
+      );
+      return { status: "done", action: "add_shift", shift_id: inserted.id, employee: emp.name, shift_date: shiftDate, start_time: startT, end_time: endT, note: note || null, warnings };
+    }
+
+    case "remove_shift": {
+      const nameQ     = String(input.employee_name ?? "").trim();
+      const shiftDate = String(input.shift_date ?? "").trim();
+      const confirm   = input.confirm === true;
+      if (!nameQ || !shiftDate) return { error: "employee_name and shift_date are required" };
+
+      const emp = await resolveEmployee(supabase, nameQ);
+      if ("error" in emp) return emp;
+
+      const shift = await findSingleShift(supabase, emp.id, shiftDate);
+      if ("error" in shift) return shift;
+
+      if (!confirm) {
+        return {
+          status: "preview",
+          action: "remove_shift",
+          plan: `Will DELETE ${emp.name}'s shift on ${shiftDate} (${shift.start_time}–${shift.end_time}).`,
+          shift_id: shift.id,
+        };
+      }
+
+      const { error } = await supabase.from("shift_shifts").delete().eq("id", shift.id);
+      if (error) return { error: error.message };
+
+      await logScheduleChange(
+        supabase,
+        `Gizmo: removed ${emp.name}'s shift on ${shiftDate} (was ${shift.start_time}–${shift.end_time})`,
+      );
+      return { status: "done", action: "remove_shift", shift_id: shift.id, employee: emp.name, shift_date: shiftDate };
+    }
+
     default:
       return { error: `unknown tool: ${name}` };
   }
@@ -284,23 +681,25 @@ Deno.serve(async (req: Request) => {
       timeZone: "America/New_York",
     });
 
-    // Build a 14-day calendar strip (today + 13 prior days) with real weekdays.
+    // Build a calendar strip: 14 prior days + today + 28 future days.
+    // Future dates matter because schedule-write tools reference upcoming shifts.
     const calendarLines: string[] = [];
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(nowET.getTime() - i * 86400_000);
+    for (let i = -14; i <= 28; i++) {
+      const d = new Date(nowET.getTime() + i * 86400_000);
       const iso = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
       const dow = d.toLocaleDateString("en-US", {
         weekday: "short",
         timeZone: "America/New_York",
       });
-      calendarLines.push(`${iso} = ${dow}`);
+      const marker = i === 0 ? " ← TODAY" : "";
+      calendarLines.push(`${iso} = ${dow}${marker}`);
     }
 
     const datePrefix =
       `[System note — always trust over training data.\n` +
       `Today (ET) is ${todayWeekday}, ${todayET}.\n` +
-      `Recent calendar (most recent first):\n${calendarLines.join("\n")}\n` +
-      `When the user says "today", "this week", "last week", "Saturday", etc., use THIS calendar — do not guess days-of-week from training data.]`;
+      `Calendar (past 14 days → today → next 28 days):\n${calendarLines.join("\n")}\n` +
+      `When the user says "today", "this week", "next Saturday", "April 20", etc., use THIS calendar — do not guess days-of-week from training data.]`;
 
     // Build the outbound message array for Claude.
     // For opening_summary we synthesize a single user turn.

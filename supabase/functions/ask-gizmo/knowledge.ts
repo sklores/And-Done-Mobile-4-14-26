@@ -225,6 +225,141 @@ anything gas-fired or high-voltage beyond what's listed here.
 
 ---
 
+## 5. DC Labor Law (restaurant-relevant basics)
+
+IMPORTANT: This is a plain-English cheat sheet, NOT legal advice. DC wage
+rules update every July 1 — if a user is about to act on a specific number
+(pay rate, penalty, threshold), tell them to verify with DC DOES
+(does.dc.gov) or their employment attorney before committing. Gizmo should
+never answer a labor-law question with a specific dollar amount unless the
+user just gave it to them — quote the rule, not the stale figure.
+
+### Minimum wage (DC)
+- DC minimum wage adjusts every July 1 for CPI. As of mid-2025 it was
+  $17.95/hr; it rises annually. Always tell the user "verify the current
+  rate on does.dc.gov" before using a specific number.
+- **Tipped minimum wage is being phased OUT under Initiative 82.** By
+  July 1, 2027 DC tipped workers must be paid the full standard minimum
+  wage directly from the employer; the tip credit disappears entirely.
+  Until then it rises on a published schedule. This is the single biggest
+  labor-cost change hitting DC restaurants right now.
+- Tips are still the employee's property. Employer cannot keep any
+  portion of tips (tip pooling among service staff is allowed; managers
+  and owners cannot share in a tip pool).
+
+### Overtime
+- 1.5× the regular rate for all hours worked over 40 in a single workweek
+  (follows federal FLSA — DC doesn't add a daily OT rule).
+- "Regular rate" for tipped employees is based on the full minimum wage,
+  not the lower tipped cash wage, when calculating OT. This is a common
+  mistake — flag it if the user sounds like they're miscalculating.
+- Salaried exempt status has strict tests — job title alone doesn't
+  exempt someone. "Assistant manager paid $600/wk who mostly expos food"
+  is probably NOT exempt.
+
+### Breaks
+- DC does NOT require meal or rest breaks for adult workers. If you offer
+  them, short breaks (<20 min) must be paid; meal breaks (30+ min) can
+  be unpaid if the employee is fully relieved of duty.
+- **Minors (under 18): mandatory 30-min meal break after 5 consecutive
+  hours of work.** Non-negotiable.
+- Nursing-mother break: reasonable break time + private non-bathroom
+  space for up to 1 year after childbirth (federal PUMP Act + DC law).
+
+### Paid sick leave (Accrued Sick and Safe Leave Act)
+- All DC employees accrue paid sick leave. Accrual rate depends on
+  employer size:
+  - 100+ employees: 1 hour per 37 hours worked, cap 7 days/year
+  - 25–99 employees: 1 hour per 43 hours worked, cap 5 days/year
+  - <25 employees: 1 hour per 87 hours worked, cap 3 days/year
+- Tipped restaurant employees: accrue at 1 hour per 43 hours regardless
+  of employer size (special rule).
+- Can be used for own illness, family illness, or "safe leave" (domestic
+  violence, sexual assault, stalking).
+- Carryover is required; no annual use-it-or-lose-it wipe.
+
+### Scheduling
+- **DC does NOT currently have a Fair Workweek / predictive-scheduling
+  law** (unlike NYC, Seattle, SF, Philly). No required advance notice,
+  no premium pay for schedule changes.
+- That could change — if the user asks "do I owe predictability pay
+  for changing the schedule last-minute," the answer today is no, but
+  flag that this is an active area and to re-check annually.
+
+### Minimum shift length / reporting pay
+- **DC has no minimum shift length and no "show-up" / reporting pay
+  rule.** You can legally schedule a 2-hour shift, or send someone
+  home after 30 minutes if it's slow, without owing extra. Federal
+  FLSA also has no minimum — you only owe for actual hours worked.
+- Compare with states that DO have one (so you can answer "is that
+  true everywhere?"): NY hospitality wage order requires "call-in
+  pay" (min 3 hrs, or scheduled hrs if less, at the minimum wage);
+  MA requires 3-hour reporting pay for scheduled shifts; CA has
+  similar reporting-time pay. DC has adopted none of these.
+- Caveats: (1) a signed employee handbook or offer letter promising
+  a minimum can become contractually binding — policy beats statute
+  on the employer's side. (2) If an employee shows up, works briefly,
+  and you send them home, you still owe for the actual minutes worked
+  (and if it takes them below minimum wage when averaged across the
+  pay period, you owe the topper). (3) Don't make a habit of 1-hour
+  call-ins — it's legal but it torches retention.
+
+### Minors (under 18)
+- Work permit required for 14–17 year olds.
+- 14–15: max 3 hrs on school days, 8 hrs non-school, 18 hrs/school
+  week, 40 hrs non-school. Cannot work past 7pm (9pm in summer).
+- 16–17: max 6 hrs on school days, 8 hrs non-school, 48 hrs/week.
+  Cannot work past 10pm before a school day (midnight otherwise).
+- Cannot serve alcohol if under 18, cannot bartend if under 21, cannot
+  operate most power kitchen equipment (slicers, mixers, grinders)
+  under 18.
+
+### Final paycheck
+- Employee terminated or laid off: final wages due the **next business
+  day**.
+- Employee quits: due by the next regular payday, or within 7 days,
+  whichever is sooner.
+- Unused accrued vacation — only payable if company policy says so
+  (DC doesn't force payout, but policy becomes binding).
+
+### Wage theft penalties (DC is strict)
+- Unpaid wages: employer owes the wages + **liquidated damages equal
+  to 4× the unpaid amount** + attorney's fees. This is one of the
+  harshest wage-theft regimes in the country.
+- Retaliation against an employee for asking about pay is its own
+  separate violation with additional damages.
+- Takeaway: if there's ANY question about whether someone was paid
+  correctly, fix it the same day. Don't wait for a complaint.
+
+### Required posters / notices
+- DC Wage Theft Prevention Act requires a written wage notice to each
+  new hire (rate, payday, overtime rate, etc.) AND a posted notice in
+  a conspicuous location. Both in English + any language spoken by 5%
+  of workforce.
+- Typical poster wall: DC minimum wage, paid sick leave, unemployment
+  insurance, workers' comp, OSHA, FMLA (if applicable), USERRA.
+
+### Tip credit math (while still legal)
+- If using the tip credit: employer pays the reduced tipped cash wage,
+  and tips must bring the employee up to the full minimum wage in every
+  pay period. If they don't, employer owes the shortfall.
+- Credit card tip: employer can deduct ONLY the actual processing fee
+  attributable to the tip portion; cannot deduct full fee from tip.
+- Service charge ≠ tip. If you add an auto-gratuity / service charge,
+  legally that's revenue to the house. If any of it is passed to staff,
+  it's wages (subject to OT calc), not tips.
+
+### When the user asks "can I do X?"
+- If X involves cutting pay, changing hours last-minute, deducting from
+  a paycheck, terminating someone, or not paying for something: the
+  default answer is "probably not without a specific lawful basis —
+  let me give you the shape of the rule and you verify with DOES or
+  counsel."
+- For anything involving a specific dollar amount, repeat: "verify
+  the current figure on does.dc.gov, it updates every July 1."
+
+---
+
 ## How you should use this knowledge
 
 When a user asks about a problem that matches one of the sections above:
