@@ -25,7 +25,7 @@ export function LogTab({ open, onClose }: Props) {
   function handleAdd() {
     const trimmed = draft.trim();
     if (!trimmed) return;
-    addEntry(trimmed, "manual");
+    void addEntry(trimmed, "manual");
     setDraft("");
   }
 
@@ -111,11 +111,16 @@ export function LogTab({ open, onClose }: Props) {
             {/* Icon */}
             <div style={{
               width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-              background: entry.type === "auto" ? "rgba(42,60,72,0.12)" : "#4EC89A",
+              background:
+                entry.type === "auto"  ? "rgba(42,60,72,0.12)" :
+                entry.type === "gizmo" ? "rgba(26,158,138,0.18)" :
+                                         "#4EC89A",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13,
             }}>
-              {entry.type === "auto" ? "⚡" : "✏️"}
+              {entry.type === "auto"  ? "⚡" :
+               entry.type === "gizmo" ? "🦝" :
+                                        "✏️"}
             </div>
 
             {/* Text + timestamp */}
@@ -133,10 +138,16 @@ export function LogTab({ open, onClose }: Props) {
               }}>
                 <span style={{
                   display: "inline-block",
-                  background: entry.type === "auto" ? "rgba(42,60,72,0.12)" : "rgba(78,200,154,0.18)",
+                  background:
+                    entry.type === "auto"  ? "rgba(42,60,72,0.12)" :
+                    entry.type === "gizmo" ? "rgba(26,158,138,0.20)" :
+                                             "rgba(78,200,154,0.18)",
                   borderRadius: 4, padding: "1px 5px",
                   fontWeight: 700, fontSize: 9, letterSpacing: ".06em", textTransform: "uppercase",
-                  color: entry.type === "auto" ? "#4A5A64" : "#084020",
+                  color:
+                    entry.type === "auto"  ? "#4A5A64" :
+                    entry.type === "gizmo" ? "#0F5A4E" :
+                                             "#084020",
                 }}>
                   {entry.type}
                 </span>
@@ -144,10 +155,10 @@ export function LogTab({ open, onClose }: Props) {
               </div>
             </div>
 
-            {/* Delete (only manual entries) */}
-            {entry.type === "manual" && (
+            {/* Delete (manual + gizmo entries) */}
+            {(entry.type === "manual" || entry.type === "gizmo") && (
               <button
-                onClick={() => removeEntry(entry.id)}
+                onClick={() => void removeEntry(entry.id)}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   color: "#C0CCCC", fontSize: 16, padding: 0, lineHeight: 1,

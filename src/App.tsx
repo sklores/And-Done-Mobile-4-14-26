@@ -3,6 +3,7 @@ import { coastal } from "./theme/skins";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
+import { useLogStore } from "./stores/useLogStore";
 import type { KpiKey } from "./stores/useKpiStore";
 import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
@@ -49,6 +50,7 @@ export default function App() {
   const tiles                 = useKpiStore((s) => s.tiles);
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
+  const hydrateLog            = useLogStore((s) => s.hydrate);
 
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
@@ -90,6 +92,11 @@ export default function App() {
     const unsubscribe = subscribeToSnapshots();
     return unsubscribe;
   }, [subscribeToSnapshots]);
+
+  // ── Activity log: load from Supabase + subscribe for realtime inserts ────
+  useEffect(() => {
+    hydrateLog();
+  }, [hydrateLog]);
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
