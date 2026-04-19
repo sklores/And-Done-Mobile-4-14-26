@@ -23,6 +23,9 @@ button { font-family: inherit; }
   to   { transform: translateX(-100%); }
 }
 
+/* Hide scrollbar on the interactive ticker (WebKit) */
+.cs-ticker-scroll::-webkit-scrollbar { display: none; }
+
 @keyframes kpiFlash {
   0%   { filter: brightness(1.4); }
   100% { filter: brightness(1); }
