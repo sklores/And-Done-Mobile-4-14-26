@@ -428,7 +428,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const [beamSweeping, setBeamSweeping] = useState(true)
   useEffect(() => {
     setBeamSweeping(true)
-    const id = setTimeout(() => setBeamSweeping(false), 4000) // one full 4s sweep
+    const id = setTimeout(() => setBeamSweeping(false), 2000) // one full 2s sweep
     return () => clearTimeout(id)
   }, [beamPulseKey])
 
@@ -908,7 +908,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 {/* Outer soft beam cone — sweeps across sky, originates at lamp */}
                 <g style={{
                   transformOrigin: `${lx}px ${lBase-30}px`,
-                  animation: `cs-beam 4s ease-in-out infinite, cs-beam-fade 4s ease-out forwards`,
+                  animation: `cs-beam 2s ease-in-out infinite, cs-beam-fade 2s ease-out forwards`,
                   opacity: Math.min(1, beamOp * 3.2),
                   mixBlendMode: 'screen',
                 }}>
@@ -920,7 +920,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 {/* Inner bright beam core — tighter, slightly different timing */}
                 <g style={{
                   transformOrigin: `${lx}px ${lBase-30}px`,
-                  animation: `cs-beam-core 4s ease-in-out infinite, cs-beam-fade 4s ease-out forwards`,
+                  animation: `cs-beam-core 2s ease-in-out infinite, cs-beam-fade 2s ease-out forwards`,
                   opacity: Math.min(1, beamOp * 4.5),
                   mixBlendMode: 'screen',
                 }}>
