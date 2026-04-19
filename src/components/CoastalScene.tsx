@@ -138,7 +138,7 @@ const SCENE_CSS = `
 @keyframes cs-beam{0%,100%{transform:rotate(-72deg)}50%{transform:rotate(-8deg)}}
 @keyframes cs-beam-core{0%,100%{transform:rotate(-70deg)}50%{transform:rotate(-10deg)}}
 @keyframes cs-beam-pulse{0%,100%{opacity:.9}50%{opacity:1}}
-@keyframes cs-beam-fade{0%,70%{opacity:1}100%{opacity:0}}
+@keyframes cs-beam-fade{0%,60%{opacity:1}100%{opacity:0}}
 @keyframes cs-drift1{0%,100%{transform:translateX(0)}50%{transform:translateX(12px)}}
 @keyframes cs-drift2{0%,100%{transform:translateX(0)}50%{transform:translateX(-10px)}}
 @keyframes cs-bfly{0%{transform:translateX(-30px)}100%{transform:translateX(420px)}}
@@ -428,7 +428,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const [beamSweeping, setBeamSweeping] = useState(true)
   useEffect(() => {
     setBeamSweeping(true)
-    const id = setTimeout(() => setBeamSweeping(false), 14000) // ~2 full 7s cycles
+    const id = setTimeout(() => setBeamSweeping(false), 4000) // one full 4s sweep
     return () => clearTimeout(id)
   }, [beamPulseKey])
 
@@ -908,7 +908,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 {/* Outer soft beam cone — sweeps across sky, originates at lamp */}
                 <g style={{
                   transformOrigin: `${lx}px ${lBase-30}px`,
-                  animation: `cs-beam 7s ease-in-out infinite, cs-beam-fade 14s ease-out forwards`,
+                  animation: `cs-beam 4s ease-in-out infinite, cs-beam-fade 4s ease-out forwards`,
                   opacity: Math.min(1, beamOp * 3.2),
                   mixBlendMode: 'screen',
                 }}>
@@ -920,7 +920,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 {/* Inner bright beam core — tighter, slightly different timing */}
                 <g style={{
                   transformOrigin: `${lx}px ${lBase-30}px`,
-                  animation: `cs-beam-core 7s ease-in-out infinite, cs-beam-fade 14s ease-out forwards`,
+                  animation: `cs-beam-core 4s ease-in-out infinite, cs-beam-fade 4s ease-out forwards`,
                   opacity: Math.min(1, beamOp * 4.5),
                   mixBlendMode: 'screen',
                 }}>
