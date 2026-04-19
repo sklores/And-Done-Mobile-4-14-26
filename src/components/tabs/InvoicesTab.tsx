@@ -89,17 +89,45 @@ const selectStyle: React.CSSProperties = {
   paddingRight: 32,
 };
 
-function fileToBase64(file: File): Promise<{ base64: string; mime: string }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const comma = result.indexOf(",");
-      resolve({ base64: result.slice(comma + 1), mime: file.type || "image/jpeg" });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+// Downscale to max 2000px on longest side + JPEG 0.85 so the base64
+// payload stays well under Anthropic's ~5MB image cap. Phone photos can
+// easily be 5-15MB raw; without this they get rejected.
+async function fileToBase64(file: File): Promise<{ base64: string; mime: string }> {
+  const MAX_DIM = 2000;
+  const dataUrl = await new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result as string);
+    r.onerror = rej;
+    r.readAsDataURL(file);
   });
+
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = dataUrl;
+  });
+
+  let { width, height } = img;
+  if (width > MAX_DIM || height > MAX_DIM) {
+    if (width >= height) {
+      height = Math.round((height / width) * MAX_DIM);
+      width = MAX_DIM;
+    } else {
+      width = Math.round((width / height) * MAX_DIM);
+      height = MAX_DIM;
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas 2d context unavailable");
+  ctx.drawImage(img, 0, 0, width, height);
+  const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  const comma = jpegDataUrl.indexOf(",");
+  return { base64: jpegDataUrl.slice(comma + 1), mime: "image/jpeg" };
 }
 
 export function InvoicesTab({ open, onClose }: Props) {
