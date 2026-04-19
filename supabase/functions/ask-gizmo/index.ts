@@ -10,6 +10,7 @@
 // When we go multi-tenant, thread org_id through from the frontend session.
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { KNOWLEDGE } from "./knowledge.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-5-20250929";
@@ -47,7 +48,9 @@ TOOLS
 
 When the user opens the tab for the first time, you will be asked to produce a short opening summary. Pull get_current_kpis and write 1–2 sentences covering the standouts. End with "What do you want to look at?" or similar.
 
-TODAY'S DATE will be injected as a user-visible system note at the top of every conversation — always trust that, never use a date from your training data.`;
+TODAY'S DATE will be injected as a user-visible system note at the top of every conversation — always trust that, never use a date from your training data.
+
+${KNOWLEDGE}`;
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
 const TOOLS = [
