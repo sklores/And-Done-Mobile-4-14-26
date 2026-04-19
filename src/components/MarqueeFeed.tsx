@@ -59,21 +59,17 @@ export function MarqueeFeed({ onLongPress }: Props) {
   });
   const line = items.length ? items.join("   •   ") : "No feeds selected";
 
-  // ── Scrollable ticker refs/state ─────────────────────────────────────────
-  const scrollRef   = useRef<HTMLDivElement>(null);
+  // ── Ticker refs: transform-based animation, unified pointer drag ─────────
+  const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef    = useRef<HTMLDivElement>(null);
+  const posRef      = useRef(0);                       // current translateX offset (positive = shifted left)
+  const halfRef     = useRef(0);                       // half of track width (one content copy)
   const pausedRef   = useRef(false);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragging    = useRef(false);
   const dragStartX  = useRef(0);
-  const dragStartScroll = useRef(0);
-  const isAutoScrolling = useRef(false); // suppresses our own scroll-event pauses
-  const scrollPos   = useRef(0);          // float accumulator (scrollLeft rounds to int in some browsers)
+  const dragStartPos = useRef(0);
 
-  const schedulePause = () => {
-    pausedRef.current = true;
-    if (resumeTimer.current) clearTimeout(resumeTimer.current);
-  };
   const scheduleResume = () => {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
     resumeTimer.current = setTimeout(() => {
@@ -81,27 +77,30 @@ export function MarqueeFeed({ onLongPress }: Props) {
     }, RESUME_AFTER_MS);
   };
 
-  // Auto-scroll via rAF: nudges scrollLeft each frame, loops seamlessly at
-  // half the track width (content is duplicated for a continuous loop).
+  const wrap = (n: number): number => {
+    const h = halfRef.current;
+    if (h <= 0) return n;
+    return ((n % h) + h) % h;
+  };
+
+  const applyTransform = () => {
+    const t = trackRef.current;
+    if (t) t.style.transform = `translate3d(${-posRef.current}px, 0, 0)`;
+  };
+
+  // rAF auto-scroll loop — mutates DOM directly, no React rerenders.
   useEffect(() => {
-    const el = scrollRef.current;
     const track = trackRef.current;
-    if (!el || !track) return;
+    if (!track) return;
     let raf = 0;
     let last = performance.now();
     const tick = (t: number) => {
-      const dt = Math.min((t - last) / 1000, 0.1); // clamp so tab-backgrounding doesn't jump
+      const dt = Math.min((t - last) / 1000, 0.1);
       last = t;
-      const half = track.scrollWidth / 2;
-      if (pausedRef.current || dragging.current) {
-        // user is in control — keep accumulator in sync with real scroll position
-        scrollPos.current = el.scrollLeft;
-      } else if (half > 0) {
-        scrollPos.current += PX_PER_SEC * dt;
-        if (scrollPos.current >= half) scrollPos.current -= half;
-        isAutoScrolling.current = true;
-        el.scrollLeft = scrollPos.current;
-        isAutoScrolling.current = false;
+      halfRef.current = track.scrollWidth / 2;
+      if (!pausedRef.current && !dragging.current && halfRef.current > 0) {
+        posRef.current = wrap(posRef.current + PX_PER_SEC * dt);
+        applyTransform();
       }
       raf = requestAnimationFrame(tick);
     };
@@ -109,41 +108,25 @@ export function MarqueeFeed({ onLongPress }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [line]);
 
-  // Touch: native pan-x handles scrolling. We just pause while finger down.
-  const handleTouchStart = () => schedulePause();
-  const handleTouchEnd   = () => scheduleResume();
-
-  // Mouse: implement click-drag since native overflow doesn't drag with mouse.
-  const handleTickerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== "mouse") return;
+  // Unified pointer handlers (touch + mouse + pen via Pointer Events).
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragging.current = true;
     dragStartX.current = e.clientX;
-    dragStartScroll.current = scrollRef.current?.scrollLeft ?? 0;
-    schedulePause();
-    scrollRef.current?.setPointerCapture(e.pointerId);
+    dragStartPos.current = posRef.current;
+    pausedRef.current = true;
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    viewportRef.current?.setPointerCapture(e.pointerId);
   };
-  const handleTickerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current || !scrollRef.current) return;
-    const track = trackRef.current;
-    const half = track ? track.scrollWidth / 2 : 0;
-    let next = dragStartScroll.current - (e.clientX - dragStartX.current);
-    if (half > 0) {
-      // wrap so drag never hits an edge
-      next = ((next % half) + half) % half;
-    }
-    scrollRef.current.scrollLeft = next;
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return;
+    const dx = e.clientX - dragStartX.current;
+    posRef.current = wrap(dragStartPos.current - dx);
+    applyTransform();
   };
-  const handleTickerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return;
     dragging.current = false;
-    scrollRef.current?.releasePointerCapture(e.pointerId);
-    scheduleResume();
-  };
-
-  // Catch mouse wheel / trackpad horizontal flick → pause while user scrolls.
-  const handleScroll = () => {
-    if (isAutoScrolling.current) return;
-    schedulePause();
+    viewportRef.current?.releasePointerCapture(e.pointerId);
     scheduleResume();
   };
 
@@ -177,40 +160,32 @@ export function MarqueeFeed({ onLongPress }: Props) {
         background: coastal.marquee.bg,
       }}>
         <div
-          ref={scrollRef}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchEnd}
-          onPointerDown={handleTickerPointerDown}
-          onPointerMove={handleTickerPointerMove}
-          onPointerUp={handleTickerPointerUp}
-          onPointerCancel={handleTickerPointerUp}
-          onScroll={handleScroll}
+          ref={viewportRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
           style={{
-            overflowX: "auto",
-            overflowY: "hidden",
-            whiteSpace: "nowrap",
+            overflow: "hidden",
             padding: "8px 0",
             color: coastal.marquee.text,
             fontSize: 12,
             fontWeight: 500,
-            cursor: dragging.current ? "grabbing" : "grab",
+            cursor: "grab",
             userSelect: "none",
             letterSpacing: ".01em",
-            touchAction: "pan-x",
-            WebkitOverflowScrolling: "touch",
-            scrollbarWidth: "none",
+            touchAction: "pan-y", // let vertical page scroll pass through; we handle horizontal
           }}
-          className="cs-ticker-scroll"
         >
           <div
             ref={trackRef}
             style={{
               display: "inline-block",
               whiteSpace: "nowrap",
+              willChange: "transform",
             }}
           >
-            {/* Duplicated for seamless loop — rAF resets scrollLeft at half-width */}
+            {/* Duplicated for seamless loop — rAF wraps at half-width */}
             <span style={{ paddingRight: 40 }}>{line}</span>
             <span style={{ paddingRight: 40 }}>{line}</span>
           </div>
