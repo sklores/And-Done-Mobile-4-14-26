@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { TabPanel } from "./TabPanel";
 import { useLogStore } from "../../stores/useLogStore";
 import { coastal } from "../../theme/skins";
@@ -21,17 +21,42 @@ export function LogTab({ open, onClose }: Props) {
   const removeEntry = useLogStore((s) => s.removeEntry);
 
   const [draft, setDraft] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function handleAdd() {
     const trimmed = draft.trim();
-    if (!trimmed) return;
-    void addEntry(trimmed, "manual");
+    if (!trimmed && !photo) return;
+    void addEntry(trimmed, "manual", { mediaFile: photo });
     setDraft("");
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(null);
+    setPhotoPreview(null);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") handleAdd();
   }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(f);
+    setPhotoPreview(URL.createObjectURL(f));
+  }
+
+  function clearPhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhoto(null);
+    setPhotoPreview(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  const canSubmit = draft.trim().length > 0 || photo !== null;
 
   return (
     <TabPanel open={open} onClose={onClose} title="Activity Log" accent="#2A3C48">
@@ -47,11 +72,37 @@ export function LogTab({ open, onClose }: Props) {
           alignItems: "center",
         }}>
           <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFile}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            aria-label="Attach photo"
+            style={{
+              background: photo ? "#4EC89A" : "rgba(0,0,0,0.05)",
+              color: photo ? "#fff" : "#2A3C48",
+              border: "none",
+              borderRadius: 10,
+              width: 34, height: 34,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16,
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: "background 0.2s",
+            }}
+          >
+            📷
+          </button>
+          <input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Add a note…"
+            placeholder={photo ? "Caption (optional)…" : "Add a note…"}
             style={{
               flex: 1,
               border: "none",
@@ -64,17 +115,17 @@ export function LogTab({ open, onClose }: Props) {
           />
           <button
             onClick={handleAdd}
-            disabled={!draft.trim()}
+            disabled={!canSubmit}
             style={{
-              background: draft.trim() ? "#2A3C48" : "rgba(0,0,0,0.08)",
-              color: draft.trim() ? "#fff" : "#aaa",
+              background: canSubmit ? "#2A3C48" : "rgba(0,0,0,0.08)",
+              color: canSubmit ? "#fff" : "#aaa",
               border: "none",
               borderRadius: 10,
               padding: "7px 14px",
               fontFamily: coastal.fonts.manrope,
               fontWeight: 800,
               fontSize: 11,
-              cursor: draft.trim() ? "pointer" : "default",
+              cursor: canSubmit ? "pointer" : "default",
               letterSpacing: ".04em",
               transition: "background 0.2s",
             }}
@@ -82,6 +133,46 @@ export function LogTab({ open, onClose }: Props) {
             LOG
           </button>
         </div>
+
+        {/* Photo preview strip */}
+        {photoPreview && (
+          <div style={{
+            marginTop: 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            background: "#fff",
+            borderRadius: 12,
+            padding: 8,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+          }}>
+            <img
+              src={photoPreview}
+              alt="Preview"
+              style={{
+                width: 54, height: 54, objectFit: "cover",
+                borderRadius: 8,
+              }}
+            />
+            <div style={{
+              flex: 1, fontSize: 11, color: "#4A5A64",
+              fontFamily: coastal.fonts.manrope,
+            }}>
+              Photo attached
+            </div>
+            <button
+              onClick={clearPhoto}
+              aria-label="Remove photo"
+              style={{
+                background: "rgba(0,0,0,0.06)", border: "none",
+                borderRadius: 8, cursor: "pointer",
+                width: 28, height: 28, fontSize: 14, color: "#4A5A64",
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Entry list ─────────────────────────────────── */}
@@ -125,12 +216,31 @@ export function LogTab({ open, onClose }: Props) {
 
             {/* Text + timestamp */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontFamily: coastal.fonts.manrope, fontSize: 13, fontWeight: 600,
-                color: "#1A2E28", lineHeight: 1.4,
-              }}>
-                {entry.text}
-              </div>
+              {entry.text && (
+                <div style={{
+                  fontFamily: coastal.fonts.manrope, fontSize: 13, fontWeight: 600,
+                  color: "#1A2E28", lineHeight: 1.4,
+                }}>
+                  {entry.text}
+                </div>
+              )}
+              {entry.mediaUrl && entry.mediaType === "image" && (
+                <img
+                  src={entry.mediaUrl}
+                  alt=""
+                  onClick={() => setViewingPhoto(entry.mediaUrl!)}
+                  style={{
+                    marginTop: entry.text ? 6 : 0,
+                    width: "100%",
+                    maxWidth: 240,
+                    maxHeight: 180,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    display: "block",
+                  }}
+                />
+              )}
               <div style={{
                 fontSize: 10, color: "#8A9C9C", marginTop: 2,
                 fontFamily: coastal.fonts.manrope,
@@ -180,6 +290,28 @@ export function LogTab({ open, onClose }: Props) {
           </div>
         )}
       </div>
+
+      {/* Full-size photo viewer */}
+      {viewingPhoto && (
+        <div
+          onClick={() => setViewingPhoto(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.88)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, cursor: "pointer",
+          }}
+        >
+          <img
+            src={viewingPhoto}
+            alt=""
+            style={{
+              maxWidth: "100%", maxHeight: "100%",
+              borderRadius: 10, objectFit: "contain",
+            }}
+          />
+        </div>
+      )}
     </TabPanel>
   );
 }
