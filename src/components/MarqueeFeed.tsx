@@ -112,7 +112,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
   const handleTouchEnd   = () => scheduleResume();
 
   // Mouse: implement click-drag since native overflow doesn't drag with mouse.
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleTickerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== "mouse") return;
     dragging.current = true;
     dragStartX.current = e.clientX;
@@ -120,7 +120,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
     schedulePause();
     scrollRef.current?.setPointerCapture(e.pointerId);
   };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleTickerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current || !scrollRef.current) return;
     const track = trackRef.current;
     const half = track ? track.scrollWidth / 2 : 0;
@@ -131,7 +131,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
     }
     scrollRef.current.scrollLeft = next;
   };
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handleTickerPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return;
     dragging.current = false;
     scrollRef.current?.releasePointerCapture(e.pointerId);
@@ -179,10 +179,10 @@ export function MarqueeFeed({ onLongPress }: Props) {
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchEnd}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          onPointerDown={handleTickerPointerDown}
+          onPointerMove={handleTickerPointerMove}
+          onPointerUp={handleTickerPointerUp}
+          onPointerCancel={handleTickerPointerUp}
           onScroll={handleScroll}
           style={{
             overflowX: "auto",
