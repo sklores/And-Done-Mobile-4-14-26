@@ -52,10 +52,17 @@ export type SalesChannels = {
   other3p: number;
 };
 
+export type HourlySales = {
+  hour: number;        // 0–23, local (America/New_York)
+  sales: number;       // net sales that hour (USD)
+  orderCount: number;  // distinct orders opened that hour
+};
+
 export type SalesDetailResult = {
   pmixTop: PmixItem[];
   pmixBottom: PmixItem[];
   channels: SalesChannels;
+  byHour: HourlySales[]; // inclusive first→last hour with sales (gaps filled with zero)
   fetchedAt: string;
 };
 

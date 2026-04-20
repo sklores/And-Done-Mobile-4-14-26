@@ -1,0 +1,148 @@
+{
+  "lastUpdated": "2026-04-19",
+  "identity": {
+    "name": "GCDC Grilled Cheese Bar",
+    "brandTagline": "DC's 1st premium grilled cheese bar",
+    "foundedYear": 2014,
+    "founders": ["Bruce Klores", "Steven Klores"],
+    "website": "https://grilledcheesedc.com",
+    "phone": "(202) 393-4232",
+    "email": "events@grilledcheesedc.com"
+  },
+  "locations": [
+    {
+      "name": "GCDC (flagship, only location)",
+      "address": "1730 Pennsylvania Ave NW, Washington, DC 20006",
+      "neighborhood": "Downtown / Foggy Bottom / West End — two blocks from the White House",
+      "hours": {
+        "mon": "9:00a-4:00p",
+        "tue": "9:00a-4:00p",
+        "wed": "9:00a-6:00p",
+        "thu": "9:00a-6:00p",
+        "fri": "9:00a-6:00p",
+        "sat": "11:00a-6:00p",
+        "sun": "11:00a-3:00p"
+      },
+      "phone": "(202) 393-4232",
+      "openedYear": 2014
+    }
+  ],
+  "menu": {
+    "signatureItems": [
+      { "name": "DC Classic", "description": "Four-cheese blend with tomato on buttered white bread", "price": null },
+      { "name": "Young American", "description": "Grilled cheese with bacon and tomato", "price": 11.00 },
+      { "name": "Fig & Prosciutto", "description": "Goat and mozzarella with chopped dates, fig jam, and prosciutto on wheat", "price": null },
+      { "name": "Short Rib", "description": "Gruyere blend and blue cheese spread with slow-cooked short rib and caramelized onions on buttered sourdough", "price": null },
+      { "name": "Buffalo Blue", "description": "Buffalo chicken and blue cheese grilled cheese — frequently cited as a guest favorite", "price": null },
+      { "name": "Bacon Jalapeno Popper", "description": "Spicy cream-cheese / jalapeno / bacon grilled cheese", "price": null },
+      { "name": "Maine Lobster Grilled Cheese", "description": "Premium lobster melt — top-tier menu item", "price": null },
+      { "name": "Mac & Cheese", "description": "House mac, often paired with sandwiches; gluten-free version available", "price": null },
+      { "name": "Tomato Soup", "description": "Classic pairing; frequently praised in reviews", "price": null }
+    ],
+    "categories": ["Signature Grilled Cheeses", "Build Your Own", "Mac & Cheese", "Quesadillas", "Soups", "Sides (including oversized pickles)", "Kids Menu", "Full Bar / Craft Beer / Wine"],
+    "priceRange": "$$",
+    "dietaryOptions": ["Gluten-free bread", "Gluten-free mac & cheese", "Vegan cheese option", "Celiac-friendly protocols (tray flagged, cross-contamination precautions)"],
+    "drinkProgram": "Full bar with craft beer, wine list, and rail cocktails. Happy hour Mon-Fri 4p-7p with $1 off rail drinks and drafts. Originally positioned as 'grilled cheese shop and wine bar.'"
+  },
+  "brand": {
+    "story": "Founded April 2014 by DC medical-malpractice attorney Bruce Klores (DC resident since 1978) after roughly a decade of dreaming about a friendly local comfort-food spot. Klores worked food-industry odd jobs in his youth (hot dogs at the Statue of Liberty, bartending) before law. His son Steven paused an aspiring music career to help open and run the business — the father-son team is central to the brand story. Opened to long lines and has operated as a single downtown DC location ever since.",
+    "voice": "Warm, casual, comfort-forward, slightly cheeky DC-pride tone. Family-run feel; not fine-dining.",
+    "aestheticKeywords": ["comfort food", "gourmet grilled cheese", "family-run", "DC-proud", "casual counter-service", "wine bar by night", "patio", "neighborhood spot near the White House"],
+    "notableAwards": []
+  },
+  "socialMedia": {
+    "instagram": { "handle": "@grilledcheesedc", "followers": 2746, "postingCadence": "Irregular — low-to-moderate", "recentThemes": ["sandwich beauty shots", "daily specials", "happy hour promos", "DC/White House proximity"] },
+    "facebook": { "handle": "GrilledCheeseDC", "followers": null },
+    "tiktok": null,
+    "twitter": "@grilledcheeseDC"
+  },
+  "reviews": {
+    "google": { "rating": null, "count": null, "topPraise": [], "topComplaints": [] },
+    "yelp": {
+      "rating": 4.2,
+      "count": 732,
+      "topPraise": ["Crispy, perfectly toasted bread (esp. sourdough)", "Buffalo Blue sandwich", "Build-your-own with American + mac", "Strong gluten-free accommodation", "Fast order turnaround (~10 min)"],
+      "topComplaints": ["Pricey for what you get", "Kiosk-only ordering feels impersonal", "Limited seating at peak hours"]
+    },
+    "tripadvisor": {
+      "rating": 4.4,
+      "count": 511,
+      "topPraise": ["'Most incredible cheese toastie you will ever eat'", "Great gluten-free / celiac protocol (GF tagged on tray)", "Mac & cheese and oversized pickles"],
+      "topComplaints": ["'Just tasted like a hot blob of grease' (June 2025 family review)", "Price-to-value complaints from tourists"]
+    }
+  },
+  "press": [
+    {
+      "outlet": "Washington City Paper",
+      "date": "2014",
+      "headline": "First Look at Grilled Cheese Shop and Wine Bar GCDC",
+      "quote": "Framed GCDC from day one as a hybrid grilled-cheese shop and wine bar near the White House.",
+      "url": "https://washingtoncitypaper.com/article/352932/first-look-at-grilled-cheese-shop-and-wine-bar-gcdc/"
+    },
+    {
+      "outlet": "The Hoya (Georgetown)",
+      "date": null,
+      "headline": "Restaurant Review: GCDC",
+      "quote": "Student-facing review highlighting GCDC as a go-to grilled cheese destination in DC.",
+      "url": "https://thehoya.com/guide/restaurant-review-gcdc/"
+    },
+    {
+      "outlet": "Jim's Dining Guides",
+      "date": "2023-01-04",
+      "headline": "GCDC Grilled Cheese Bar",
+      "quote": "Dining-guide writeup describing the menu breadth and comfort-food positioning.",
+      "url": "https://jimsdiningguides.com/2023/01/04/gcdc-grilled-cheese-bar/"
+    }
+  ],
+  "competitive": {
+    "dcGrilledCheeseScene": "GCDC positions itself as DC's first PREMIUM grilled cheese bar — there is no other full-service sit-down concept in DC dedicated entirely to grilled cheese. Competitors are either national chains (The Melt, Cheeseboy — neither has major DC presence) or non-specialist comfort-food spots that offer a grilled cheese as part of a broader menu. TripAdvisor ranks GCDC #24 of 2,763 DC restaurants, indicating category dominance within downtown DC.",
+    "mainCompetitors": [
+      { "name": "Declaration (Penn Quarter)", "notes": "Nearby casual American spot drawing the same tourist/White House foot traffic." },
+      { "name": "Cava / Sweetgreen / &pizza (downtown fast-casual)", "notes": "Compete for the same weekday lunch workers." },
+      { "name": "Chercher, Founding Farmers, Old Ebbitt Grill", "notes": "Tourist-oriented DC lunch alternatives within walking distance." }
+    ]
+  },
+  "operationalSignals": {
+    "busyDays": ["Friday", "Saturday"],
+    "busyHours": ["Weekday lunch 11:30a-1:30p", "Happy hour 4p-7p (Wed-Fri)"],
+    "cateringOffered": true,
+    "delivery": ["Toast (direct)", "DoorDash", "Uber Eats", "Grubhub", "Fantuan"],
+    "eventsHosted": true,
+    "reservations": false
+  },
+  "facts": [
+    "GCDC Grilled Cheese Bar opened in April 2014 at 1730 Pennsylvania Ave NW, Washington DC, two blocks from the White House.",
+    "It is DC's first premium grilled cheese bar and currently operates a single location (no expansion as of April 2026).",
+    "Founded by DC medical-malpractice attorney Bruce Klores, a DC resident since 1978, and his son Steven Klores.",
+    "Bruce Klores worked food jobs in his youth — including selling hot dogs at the Statue of Liberty — before becoming a lawyer.",
+    "Son Steven Klores paused an aspiring music career to help launch and run GCDC.",
+    "The original concept was explicitly a hybrid 'grilled cheese shop and wine bar' — full bar is a core element, not an afterthought.",
+    "Phone: (202) 393-4232. Events/catering email: events@grilledcheesedc.com (catering manager Johnny Penn).",
+    "Website: grilledcheesedc.com; online ordering at order.grilledcheesedc.com (powered by Toast).",
+    "Hours: Mon-Tue 9a-4p, Wed-Fri 9a-6p, Sat 11a-6p, Sun 11a-3p. Closed earliest Sun.",
+    "Happy hour runs Mon-Fri 4p-7p with $1 off rail drinks and drafts.",
+    "Yelp: 4.2 stars, 732 reviews (as of March 2026).",
+    "TripAdvisor: 4.4 stars, 511 reviews, ranked #24 of 2,763 Washington DC restaurants.",
+    "Instagram @grilledcheesedc has approximately 2,746 followers — small following relative to foot-traffic volume.",
+    "Twitter/X: @grilledcheeseDC. Facebook page: GrilledCheeseDC.",
+    "Price tier is $$ (moderate). Sandwiches roughly $11-$14; kids sandwiches from $6.50.",
+    "The DC Classic (four-cheese blend + tomato on buttered white) is the house flagship sandwich.",
+    "Other signature sandwiches: Buffalo Blue, Young American (bacon + tomato, $11), Fig & Prosciutto, Short Rib + Gruyere, Bacon Jalapeno Popper, Maine Lobster Grilled Cheese.",
+    "Menu also includes Build Your Own sandwiches, Mac & Cheese, quesadillas, tomato soup, and oversized pickles.",
+    "GCDC is unusually celiac-friendly: gluten-free bread, GF mac, vegan cheese, cross-contamination protocol, and GF orders are flagged on the delivery tray.",
+    "Ordering is kiosk-based in-store — a recurring complaint in reviews from guests who prefer human service.",
+    "Reservations are NOT accepted; it operates as counter-service / walk-in.",
+    "Private events supported for groups of 25-90; full buyouts and off-site mobile grill + bar service available.",
+    "Typical private-event spend: $438-$850 for 50 guests.",
+    "Delivery available via Toast, DoorDash, Uber Eats, Grubhub, and Fantuan.",
+    "Outdoor patio seating and a full sound system are part of the physical space.",
+    "Top positive review themes: crispy bread (especially sourdough), Buffalo Blue sandwich, gluten-free accommodation, and quick ~10-minute ticket times.",
+    "Top critical review themes: perceived high prices, kiosk-only ordering, limited seating at peak hours, occasional 'greasy' complaints.",
+    "Day-part skew is strong weekday lunch plus Wed-Fri happy hour; weekends close by 6p (Sat) and 3p (Sun).",
+    "Neighborhood is variably tagged as Downtown, Foggy Bottom, West End, or Penn Quarter — it sits at the intersection of those zones near the White House.",
+    "GCDC has no confirmed Washingtonian 'Best Of' or major award as of April 2026 — HUMAN VERIFICATION RECOMMENDED.",
+    "No Wikipedia page exists for GCDC as of April 2026.",
+    "Tourist traffic (White House proximity) is a structural demand driver — implies seasonality tied to DC tourism cycles (spring break, cherry blossom, summer, fall).",
+    "Category competition within DC is weak — GCDC is the only dedicated grilled-cheese concept of scale in the district, so category risk comes from general fast-casual lunch, not from other grilled-cheese shops."
+  ]
+}

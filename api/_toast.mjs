@@ -411,15 +411,42 @@ export async function getTodaySalesDetail(creds) {
   // Channel breakdown
   const channels = { dinein: 0, takeout: 0, doordash: 0, ubereats: 0, grubhub: 0, other3p: 0 };
 
+  // Hourly breakdown — bucket each order's net sales into its opened-hour
+  // (local DC time). We derive the local hour from openedDate without
+  // relying on server TZ: iterate both UTC and America/New_York formatted
+  // parts. If openedDate is missing we skip the order (rare).
+  const hourMap = new Map(); // hour (0-23) → { sales, orderCount }
+  function bucketHour(isoTs) {
+    if (!isoTs) return null;
+    const d = new Date(isoTs);
+    if (Number.isNaN(d.getTime())) return null;
+    // Toast businessDate is in the restaurant's timezone, so use the
+    // same TZ for hour bucketing. GCDC = America/New_York. Using
+    // Intl.DateTimeFormat with hour12:false gives us "0"–"23".
+    const hourStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      hour12: false,
+    }).format(d);
+    const h = parseInt(hourStr, 10);
+    return Number.isFinite(h) ? h : null;
+  }
+
   if (Array.isArray(orders)) {
     for (const o of orders) {
       const channel = classifyDiningOption(o.diningOption?.guid);
+      const hour = bucketHour(o.openedDate ?? o.paidDate ?? o.createdDate);
 
       for (const c of o.checks ?? []) {
         if (c.voided) continue;
         // Channel: attribute net sales from check.amount to this order's channel
         if (typeof c.amount === "number") {
           channels[channel] = (channels[channel] ?? 0) + c.amount;
+          if (hour != null) {
+            const existing = hourMap.get(hour) ?? { sales: 0, orderCount: 0 };
+            existing.sales += c.amount;
+            hourMap.set(hour, existing);
+          }
         }
         // Product mix: iterate top-level selections (not modifiers)
         for (const sel of c.selections ?? []) {
@@ -440,6 +467,31 @@ export async function getTodaySalesDetail(creds) {
           }
         }
       }
+
+      // Count each order once in its opened-hour bucket (order-level, not
+      // check-level, so multi-check orders don't inflate the count)
+      if (hour != null) {
+        const existing = hourMap.get(hour) ?? { sales: 0, orderCount: 0 };
+        existing.orderCount += 1;
+        hourMap.set(hour, existing);
+      }
+    }
+  }
+
+  // Operating hours = first hour with a sale → last hour with a sale.
+  // Fill gaps with zero rows (closed-between-services reads correctly).
+  let byHour = [];
+  const hoursWithSales = Array.from(hourMap.keys()).sort((a, b) => a - b);
+  if (hoursWithSales.length > 0) {
+    const firstHr = hoursWithSales[0];
+    const lastHr  = hoursWithSales[hoursWithSales.length - 1];
+    for (let h = firstHr; h <= lastHr; h++) {
+      const entry = hourMap.get(h) ?? { sales: 0, orderCount: 0 };
+      byHour.push({
+        hour: h,
+        sales: Math.round(entry.sales * 100) / 100,
+        orderCount: entry.orderCount,
+      });
     }
   }
 
@@ -467,6 +519,7 @@ export async function getTodaySalesDetail(creds) {
     pmixTop: top,
     pmixBottom: bottom,
     channels,
+    byHour,
     fetchedAt: new Date().toISOString(),
   };
 }

@@ -1,7 +1,7 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
-import type { PmixItem } from "../data/toastAdapter";
+import type { PmixItem, HourlySales } from "../data/toastAdapter";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -29,6 +29,87 @@ function SectionHeader({ title }: { title: string }) {
       }}
     >
       {title}
+    </div>
+  );
+}
+
+// ── Sales by Hour ───────────────────────────────────────────────────────────
+function formatHour(h: number): string {
+  const ampm = h < 12 ? "a" : "p";
+  const hr12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hr12}${ampm}`;
+}
+
+function HourBarRow({
+  entry,
+  peakSales,
+  highlight,
+}: {
+  entry: HourlySales;
+  peakSales: number;
+  highlight: boolean;
+}) {
+  // Bar width as a % of the peak hour; clamp to >=2% so zero-sales hours still
+  // render a visible stub on the track.
+  const pctOfPeak = peakSales > 0 ? (entry.sales / peakSales) * 100 : 0;
+  const barWidth  = entry.sales > 0 ? Math.max(pctOfPeak, 4) : 0;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        padding: "8px 18px",
+        gap: 10,
+        borderBottom: "1px solid rgba(0,0,0,0.04)",
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          fontFamily: coastal.fonts.manrope,
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#8A9C9C",
+          letterSpacing: ".02em",
+          flexShrink: 0,
+        }}
+      >
+        {formatHour(entry.hour)}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          height: 18,
+          background: "rgba(47,107,88,0.08)",
+          borderRadius: 4,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${barWidth}%`,
+            height: "100%",
+            background: highlight ? "#2F6B58" : "rgba(47,107,88,0.55)",
+            borderRadius: 4,
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+      <div
+        style={{
+          width: 64,
+          textAlign: "right",
+          fontFamily: coastal.fonts.condensed,
+          fontSize: 13,
+          fontWeight: 700,
+          color: "#1A2E28",
+          flexShrink: 0,
+        }}
+      >
+        {entry.sales > 0 ? fmt$(entry.sales) : "—"}
+      </div>
     </div>
   );
 }
@@ -158,6 +239,24 @@ export function SalesDrillDown({ open, onClose }: Props) {
       {ch && ch.other3p > 0 && (
         <DrillRow label="  · Other"     value={fmt$(ch.other3p)}  dimmed />
       )}
+
+      {/* ── Sales by Hour ─────────────────────────────── */}
+      {detail && detail.byHour && detail.byHour.length > 0 && (() => {
+        const peakSales = Math.max(...detail.byHour.map((e) => e.sales));
+        return (
+          <>
+            <SectionHeader title="Sales by Hour (operating hours)" />
+            {detail.byHour.map((e) => (
+              <HourBarRow
+                key={e.hour}
+                entry={e}
+                peakSales={peakSales}
+                highlight={e.sales === peakSales && peakSales > 0}
+              />
+            ))}
+          </>
+        );
+      })()}
 
       {/* ── Top Sellers ────────────────────────────────── */}
       {detail && detail.pmixTop.length > 0 && (
