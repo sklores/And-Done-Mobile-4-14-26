@@ -877,17 +877,14 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 <path d="M-9,-.5 L-7,-3 L-5,-.5 Z" fill="#B8BEC8" />
                 {/* Nose highlight */}
                 <ellipse cx={8} cy={-.3} rx={2} ry={1} fill="#ECEFF4" opacity={.85} />
-                {/* Red port nav light (blinking) — left wing */}
-                <circle cx={5} cy={-4.5} r={1.4} fill="#FF3030" opacity={.4}
-                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite' }} />
-                <circle cx={5} cy={-4.5} r={.7} fill="#FF6060"
-                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite' }} />
-                {/* Green starboard nav light (blinking, offset) — right wing */}
-                <circle cx={5} cy={4.5} r={1.4} fill="#30FF70" opacity={.4}
-                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite .6s' }} />
-                <circle cx={5} cy={4.5} r={.7} fill="#70FFA0"
-                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite .6s' }} />
-                {/* White strobe on top (fast blink) */}
+                {/* Red port nav light — steady (on real aircraft these
+                    don't blink; only the anti-collision strobe does) */}
+                <circle cx={5} cy={-4.5} r={1.4} fill="#FF3030" opacity={.4} />
+                <circle cx={5} cy={-4.5} r={.7} fill="#FF6060" />
+                {/* Green starboard nav light — steady */}
+                <circle cx={5} cy={4.5} r={1.4} fill="#30FF70" opacity={.4} />
+                <circle cx={5} cy={4.5} r={.7} fill="#70FFA0" />
+                {/* White anti-collision strobe on top (only thing that blinks) */}
                 <circle cx={-8} cy={-1.8} r={1.2} fill="#FFFFFF" opacity={.5}
                         style={{ animation: 'cs-strobe 1.8s steps(1,end) infinite' }} />
               </g>
