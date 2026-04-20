@@ -158,6 +158,8 @@ function wp3(a: number): string {
 }
 
 const SCENE_CSS = `
+@keyframes cs-scene-in{from{opacity:0}to{opacity:1}}
+.coastal-scene{animation:cs-scene-in .9s ease-out both}
 @keyframes cs-wv1{0%,100%{transform:translateX(0)}50%{transform:translateX(-22px)}}
 @keyframes cs-wv2{0%,100%{transform:translateX(-16px)}50%{transform:translateX(18px)}}
 @keyframes cs-wv3{0%,100%{transform:translateX(10px)}50%{transform:translateX(-14px)}}
@@ -854,7 +856,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               by a sky lantern drifting upward (rendered below). The jet still
               crosses its own cycle independently. Altitude = Reviews score. */}
           {!isNight && (
-            <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
+            <g style={{ animation: `cs-balloon 5s ease-in-out infinite -2.4s`, transformOrigin: `${bx}px ${by+28}px` }}
                opacity={.92}>
               <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill={balloonBody} />
               <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill={balloonShade} opacity={.32} />
@@ -868,39 +870,8 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           )}
 
-          {/* Sky lantern — night replacement for the balloon. Traditional
-              Chinese paper lantern with a flickering candle. Drifts slowly
-              rightward while rising on a gentle bob. Reviews altitude still
-              drives by so it sits in the same altitude band as the balloon. */}
-          {isNight && (
-            <g style={{ animation: `cs-drift-r 90s linear infinite -20s` }}>
-              <g transform={`translate(0, ${by+20})`}>
-                <g style={{ animation: `cs-balloon 6s ease-in-out infinite` }}>
-                  {/* Warm halo from the candle */}
-                  <ellipse cx={bx} cy={by+6} rx={16} ry={14} fill="#FFC878" opacity={.18} />
-                  <ellipse cx={bx} cy={by+6} rx={10} ry={9}  fill="#FFD890" opacity={.28} />
-                  {/* Paper body — taller oval, warm cream lit from within */}
-                  <path d={`M${bx-8},${by-2} Q${bx-11},${by+6} ${bx-8},${by+14} L${bx+8},${by+14} Q${bx+11},${by+6} ${bx+8},${by-2} Z`}
-                        fill="#FFE3A0" opacity={.92} />
-                  {/* Subtle vertical paper ribs */}
-                  <line x1={bx-4} y1={by-1} x2={bx-4} y2={by+13} stroke="#C89460" strokeWidth={.4} opacity={.5} />
-                  <line x1={bx}   y1={by-2} x2={bx}   y2={by+14} stroke="#C89460" strokeWidth={.4} opacity={.5} />
-                  <line x1={bx+4} y1={by-1} x2={bx+4} y2={by+13} stroke="#C89460" strokeWidth={.4} opacity={.5} />
-                  {/* Top + bottom rims */}
-                  <rect x={bx-8} y={by-3} width={16} height={2} rx={1} fill="#B0743A" />
-                  <rect x={bx-8} y={by+13} width={16} height={2} rx={1} fill="#B0743A" />
-                  {/* Candle flame — flickers */}
-                  <g style={{ animation: `cs-jelly-pulse 1.1s ease-in-out infinite` }}>
-                    <ellipse cx={bx} cy={by+10} rx={1.6} ry={2.6} fill="#FFE080" />
-                    <ellipse cx={bx} cy={by+10} rx={.9} ry={1.7}  fill="#FFFCD8" />
-                  </g>
-                  {/* Tiny tail strings */}
-                  <line x1={bx-4} y1={by+15} x2={bx-5} y2={by+19} stroke="#8A6A40" strokeWidth={.5} />
-                  <line x1={bx+4} y1={by+15} x2={bx+5} y2={by+19} stroke="#8A6A40" strokeWidth={.5} />
-                </g>
-              </g>
-            </g>
-          )}
+          {/* (No sky lantern at night — sky stays quiet. The jet + shooting
+              star + moon + stars already carry the night sky.) */}
 
           {/* Night jet — crosses the sky once every 20s with blinking nav
               lights. Invisible for ~17s of every 20s cycle. Cruising
@@ -1068,7 +1039,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
           {/* Ambient — furthest back, rides highest on waterline. Seeded at ~75% across. */}
           <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
             <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite' }}>
+              <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite -1.3s' }}>
                 {renderBoat(ambientBoat, isNight)}
                 {isNight && renderRunningLights(ambientBoat)}
               </g>
@@ -1079,7 +1050,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               Hidden at night (the harbor is quiet — just the ambient boat). */}
           {!isNight && <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
             <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite' }}>
+              <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite -3.7s' }}>
                 {renderBoat(heroBoat, isNight)}
                 {isNight && renderRunningLights(heroBoat)}
               </g>
@@ -1090,7 +1061,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               Hidden at night. */}
           {!isNight && <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
             <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite' }}>
+              <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite -2.1s' }}>
                 {renderBoat(secondaryBoat, isNight)}
                 {isNight && renderRunningLights(secondaryBoat)}
               </g>
