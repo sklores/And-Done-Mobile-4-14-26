@@ -1191,8 +1191,11 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <rect x={lx-9} y={lBase} width="18" height="3" rx="1" fill="#A8A090" />
           </g>
 
-          {/* Bottom water depth */}
-          <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />
+          {/* Bottom water depth — skipped at night. Its w3 fill at .5 opacity
+              over already-dark water produced a visibly darker band at the
+              bottom 8px of the scene, reading as a seam right above the
+              nameplate. Day palette keeps the depth cue. */}
+          {!isNight && <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />}
 
           {/* & — bold italic serif, fades in then fades out, never returns */}
           <text
