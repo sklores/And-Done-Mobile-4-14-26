@@ -53,7 +53,7 @@ const SKY: Record<TimeOfDay, [string, string, string]> = {
   morning:   ['#6AAED4', '#94CAE0', '#C0E0EE'],
   afternoon: ['#4A90C8', '#78B4D8', '#AADCEE'],
   sundown:   ['#C84828', '#E87840', '#F4A860'],
-  night:     ['#080E1C', '#0C1428', '#101E38'],
+  night:     ['#142042', '#1A2E58', '#243E6E'],
 }
 
 // Extra deep-top color injected as a 4th gradient stop for sundown/dawn
@@ -67,7 +67,7 @@ const HORIZON: Record<TimeOfDay, string> = {
   morning:   '#CCE8F4',
   afternoon: '#C4E4F4',
   sundown:   '#F8C888',
-  night:     '#0E1C30',
+  night:     '#1E3458',
 }
 
 const WATER: Record<TimeOfDay, [string, string, string]> = {
@@ -75,7 +75,7 @@ const WATER: Record<TimeOfDay, [string, string, string]> = {
   morning:   ['#4A9AB8', '#2A7898', '#0E4E6E'],  // clear bright teal-blue
   afternoon: ['#3A8EB8', '#1A6898', '#0A4068'],  // deep clean blue
   sundown:   ['#3A6A8A', '#1A4868', '#0A2848'],  // dusky navy — stays blue
-  night:     ['#0C1828', '#080E18', '#040810'],  // near-black deep blue
+  night:     ['#18304A', '#10243A', '#081828'],  // deep moonlit navy (not pitch black)
 }
 
 const SUN: Record<TimeOfDay, { x: number; y: number; r: number; c: string; g: string; moon: boolean }> = {
@@ -131,7 +131,7 @@ const ROCK_COLORS: Record<TimeOfDay, [string, string, string]> = {
   morning:   ['#545E66', '#424C54', '#323A40'],
   afternoon: ['#545E66', '#424C54', '#323A40'],
   sundown:   ['#4A4440', '#38343A', '#2A2628'],
-  night:     ['#1E2838', '#162030', '#0E1826'],
+  night:     ['#2E3E54', '#243148', '#182238'],
 }
 
 function wAmp(sales: number): number {
@@ -186,6 +186,9 @@ const SCENE_CSS = `
 @keyframes cs-sprayl{0%{opacity:0;transform:translateY(0)}30%{opacity:.5}100%{opacity:0;transform:translateY(-12px) scaleX(1.3)}}
 @keyframes cs-dolphin{0%,22%,100%{transform:translateY(0) rotate(0deg);opacity:0} 7%{transform:translateY(-26px) rotate(-22deg);opacity:1} 14%{transform:translateY(-14px) rotate(12deg);opacity:0.8} 18%{transform:translateY(0) rotate(0deg);opacity:0}}
 @keyframes cs-dolphin2{0%,24%,100%{transform:translateY(0) rotate(0deg);opacity:0} 8%{transform:translateY(-20px) rotate(-18deg);opacity:0.85} 15%{transform:translateY(-8px) rotate(10deg);opacity:0.6} 20%{transform:translateY(0) rotate(0deg);opacity:0}}
+@keyframes cs-jelly{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-6px) scaleY(.88)}}
+@keyframes cs-jelly-drift{0%{transform:translateX(0)}100%{transform:translateX(60px)}}
+@keyframes cs-jelly-pulse{0%,100%{opacity:.45}50%{opacity:.85}}
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 @keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
@@ -438,8 +441,53 @@ function pickSecondary(scores: {
 const AMBIENT_POOL: BoatKey[] = [
   'speedboat', 'jet_ski', 'kayak', 'fishing_boat', 'sailboat', 'yacht',
 ]
-function pickAmbient(): BoatKey {
-  return AMBIENT_POOL[Math.floor(Date.now() / 60000) % AMBIENT_POOL.length]
+// At night the harbor quiets down — only slow, lit boats stay out.
+const NIGHT_POOL: BoatKey[] = ['sailboat', 'fishing_boat', 'yacht']
+function pickAmbient(isNight: boolean): BoatKey {
+  const pool = isNight ? NIGHT_POOL : AMBIENT_POOL
+  return pool[Math.floor(Date.now() / 60000) % pool.length]
+}
+
+// Running-lights overlay (port=red, starboard=green, mast=white) drawn on top
+// of a boat when the scene is at night. Positions are boat-specific so the
+// lights sit where they'd actually be on the real hull/mast.
+function renderRunningLights(key: BoatKey) {
+  // [mast (x, y), port (x, y), starboard (x, y)] — null to skip a slot.
+  const L: Partial<Record<BoatKey, { mast?: [number,number]; port?: [number,number]; stbd?: [number,number] }>> = {
+    sailboat:     { mast: [0, -19], port: [-11, 2],  stbd: [11, 2]  },
+    fishing_boat: { mast: [14, -15], port: [-15, 2], stbd: [15, 2]  },
+    yacht:        { mast: [-2, -14], port: [-16, 0], stbd: [15, 0]  },
+    cruise_ship:  { mast: [14, -22], port: [-34, 2], stbd: [34, 2]  },
+    cargo_freighter: { mast: [26, -30], port: [-30, 2], stbd: [30, 2] },
+    oil_tanker:   { mast: [30, -23], port: [-40, 5], stbd: [40, 5]  },
+    pirate_ship:  { mast: [-6, -24], port: [-18, 6], stbd: [18, 6]  },
+    party_boat:   { mast: [0, -12], port: [-16, 2], stbd: [16, 2]  },
+    speedboat:    { port: [-12, 0], stbd: [14, 0] },
+  }
+  const l = L[key]
+  if (!l) return null
+  return (
+    <g>
+      {l.mast && (
+        <>
+          <circle cx={l.mast[0]} cy={l.mast[1]} r={2.2} fill="#FFF6C0" opacity={.45} />
+          <circle cx={l.mast[0]} cy={l.mast[1]} r={1.1} fill="#FFFFE8" />
+        </>
+      )}
+      {l.port && (
+        <>
+          <circle cx={l.port[0]} cy={l.port[1]} r={1.9} fill="#FF4848" opacity={.38} />
+          <circle cx={l.port[0]} cy={l.port[1]} r={0.9} fill="#FF6666" />
+        </>
+      )}
+      {l.stbd && (
+        <>
+          <circle cx={l.stbd[0]} cy={l.stbd[1]} r={1.9} fill="#38E078" opacity={.38} />
+          <circle cx={l.stbd[0]} cy={l.stbd[1]} r={0.9} fill="#58F090" />
+        </>
+      )}
+    </g>
+  )
 }
 
 const SNOW_FLAKES: [number, number][] = [
@@ -472,15 +520,8 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const cogsScoreT = tiles.find(t => t.key === 'cogs')?.score  ?? 5
   const netProfitScore = netSt?.score ?? 5
 
-  // Boat slot selections (hero/secondary/ambient)
-  const heroBoat      = pickHero(netProfitScore, sales)
-  const secondaryBoat = pickSecondary({
-    labor: laborScore,
-    prime: primeScore,
-    fixed: expScore,
-    cogs:  cogsScoreT,
-  })
-  const ambientBoat   = pickAmbient()
+  // Boat slot selections (hero/secondary/ambient) — computed after `isNight`
+  // is known below so we can swap to a slow lit-boat pool at night.
   const revScore   = tiles.find(t => t.key === 'reviews')?.score  ?? 5
   const socScore   = tiles.find(t => t.key === 'social')?.score   ?? 5
 
@@ -493,6 +534,19 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const isNight   = tod === 'night'
   const isSundown = tod === 'sundown'
   const isDawn    = tod === 'dawn'
+
+  // At night the harbor quiets down — override all three boat slots to the
+  // slow lit-boat pool so speedboats/jet skis don't streak by in the dark.
+  const heroBoat      = isNight ? 'sailboat'
+                                : pickHero(netProfitScore, sales)
+  const secondaryBoat = isNight ? 'fishing_boat'
+                                : pickSecondary({
+                                    labor: laborScore,
+                                    prime: primeScore,
+                                    fixed: expScore,
+                                    cogs:  cogsScoreT,
+                                  })
+  const ambientBoat   = pickAmbient(isNight)
 
   const [s1, s2, s3] = SKY[tod]
   const [w1, w2, w3] = WATER[tod]
@@ -853,12 +907,44 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           ))}
 
+          {/* Bioluminescent jellyfish — night-only. Gentle bob + slow drift +
+              a soft glow pulse. They live deep under the waterline so boats
+              still read as the foreground. */}
+          {isNight && [
+            { x:  62, y: WL + 34, hue: '#6AD0FF', size: 1.0, spd: 3.2, drift: 22, dl: 0.0 },
+            { x: 148, y: WL + 46, hue: '#B088FF', size: 0.85, spd: 3.8, drift: 26, dl: 1.3 },
+            { x: 228, y: WL + 38, hue: '#58E8D8', size: 1.15, spd: 3.4, drift: 30, dl: 0.6 },
+            { x: 304, y: WL + 50, hue: '#FF9AD8', size: 0.9, spd: 4.2, drift: 24, dl: 2.1 },
+          ].map((j, i) => (
+            <g key={`jelly-${i}`}
+               style={{ animation: `cs-jelly-drift ${j.drift}s ease-in-out infinite alternate ${j.dl}s` }}>
+              <g transform={`translate(${j.x}, ${j.y}) scale(${j.size})`}
+                 style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite ${j.dl}s` }}>
+                <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite ${j.dl}s` }}>
+                  {/* Outer glow */}
+                  <ellipse cx={0} cy={0} rx={10} ry={7} fill={j.hue} opacity={.12} />
+                  <ellipse cx={0} cy={0} rx={6.5} ry={4.5} fill={j.hue} opacity={.28} />
+                  {/* Bell */}
+                  <path d={`M-5,0 Q-5,-5 0,-5 Q5,-5 5,0 Q5,1 3,1 Q2,0 1,1 Q0,0 -1,1 Q-2,0 -3,1 Q-5,1 -5,0 Z`}
+                        fill={j.hue} opacity={.72} />
+                  <ellipse cx={-1.3} cy={-2.5} rx={1.2} ry={1.8} fill="#FFFFFF" opacity={.45} />
+                  {/* Tentacles */}
+                  <path d={`M-3,1 Q-3.5,4 -2.8,7 Q-3.2,9 -2.5,11`} stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
+                  <path d={`M-1,1 Q-1.2,5 -.5,8 Q-1.1,10 -.3,12`}  stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
+                  <path d={`M1,1 Q1.2,5 .5,8 Q1.1,10 .3,12`}       stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
+                  <path d={`M3,1 Q3.5,4 2.8,7 Q3.2,9 2.5,11`}      stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
+                </g>
+              </g>
+            </g>
+          ))}
+
           {/* Drifting boats — hero (profit), secondary (worst cost KPI), ambient (rotation) */}
           {/* Ambient — furthest back, rides highest on waterline. Seeded at ~75% across. */}
           <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
             <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
               <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite' }}>
                 {renderBoat(ambientBoat, isNight)}
+                {isNight && renderRunningLights(ambientBoat)}
               </g>
             </g>
           </g>
@@ -868,6 +954,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
               <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite' }}>
                 {renderBoat(heroBoat, isNight)}
+                {isNight && renderRunningLights(heroBoat)}
               </g>
             </g>
           </g>
@@ -877,6 +964,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
               <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite' }}>
                 {renderBoat(secondaryBoat, isNight)}
+                {isNight && renderRunningLights(secondaryBoat)}
               </g>
             </g>
           </g>
