@@ -194,6 +194,16 @@ const SCENE_CSS = `
 @keyframes cs-jet{0%{transform:translateX(-50px)}15%{transform:translateX(430px)}15.01%,100%{transform:translateX(430px)}}
 @keyframes cs-navblink{0%,49%{opacity:1}50%,100%{opacity:0}}
 @keyframes cs-strobe{0%,92%{opacity:0}93%,97%{opacity:1}98%,100%{opacity:0}}
+/* Shooting star: 40s cycle, visible ~2s starting at t=10s (25% of cycle).
+   Jet windows in the same 40s span are 0-3s and 20-23s, so the star's
+   10-12s slot is safely between jet appearances and never overlaps. */
+@keyframes cs-shoot{
+  0%,24.9%     {transform:translate(355px,12px);opacity:0}
+  25%          {transform:translate(355px,12px);opacity:1}
+  29.5%        {transform:translate(25px,100px);opacity:1}
+  30%          {transform:translate(25px,100px);opacity:0}
+  30.01%,100%  {transform:translate(25px,100px);opacity:0}
+}
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 @keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
@@ -840,8 +850,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               style={{ animation: `cs-wind ${1.2+i*.3}s ease-in-out infinite ${i*.4}s` }} />
           ))}
 
-          {/* Balloon — day only. At night the sky gets a passing jet instead
-              (rendered below). Altitude = Reviews score. */}
+          {/* Balloon — day only. At night the hot-air balloon is replaced
+              by a sky lantern drifting upward (rendered below). The jet still
+              crosses its own cycle independently. Altitude = Reviews score. */}
           {!isNight && (
             <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
                opacity={.92}>
@@ -854,6 +865,40 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               <line x1={bx+13} y1={by+34} x2={bx+8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
               <rect x={bx-9} y={by+42} width="18" height="8" rx="2.5" fill="#C09870" />
               <rect x={bx-7} y={by+43} width="14" height="6" rx="2"   fill="#A07848" opacity={.55} />
+            </g>
+          )}
+
+          {/* Sky lantern — night replacement for the balloon. Traditional
+              Chinese paper lantern with a flickering candle. Drifts slowly
+              rightward while rising on a gentle bob. Reviews altitude still
+              drives by so it sits in the same altitude band as the balloon. */}
+          {isNight && (
+            <g style={{ animation: `cs-drift-r 90s linear infinite -20s` }}>
+              <g transform={`translate(0, ${by+20})`}>
+                <g style={{ animation: `cs-balloon 6s ease-in-out infinite` }}>
+                  {/* Warm halo from the candle */}
+                  <ellipse cx={bx} cy={by+6} rx={16} ry={14} fill="#FFC878" opacity={.18} />
+                  <ellipse cx={bx} cy={by+6} rx={10} ry={9}  fill="#FFD890" opacity={.28} />
+                  {/* Paper body — taller oval, warm cream lit from within */}
+                  <path d={`M${bx-8},${by-2} Q${bx-11},${by+6} ${bx-8},${by+14} L${bx+8},${by+14} Q${bx+11},${by+6} ${bx+8},${by-2} Z`}
+                        fill="#FFE3A0" opacity={.92} />
+                  {/* Subtle vertical paper ribs */}
+                  <line x1={bx-4} y1={by-1} x2={bx-4} y2={by+13} stroke="#C89460" strokeWidth={.4} opacity={.5} />
+                  <line x1={bx}   y1={by-2} x2={bx}   y2={by+14} stroke="#C89460" strokeWidth={.4} opacity={.5} />
+                  <line x1={bx+4} y1={by-1} x2={bx+4} y2={by+13} stroke="#C89460" strokeWidth={.4} opacity={.5} />
+                  {/* Top + bottom rims */}
+                  <rect x={bx-8} y={by-3} width={16} height={2} rx={1} fill="#B0743A" />
+                  <rect x={bx-8} y={by+13} width={16} height={2} rx={1} fill="#B0743A" />
+                  {/* Candle flame — flickers */}
+                  <g style={{ animation: `cs-jelly-pulse 1.1s ease-in-out infinite` }}>
+                    <ellipse cx={bx} cy={by+10} rx={1.6} ry={2.6} fill="#FFE080" />
+                    <ellipse cx={bx} cy={by+10} rx={.9} ry={1.7}  fill="#FFFCD8" />
+                  </g>
+                  {/* Tiny tail strings */}
+                  <line x1={bx-4} y1={by+15} x2={bx-5} y2={by+19} stroke="#8A6A40" strokeWidth={.5} />
+                  <line x1={bx+4} y1={by+15} x2={bx+5} y2={by+19} stroke="#8A6A40" strokeWidth={.5} />
+                </g>
+              </g>
             </g>
           )}
 
@@ -888,6 +933,30 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                 <circle cx={-8} cy={-1.8} r={1.2} fill="#FFFFFF" opacity={.5}
                         style={{ animation: 'cs-strobe 1.8s steps(1,end) infinite' }} />
               </g>
+            </g>
+          )}
+
+          {/* Shooting star — night-only. Streaks diagonally top-right → bottom-left
+              once every 40s. The 2-second visible window (t=10s..12s of the
+              cycle) is timed to never collide with the jet's 20s cycle
+              (visible at t=0..3s and t=20..23s within any 40s span). */}
+          {isNight && (
+            <g style={{ animation: 'cs-shoot 40s linear infinite' }}>
+              {/* The star is drawn with head at (0,0) and trail extending up
+                  and to the right (+x, -y) so it reads as "already fallen
+                  from there" while the group travels down-left. */}
+              {/* Outer soft glow */}
+              <ellipse cx={0} cy={0} rx={3.5} ry={2.2} fill="#FFFFFF" opacity={.35} />
+              {/* Tapered trail */}
+              <path d="M0,0 L6,-1.4 L12,-2.6 L18,-3.8"
+                    stroke="#E8EFFF" strokeWidth={1.6} strokeLinecap="round"
+                    fill="none" opacity={.85} />
+              <path d="M2,-.4 L10,-2.2 L22,-4.6"
+                    stroke="#BCC8E8" strokeWidth={.8} strokeLinecap="round"
+                    fill="none" opacity={.55} />
+              {/* Bright head */}
+              <circle cx={0} cy={0} r={1.6} fill="#FFFFFF" />
+              <circle cx={0} cy={0} r={.7}  fill="#F4F8FF" />
             </g>
           )}
 
@@ -958,9 +1027,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
           {isNight && [
             // dir=r drifts L→R, dir=l drifts R→L. Long cycle + negative
             // delay means each jelly enters the scene at a different time.
-            { y: 178, hue: '#6AD0FF', size: 1.3,  spd: 3.2, dir: 'r', dur: 48, dl: -8  },
-            { y: 188, hue: '#B088FF', size: 1.1,  spd: 3.8, dir: 'l', dur: 62, dl: -26 },
-            { y: 182, hue: '#58E8D8', size: 1.45, spd: 3.4, dir: 'r', dur: 54, dl: -40 },
+            { y: 178, hue: '#6AD0FF', size: 0.78, spd: 3.2, dir: 'r', dur: 48, dl: -8  },
+            { y: 188, hue: '#B088FF', size: 0.66, spd: 3.8, dir: 'l', dur: 62, dl: -26 },
+            { y: 182, hue: '#58E8D8', size: 0.87, spd: 3.4, dir: 'r', dur: 54, dl: -40 },
           ].map((j, i) => (
             // NB: SVG `transform=` and CSS `transform` on the same element
             // don't compose — CSS wins and drops the SVG attr. So we split

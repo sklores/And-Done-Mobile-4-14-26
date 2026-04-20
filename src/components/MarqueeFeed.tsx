@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { coastal, tileForScore } from "../theme/skins";
 import { FEED_SCORES } from "../data/feedScores";
+import { useIsDusky } from "../hooks/useTimeOfDay";
 
 export type FeedKey = "reviews" | "bank" | "social" | "events";
 
@@ -43,6 +44,14 @@ type Props = {
 };
 
 export function MarqueeFeed({ onLongPress }: Props) {
+  // At night the tan driftwood border + pale bg reads as a bright "blue
+  // bar" above the tab bar (the saturation filter applied to this chrome
+  // section turns the tan into a grey-blue stripe). Swap to the deep
+  // ocean colors so the marquee blends into the nocturnal palette.
+  const isDusky = useIsDusky();
+  const marqueeBorder = isDusky ? "#10243A" : "#C4B090";
+  const marqueeBg     = isDusky ? "#081828" : coastal.marquee.bg;
+  const marqueeText   = isDusky ? "#D8E0F0" : coastal.marquee.text;
   const [active, setActive] = useState<Record<FeedKey, boolean>>({
     reviews: true,
     bank:    true,
@@ -168,11 +177,12 @@ export function MarqueeFeed({ onLongPress }: Props) {
       {/* Scrolling text — framed in driftwood, same width as KpiBar */}
       <div style={{
         margin: "8px 10px 0",
-        border: "3px solid #C4B090",
+        border: `3px solid ${marqueeBorder}`,
         borderRadius: 10,
         overflow: "hidden",
         boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
-        background: coastal.marquee.bg,
+        background: marqueeBg,
+        transition: "background 1.2s ease, border-color 1.2s ease",
       }}>
         <div
           ref={viewportRef}
@@ -183,7 +193,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
           style={{
             overflow: "hidden",
             padding: "8px 0",
-            color: coastal.marquee.text,
+            color: marqueeText,
             fontSize: 12,
             fontWeight: 500,
             cursor: "grab",
