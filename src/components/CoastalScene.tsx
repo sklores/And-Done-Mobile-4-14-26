@@ -916,11 +916,15 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             { x: 168, y: 188, hue: '#B088FF', size: 1.1, spd: 3.8, drift: 22, dl: 1.3 },
             { x: 260, y: 182, hue: '#58E8D8', size: 1.45, spd: 3.4, drift: 26, dl: 0.6 },
           ].map((j, i) => (
-            <g key={`jelly-${i}`}
-               style={{ animation: `cs-jelly-drift ${j.drift}s ease-in-out infinite alternate ${j.dl}s` }}>
-              <g transform={`translate(${j.x}, ${j.y}) scale(${j.size})`}
-                 style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite ${j.dl}s` }}>
-                <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite ${j.dl}s` }}>
+            // NB: SVG `transform=` attribute and CSS `transform` on the same
+            // element don't compose — CSS wins and clobbers the position.
+            // We split static position (SVG attr) from the animations (CSS)
+            // onto separate nested <g>s so they compose correctly.
+            <g key={`jelly-${i}`} transform={`translate(${j.x}, ${j.y})`}>
+              <g style={{ animation: `cs-jelly-drift ${j.drift}s ease-in-out infinite alternate ${j.dl}s` }}>
+                <g transform={`scale(${j.size})`}>
+                  <g style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite ${j.dl}s` }}>
+                    <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite ${j.dl}s` }}>
                   {/* Outer halo glow so it reads against dark water */}
                   <ellipse cx={0} cy={0} rx={14} ry={10} fill={j.hue} opacity={.18} />
                   <ellipse cx={0} cy={0} rx={9} ry={6.5} fill={j.hue} opacity={.35} />
@@ -934,7 +938,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                   <path d={`M-2,1 Q-2.3,6 -1.2,10 Q-2.2,14 -1.1,18`} stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
                   <path d={`M0,1 Q.3,6 -.2,10 Q.5,14 -.2,18`}         stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
                   <path d={`M2,1 Q2.3,6 1.2,10 Q2.2,14 1.1,18`}       stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
-                  <path d={`M4,1 Q4.6,5 3.6,9 Q4.4,13 3.3,17`}        stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                      <path d={`M4,1 Q4.6,5 3.6,9 Q4.4,13 3.3,17`}        stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                    </g>
+                  </g>
                 </g>
               </g>
             </g>
