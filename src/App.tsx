@@ -195,11 +195,12 @@ export default function App() {
   const isDusky = useIsDusky();
   const pageBg  = isDusky ? "#1E1A17" : coastal.pageBg;
   const phoneBg = isNight ? "#1E1A17" : isDusky ? "#2A2320" : coastal.phoneBg;
-  // Filter strength — sundown gets a tiny dim, full night gets the real one.
+  // Filter strength — sundown gets a modest dim, full night goes hard so the
+  // pastel tiles stop yelling against the dark scene.
   const chromeFilter = isNight
-    ? "brightness(0.78) saturate(0.72)"
+    ? "brightness(0.48) saturate(0.55)"
     : isDusky
-      ? "brightness(0.9)  saturate(0.85)"
+      ? "brightness(0.72) saturate(0.78)"
       : undefined;
 
   return (
