@@ -296,12 +296,12 @@ export default function App() {
             <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
               style={isDusky ? {
-                // DIAGNOSTIC: hot pink + hard-force every layering prop.
-                // If the strip under the scene is pink, this is the right
-                // element and we swap the color. If it's still dark, the
-                // strip comes from an overlay/pseudo we haven't located.
-                background: "#FF00FF",
-                backgroundColor: "#FF00FF",
+                // Hot-pink diagnostic confirmed this is the nameplate row.
+                // Now painted ocean blue (sampled from the live scene) and
+                // all layering props hard-forced so no wrapper / overlay /
+                // pseudo can leak a different dark over it.
+                background: "#132437",
+                backgroundColor: "#132437",
                 backgroundImage: "none",
                 color: namePlateText,
                 fontSize: 12,
