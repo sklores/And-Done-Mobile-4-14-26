@@ -44,15 +44,62 @@ export function useTimeOfDay(): TimeOfDay {
   return tod;
 }
 
-/** True after sundown-proper (the blue hour has ended) through dawn. */
-export function useIsNight(): boolean {
-  const tod = useTimeOfDay();
-  return tod === "night";
+// The scene palette (sky gradient, sun/moon) stays driven by the 5-label
+// getTimeOfDay() above — don't touch that. The chrome-dimming booleans
+// below are intentionally decoupled so they can be tuned independently
+// of the sky-palette phases.
+//
+// Desired chrome timing:
+//   isDusky → starts 30 min after sunset (UI goes dark)
+//   isNight → starts  1 hr after isDusky (= sunset + 1.5 h; scene goes
+//             fully nocturnal: moon/stars/jellyfish, no sharks, etc.)
+// Both remain true through the rest of the night until dawn
+// (sunrise - 1 hr, matching the getTimeOfDay "dawn" window).
+
+function hoursAfterSunsetBoundaries(d = new Date()): { afterSunset: boolean; duskStart: number; nightStart: number; dawnEnd: number; h: number } {
+  const h = d.getHours() + d.getMinutes() / 60;
+  const { sunrise, sunset } = sunTimes(d);
+  return {
+    afterSunset: h >= sunset,
+    duskStart:  sunset + 0.5,
+    nightStart: sunset + 1.5,
+    dawnEnd:    sunrise - 1,
+    h,
+  };
 }
 
-/** True from sundown onward through the full night — for when you want
- *  the UI to start dimming earlier, as the sky is already going orange. */
+/** True once the scene has fully committed to night (sunset + 1.5h)
+ *  through the end of dawn (sunrise - 1h). */
+export function useIsNight(): boolean {
+  const [flag, setFlag] = useState<boolean>(() => isNightNow());
+  useEffect(() => {
+    const id = setInterval(() => setFlag(isNightNow()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return flag;
+}
+
+function isNightNow(d = new Date()): boolean {
+  const { h, nightStart, dawnEnd } = hoursAfterSunsetBoundaries(d);
+  // Night runs from nightStart (past 24h counts) through dawnEnd the
+  // next morning. Since nightStart > dawnEnd in a 0–24 frame, the
+  // correct test is: h >= nightStart OR h < dawnEnd.
+  return h >= nightStart || h < dawnEnd;
+}
+
+/** True from 30 min after sunset through end of dawn — the chrome starts
+ *  dimming here, even though the scene still shows a sundown sky until
+ *  isNight kicks in an hour later. */
 export function useIsDusky(): boolean {
-  const tod = useTimeOfDay();
-  return tod === "sundown" || tod === "night";
+  const [flag, setFlag] = useState<boolean>(() => isDuskyNow());
+  useEffect(() => {
+    const id = setInterval(() => setFlag(isDuskyNow()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return flag;
+}
+
+function isDuskyNow(d = new Date()): boolean {
+  const { h, duskStart, dawnEnd } = hoursAfterSunsetBoundaries(d);
+  return h >= duskStart || h < dawnEnd;
 }
