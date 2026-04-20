@@ -190,6 +190,10 @@ const SCENE_CSS = `
 @keyframes cs-jelly-drift{0%{transform:translateX(0)}100%{transform:translateX(60px)}}
 @keyframes cs-jelly-pulse{0%,100%{opacity:.45}50%{opacity:.85}}
 @keyframes cs-flicker{0%,100%{opacity:var(--f,1)}22%{opacity:.82}44%{opacity:1}60%{opacity:.7}78%{opacity:.95}}
+/* Jet: offscreen L → sweeps across in first 15% of cycle → stays offscreen R the remaining 85% so it reappears roughly every 20s. */
+@keyframes cs-jet{0%{transform:translateX(-50px)}15%{transform:translateX(430px)}15.01%,100%{transform:translateX(430px)}}
+@keyframes cs-navblink{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes cs-strobe{0%,92%{opacity:0}93%,97%{opacity:1}98%,100%{opacity:0}}
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 @keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
@@ -836,10 +840,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               style={{ animation: `cs-wind ${1.2+i*.3}s ease-in-out infinite ${i*.4}s` }} />
           ))}
 
-          {/* Balloon (day) / Sky lantern (night) — altitude = Reviews score.
-              Day: reviews-palette colored balloon.
-              Night: warm paper lantern with a flickering candle glow. */}
-          {!isNight ? (
+          {/* Balloon — day only. At night the sky gets a passing jet instead
+              (rendered below). Altitude = Reviews score. */}
+          {!isNight && (
             <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
                opacity={.92}>
               <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill={balloonBody} />
@@ -852,39 +855,42 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               <rect x={bx-9} y={by+42} width="18" height="8" rx="2.5" fill="#C09870" />
               <rect x={bx-7} y={by+43} width="14" height="6" rx="2"   fill="#A07848" opacity={.55} />
             </g>
-          ) : (
-            <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}>
-              {/* Warm ambient halo — the paper glows from the candle inside */}
-              <ellipse cx={bx} cy={by+16} rx="32" ry="26" fill="#FFB060" opacity={.10}
-                       style={{ animation: 'cs-flicker 2.4s ease-in-out infinite' }} />
-              <ellipse cx={bx} cy={by+16} rx="22" ry="18" fill="#FFC878" opacity={.18}
-                       style={{ animation: 'cs-flicker 1.7s ease-in-out infinite .3s' }} />
-              {/* Lantern body — rice-paper trapezoid, warmer at bottom near candle */}
-              <defs>
-                <linearGradient id={`cs-lantern-${Math.round(bx)}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stopColor="#F4D890" />
-                  <stop offset="55%"  stopColor="#F8C066" />
-                  <stop offset="100%" stopColor="#FFA040" />
-                </linearGradient>
-              </defs>
-              <path d={`M${bx-11},${by-2} L${bx+11},${by-2} L${bx+13},${by+26} L${bx-13},${by+26} Z`}
-                    fill={`url(#cs-lantern-${Math.round(bx)})`} opacity={.92} />
-              {/* Vertical paper ribs */}
-              <line x1={bx-7} y1={by-1} x2={bx-8}  y2={by+25} stroke="#C88828" strokeWidth={.5} opacity={.5} />
-              <line x1={bx}   y1={by-2} x2={bx}    y2={by+26} stroke="#C88828" strokeWidth={.5} opacity={.5} />
-              <line x1={bx+7} y1={by-1} x2={bx+8}  y2={by+25} stroke="#C88828" strokeWidth={.5} opacity={.5} />
-              {/* Top + bottom bamboo rings */}
-              <ellipse cx={bx} cy={by-2}  rx="11" ry="2" fill="#8A5A20" opacity={.8} />
-              <ellipse cx={bx} cy={by+26} rx="13" ry="2" fill="#8A5A20" opacity={.8} />
-              {/* Suspension strings + tiny top loop */}
-              <line x1={bx-11} y1={by-2} x2={bx-3} y2={by-10} stroke="#6A4818" strokeWidth={.6} />
-              <line x1={bx+11} y1={by-2} x2={bx+3} y2={by-10} stroke="#6A4818" strokeWidth={.6} />
-              <circle cx={bx} cy={by-11} r="1.4" fill="none" stroke="#6A4818" strokeWidth={.6} />
-              {/* Candle glow inside — small bright core, flickering */}
-              <ellipse cx={bx} cy={by+20} rx="5" ry="3.5" fill="#FFE8A8" opacity={.75}
-                       style={{ animation: 'cs-flicker 1.1s ease-in-out infinite' }} />
-              <circle cx={bx} cy={by+20} r="1.6" fill="#FFFFE8"
-                       style={{ animation: 'cs-flicker 0.7s ease-in-out infinite .15s' }} />
+          )}
+
+          {/* Night jet — crosses the sky once every 20s with blinking nav
+              lights. Invisible for ~17s of every 20s cycle. Cruising
+              altitude y=38, travels L→R. */}
+          {isNight && (
+            <g style={{ animation: 'cs-jet 20s linear infinite' }}>
+              <g transform="translate(0, 38)">
+                {/* Short contrail behind the jet */}
+                <path d="M-22,0 Q-12,-.5 -4,0" stroke="#DDE4F0" strokeWidth={1.6}
+                      fill="none" opacity={.4} strokeLinecap="round" />
+                <path d="M-30,0 Q-20,.4 -12,0" stroke="#DDE4F0" strokeWidth={1.1}
+                      fill="none" opacity={.22} strokeLinecap="round" />
+                {/* Fuselage */}
+                <ellipse cx={0} cy={0} rx={10} ry={1.6} fill="#D8DCE4" />
+                {/* Swept wings */}
+                <path d="M-2,-.5 L4,-5 L8,-4 L2,.5 Z"   fill="#B8BEC8" />
+                <path d="M-2,.5  L4,5  L8,4  L2,-.5 Z"  fill="#98A0AC" />
+                {/* Tail fin */}
+                <path d="M-9,-.5 L-7,-3 L-5,-.5 Z" fill="#B8BEC8" />
+                {/* Nose highlight */}
+                <ellipse cx={8} cy={-.3} rx={2} ry={1} fill="#ECEFF4" opacity={.85} />
+                {/* Red port nav light (blinking) — left wing */}
+                <circle cx={5} cy={-4.5} r={1.4} fill="#FF3030" opacity={.4}
+                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite' }} />
+                <circle cx={5} cy={-4.5} r={.7} fill="#FF6060"
+                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite' }} />
+                {/* Green starboard nav light (blinking, offset) — right wing */}
+                <circle cx={5} cy={4.5} r={1.4} fill="#30FF70" opacity={.4}
+                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite .6s' }} />
+                <circle cx={5} cy={4.5} r={.7} fill="#70FFA0"
+                        style={{ animation: 'cs-navblink 1.2s steps(1,end) infinite .6s' }} />
+                {/* White strobe on top (fast blink) */}
+                <circle cx={-8} cy={-1.8} r={1.2} fill="#FFFFFF" opacity={.5}
+                        style={{ animation: 'cs-strobe 1.8s steps(1,end) infinite' }} />
+              </g>
             </g>
           )}
 
