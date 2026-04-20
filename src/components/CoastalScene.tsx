@@ -915,20 +915,22 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
                       fill="none" opacity={.22} strokeLinecap="round" />
                 {/* Fuselage */}
                 <ellipse cx={0} cy={0} rx={10} ry={1.6} fill="#D8DCE4" />
-                {/* Swept wings */}
-                <path d="M-2,-.5 L4,-5 L8,-4 L2,.5 Z"   fill="#B8BEC8" />
-                <path d="M-2,.5  L4,5  L8,4  L2,-.5 Z"  fill="#98A0AC" />
+                {/* Swept wings — jet flies L→R (nose at +x), so the wings
+                    sweep back toward the tail (-x). Wing root near center,
+                    wingtip trails behind. */}
+                <path d="M2,-.5 L-3,-5 L-7,-4 L-2,.5 Z"  fill="#B8BEC8" />
+                <path d="M2,.5  L-3,5  L-7,4  L-2,-.5 Z" fill="#98A0AC" />
                 {/* Tail fin */}
                 <path d="M-9,-.5 L-7,-3 L-5,-.5 Z" fill="#B8BEC8" />
                 {/* Nose highlight */}
                 <ellipse cx={8} cy={-.3} rx={2} ry={1} fill="#ECEFF4" opacity={.85} />
-                {/* Red port nav light — steady (on real aircraft these
-                    don't blink; only the anti-collision strobe does) */}
-                <circle cx={5} cy={-4.5} r={1.4} fill="#FF3030" opacity={.4} />
-                <circle cx={5} cy={-4.5} r={.7} fill="#FF6060" />
-                {/* Green starboard nav light — steady */}
-                <circle cx={5} cy={4.5} r={1.4} fill="#30FF70" opacity={.4} />
-                <circle cx={5} cy={4.5} r={.7} fill="#70FFA0" />
+                {/* Red port nav light — on the port wingtip (now swept back).
+                    Real aircraft nav lights are steady; only the strobe blinks. */}
+                <circle cx={-7} cy={-4.5} r={1.4} fill="#FF3030" opacity={.4} />
+                <circle cx={-7} cy={-4.5} r={.7} fill="#FF6060" />
+                {/* Green starboard nav light — starboard wingtip */}
+                <circle cx={-7} cy={4.5} r={1.4} fill="#30FF70" opacity={.4} />
+                <circle cx={-7} cy={4.5} r={.7} fill="#70FFA0" />
                 {/* White anti-collision strobe on top (only thing that blinks) */}
                 <circle cx={-8} cy={-1.8} r={1.2} fill="#FFFFFF" opacity={.5}
                         style={{ animation: 'cs-strobe 1.8s steps(1,end) infinite' }} />
