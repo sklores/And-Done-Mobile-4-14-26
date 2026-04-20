@@ -202,7 +202,13 @@ export default function App() {
     : isDusky
       ? "brightness(0.72) saturate(0.78)"
       : undefined;
-  // Scene frame + nameplate + bottom-tab bar all share one tan color during
+  // Nameplate row (under the scene image) bleeds into the water at night
+  // so there's no visible "footer strip" between the scene and the KPI
+  // chrome. Matches WATER[night][1] (#10243A) from CoastalScene — the
+  // mid-band water color — so the seam disappears into the ocean.
+  const namePlateBg = isDusky ? "#10243A" : "#C4B090";
+  // Scene frame + bottom-tab bar share one dark color at night so the
+  // chrome reads as a single frame; the nameplate no longer matches.
   // the day and swap to a dark walnut after sundown so they stop glowing.
   const frameColor     = isDusky ? "#1A2438" : "#C4B090";
   const frameSeamColor = isDusky ? "#101828" : "#A89070";
@@ -276,7 +282,9 @@ export default function App() {
               borderTop: `6px solid ${frameColor}`,
               borderLeft: `6px solid ${frameColor}`,
               borderRight: `6px solid ${frameColor}`,
-              borderBottom: `3px solid ${frameColor}`,
+              // At night the bottom lip of the frame matches the nameplate
+              // so there's no extra strip below the ocean-colored footer.
+              borderBottom: `3px solid ${isDusky ? namePlateBg : frameColor}`,
               borderRadius: 8,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               overflow: "hidden",
@@ -287,7 +295,7 @@ export default function App() {
             <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
               style={{
-                background: frameColor,
+                background: namePlateBg,
                 color: namePlateText,
                 fontSize: 12,
                 fontWeight: 700,
@@ -295,7 +303,11 @@ export default function App() {
                 display: "flex",
                 justifyContent: "space-between",
                 letterSpacing: ".06em",
-                borderTop: `1px solid ${frameSeamColor}`,
+                // No seam at night — the ocean-colored nameplate needs to
+                // bleed into the water with no visible divider.
+                borderTop: isDusky ? "none" : `1px solid ${frameSeamColor}`,
+                boxShadow: "none",
+                transition: "background 1.2s ease",
               }}
             >
               <span>{businessName}</span>
