@@ -189,6 +189,7 @@ const SCENE_CSS = `
 @keyframes cs-jelly{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-6px) scaleY(.88)}}
 @keyframes cs-jelly-drift{0%{transform:translateX(0)}100%{transform:translateX(60px)}}
 @keyframes cs-jelly-pulse{0%,100%{opacity:.45}50%{opacity:.85}}
+@keyframes cs-flicker{0%,100%{opacity:var(--f,1)}22%{opacity:.82}44%{opacity:1}60%{opacity:.7}78%{opacity:.95}}
 @keyframes cs-amp-fade{0%{opacity:0}15%{opacity:0.92}65%{opacity:0.92}100%{opacity:0}}
 @keyframes cs-drift-r{0%{transform:translateX(-110px)}100%{transform:translateX(470px)}}
 @keyframes cs-drift-l{0%{transform:translateX(470px)}100%{transform:translateX(-110px)}}
@@ -835,19 +836,57 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               style={{ animation: `cs-wind ${1.2+i*.3}s ease-in-out infinite ${i*.4}s` }} />
           ))}
 
-          {/* Balloon — altitude = Reviews score, color = Reviews chip color */}
-          <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
-             opacity={isNight ? .82 : .92}>
-            <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill={balloonBody} />
-            <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill={balloonShade} opacity={.32} />
-            <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill={balloonShade} opacity={.48} />
-            <line x1={bx-19} y1={by+13} x2={bx+19} y2={by+13} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
-            <line x1={bx}    y1={by-9}  x2={bx}    y2={by+36} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
-            <line x1={bx-13} y1={by+34} x2={bx-8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
-            <line x1={bx+13} y1={by+34} x2={bx+8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
-            <rect x={bx-9} y={by+42} width="18" height="8" rx="2.5" fill="#C09870" />
-            <rect x={bx-7} y={by+43} width="14" height="6" rx="2"   fill="#A07848" opacity={.55} />
-          </g>
+          {/* Balloon (day) / Sky lantern (night) — altitude = Reviews score.
+              Day: reviews-palette colored balloon.
+              Night: warm paper lantern with a flickering candle glow. */}
+          {!isNight ? (
+            <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}
+               opacity={.92}>
+              <ellipse cx={bx}    cy={by+13} rx="19" ry="23" fill={balloonBody} />
+              <path d={`M${bx-19},${by+13} Q${bx},${by-11} ${bx+19},${by+13}`} fill={balloonShade} opacity={.32} />
+              <path d={`M${bx-19},${by+13} Q${bx},${by+37} ${bx+19},${by+13}`} fill={balloonShade} opacity={.48} />
+              <line x1={bx-19} y1={by+13} x2={bx+19} y2={by+13} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
+              <line x1={bx}    y1={by-9}  x2={bx}    y2={by+36} stroke="rgba(44,58,53,0.18)" strokeWidth={.7} />
+              <line x1={bx-13} y1={by+34} x2={bx-8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
+              <line x1={bx+13} y1={by+34} x2={bx+8}  y2={by+42} stroke="#8A7A60" strokeWidth={.9} />
+              <rect x={bx-9} y={by+42} width="18" height="8" rx="2.5" fill="#C09870" />
+              <rect x={bx-7} y={by+43} width="14" height="6" rx="2"   fill="#A07848" opacity={.55} />
+            </g>
+          ) : (
+            <g style={{ animation: `cs-balloon 5s ease-in-out infinite`, transformOrigin: `${bx}px ${by+28}px` }}>
+              {/* Warm ambient halo — the paper glows from the candle inside */}
+              <ellipse cx={bx} cy={by+16} rx="32" ry="26" fill="#FFB060" opacity={.10}
+                       style={{ animation: 'cs-flicker 2.4s ease-in-out infinite' }} />
+              <ellipse cx={bx} cy={by+16} rx="22" ry="18" fill="#FFC878" opacity={.18}
+                       style={{ animation: 'cs-flicker 1.7s ease-in-out infinite .3s' }} />
+              {/* Lantern body — rice-paper trapezoid, warmer at bottom near candle */}
+              <defs>
+                <linearGradient id={`cs-lantern-${Math.round(bx)}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor="#F4D890" />
+                  <stop offset="55%"  stopColor="#F8C066" />
+                  <stop offset="100%" stopColor="#FFA040" />
+                </linearGradient>
+              </defs>
+              <path d={`M${bx-11},${by-2} L${bx+11},${by-2} L${bx+13},${by+26} L${bx-13},${by+26} Z`}
+                    fill={`url(#cs-lantern-${Math.round(bx)})`} opacity={.92} />
+              {/* Vertical paper ribs */}
+              <line x1={bx-7} y1={by-1} x2={bx-8}  y2={by+25} stroke="#C88828" strokeWidth={.5} opacity={.5} />
+              <line x1={bx}   y1={by-2} x2={bx}    y2={by+26} stroke="#C88828" strokeWidth={.5} opacity={.5} />
+              <line x1={bx+7} y1={by-1} x2={bx+8}  y2={by+25} stroke="#C88828" strokeWidth={.5} opacity={.5} />
+              {/* Top + bottom bamboo rings */}
+              <ellipse cx={bx} cy={by-2}  rx="11" ry="2" fill="#8A5A20" opacity={.8} />
+              <ellipse cx={bx} cy={by+26} rx="13" ry="2" fill="#8A5A20" opacity={.8} />
+              {/* Suspension strings + tiny top loop */}
+              <line x1={bx-11} y1={by-2} x2={bx-3} y2={by-10} stroke="#6A4818" strokeWidth={.6} />
+              <line x1={bx+11} y1={by-2} x2={bx+3} y2={by-10} stroke="#6A4818" strokeWidth={.6} />
+              <circle cx={bx} cy={by-11} r="1.4" fill="none" stroke="#6A4818" strokeWidth={.6} />
+              {/* Candle glow inside — small bright core, flickering */}
+              <ellipse cx={bx} cy={by+20} rx="5" ry="3.5" fill="#FFE8A8" opacity={.75}
+                       style={{ animation: 'cs-flicker 1.1s ease-in-out infinite' }} />
+              <circle cx={bx} cy={by+20} r="1.6" fill="#FFFFE8"
+                       style={{ animation: 'cs-flicker 0.7s ease-in-out infinite .15s' }} />
+            </g>
+          )}
 
           {/* Birds — Labor score: 3 (good/low labor) → 20 (bad/high labor) */}
           {BIRD_SLOTS.slice(0, birdCount).map((b, i) => (
@@ -857,8 +896,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           ))}
 
-          {/* Horizon haze */}
-          <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />
+          {/* Horizon haze — skipped at night (it read as a random blue bar
+              against the dark sky/water; nothing to see there after dusk). */}
+          {!isNight && <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />}
 
           {/* Reef rock (drawn before water so water covers underwater portion) */}
           <path d={`M12,200 L12,${WL} L18,${WL-1} L24,${WL-1} L30,${WL-2} L38,${WL-2} L44,${WL-2} L52,${WL-2} L60,${WL-2} L66,${WL-1} L72,${WL-1} L78,${WL-1} L84,${WL} L90,${WL-1} L94,${WL} L94,200Z`} fill={rC} />
