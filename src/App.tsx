@@ -202,6 +202,11 @@ export default function App() {
     : isDusky
       ? "brightness(0.72) saturate(0.78)"
       : undefined;
+  // Scene frame + nameplate + bottom-tab bar all share one tan color during
+  // the day and swap to a dark walnut after sundown so they stop glowing.
+  const frameColor     = isDusky ? "#3A2E24" : "#C4B090";
+  const frameSeamColor = isDusky ? "#2A2018" : "#A89070";
+  const namePlateText  = isDusky ? "#E0D4BC" : "#3A2A10";
 
   return (
     <div
@@ -268,29 +273,29 @@ export default function App() {
           <div
             style={{
               margin: "8px 12px 0",
-              borderTop: "6px solid #C4B090",
-              borderLeft: "6px solid #C4B090",
-              borderRight: "6px solid #C4B090",
-              borderBottom: "3px solid #C4B090",
+              borderTop: `6px solid ${frameColor}`,
+              borderLeft: `6px solid ${frameColor}`,
+              borderRight: `6px solid ${frameColor}`,
+              borderBottom: `3px solid ${frameColor}`,
               borderRadius: 8,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               overflow: "hidden",
-              background: "#C4B090",
+              background: frameColor,
               flexShrink: 0,
             }}
           >
             <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
               style={{
-                background: "#C4B090",
-                color: "#3A2A10",
+                background: frameColor,
+                color: namePlateText,
                 fontSize: 12,
                 fontWeight: 700,
                 padding: "7px 12px",
                 display: "flex",
                 justifyContent: "space-between",
                 letterSpacing: ".06em",
-                borderTop: "1px solid #A89070",
+                borderTop: `1px solid ${frameSeamColor}`,
               }}
             >
               <span>{businessName}</span>
@@ -345,7 +350,7 @@ export default function App() {
         </div>{/* end scroll container */}
         </div>{/* end relative wrapper */}
 
-        <BottomTabs onOpen={setOpenTab} />
+        <BottomTabs onOpen={setOpenTab} bg={frameColor} textColor={namePlateText} />
       </div>
 
       {/* ── KPI drill-down modals ───────────────────── */}

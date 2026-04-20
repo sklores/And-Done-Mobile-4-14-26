@@ -907,32 +907,34 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           ))}
 
-          {/* Bioluminescent jellyfish — night-only. Gentle bob + slow drift +
-              a soft glow pulse. They live deep under the waterline so boats
-              still read as the foreground. */}
+          {/* Bioluminescent jellyfish — night-only. Parked deep in the water
+              column (viewBox is 200 tall, waves live WL..WL+18) so they sit
+              below the wave troughs but well above the bottom edge. Bigger
+              and more opaque than the first pass so they actually read. */}
           {isNight && [
-            { x:  62, y: WL + 34, hue: '#6AD0FF', size: 1.0, spd: 3.2, drift: 22, dl: 0.0 },
-            { x: 148, y: WL + 46, hue: '#B088FF', size: 0.85, spd: 3.8, drift: 26, dl: 1.3 },
-            { x: 228, y: WL + 38, hue: '#58E8D8', size: 1.15, spd: 3.4, drift: 30, dl: 0.6 },
-            { x: 304, y: WL + 50, hue: '#FF9AD8', size: 0.9, spd: 4.2, drift: 24, dl: 2.1 },
+            { x:  78, y: 178, hue: '#6AD0FF', size: 1.3, spd: 3.2, drift: 18, dl: 0.0 },
+            { x: 168, y: 188, hue: '#B088FF', size: 1.1, spd: 3.8, drift: 22, dl: 1.3 },
+            { x: 260, y: 182, hue: '#58E8D8', size: 1.45, spd: 3.4, drift: 26, dl: 0.6 },
           ].map((j, i) => (
             <g key={`jelly-${i}`}
                style={{ animation: `cs-jelly-drift ${j.drift}s ease-in-out infinite alternate ${j.dl}s` }}>
               <g transform={`translate(${j.x}, ${j.y}) scale(${j.size})`}
                  style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite ${j.dl}s` }}>
                 <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite ${j.dl}s` }}>
-                  {/* Outer glow */}
-                  <ellipse cx={0} cy={0} rx={10} ry={7} fill={j.hue} opacity={.12} />
-                  <ellipse cx={0} cy={0} rx={6.5} ry={4.5} fill={j.hue} opacity={.28} />
-                  {/* Bell */}
-                  <path d={`M-5,0 Q-5,-5 0,-5 Q5,-5 5,0 Q5,1 3,1 Q2,0 1,1 Q0,0 -1,1 Q-2,0 -3,1 Q-5,1 -5,0 Z`}
-                        fill={j.hue} opacity={.72} />
-                  <ellipse cx={-1.3} cy={-2.5} rx={1.2} ry={1.8} fill="#FFFFFF" opacity={.45} />
-                  {/* Tentacles */}
-                  <path d={`M-3,1 Q-3.5,4 -2.8,7 Q-3.2,9 -2.5,11`} stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
-                  <path d={`M-1,1 Q-1.2,5 -.5,8 Q-1.1,10 -.3,12`}  stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
-                  <path d={`M1,1 Q1.2,5 .5,8 Q1.1,10 .3,12`}       stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
-                  <path d={`M3,1 Q3.5,4 2.8,7 Q3.2,9 2.5,11`}      stroke={j.hue} strokeWidth={.6} fill="none" opacity={.55} />
+                  {/* Outer halo glow so it reads against dark water */}
+                  <ellipse cx={0} cy={0} rx={14} ry={10} fill={j.hue} opacity={.18} />
+                  <ellipse cx={0} cy={0} rx={9} ry={6.5} fill={j.hue} opacity={.35} />
+                  {/* Bell — dome with scalloped mouth */}
+                  <path d={`M-6,0 Q-6,-6 0,-6 Q6,-6 6,0 Q5.5,1.2 4,1 Q3,-.2 2,1 Q1,-.2 0,1 Q-1,-.2 -2,1 Q-3,-.2 -4,1 Q-5.5,1.2 -6,0 Z`}
+                        fill={j.hue} opacity={.9} />
+                  {/* Highlight on bell */}
+                  <ellipse cx={-1.8} cy={-3} rx={1.4} ry={2.2} fill="#FFFFFF" opacity={.55} />
+                  {/* Tentacles — longer, curly, wafting */}
+                  <path d={`M-4,1 Q-4.6,5 -3.6,9 Q-4.4,13 -3.3,17`} stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                  <path d={`M-2,1 Q-2.3,6 -1.2,10 Q-2.2,14 -1.1,18`} stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                  <path d={`M0,1 Q.3,6 -.2,10 Q.5,14 -.2,18`}         stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                  <path d={`M2,1 Q2.3,6 1.2,10 Q2.2,14 1.1,18`}       stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
+                  <path d={`M4,1 Q4.6,5 3.6,9 Q4.4,13 3.3,17`}        stroke={j.hue} strokeWidth={.8} fill="none" opacity={.75} strokeLinecap="round" />
                 </g>
               </g>
             </g>
@@ -949,25 +951,27 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           </g>
 
-          {/* Hero — profit-driven, middle band, L→R. Seeded at ~40% across. */}
-          <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
+          {/* Hero — profit-driven, middle band, L→R. Seeded at ~40% across.
+              Hidden at night (the harbor is quiet — just the ambient boat). */}
+          {!isNight && <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
             <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
               <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite' }}>
                 {renderBoat(heroBoat, isNight)}
                 {isNight && renderRunningLights(heroBoat)}
               </g>
             </g>
-          </g>
+          </g>}
 
-          {/* Secondary — worst non-profit KPI, front band, R→L. Seeded at ~40% from right. */}
-          <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
+          {/* Secondary — worst non-profit KPI, front band, R→L. Seeded at ~40% from right.
+              Hidden at night. */}
+          {!isNight && <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
             <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
               <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite' }}>
                 {renderBoat(secondaryBoat, isNight)}
                 {isNight && renderRunningLights(secondaryBoat)}
               </g>
             </g>
-          </g>
+          </g>}
 
           {/* Dolphins — Social score (active + frequency when good) */}
           {dolphinActive && (

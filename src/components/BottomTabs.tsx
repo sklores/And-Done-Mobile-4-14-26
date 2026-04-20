@@ -4,6 +4,8 @@ export type TabKey = "invoices" | "log" | "gizmo";
 
 type Props = {
   onOpen: (k: TabKey) => void;
+  bg?: string;
+  textColor?: string;
 };
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -12,9 +14,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "gizmo",    label: "Gizmo"    },
 ];
 
-export function BottomTabs({ onOpen }: Props) {
+export function BottomTabs({ onOpen, bg, textColor }: Props) {
   return (
-    <div style={{ background: coastal.tabs.bg, flexShrink: 0 }}>
+    <div style={{ background: bg ?? coastal.tabs.bg, flexShrink: 0, transition: "background 1.2s ease" }}>
       <div
         style={{
           display: "flex",
@@ -31,7 +33,7 @@ export function BottomTabs({ onOpen }: Props) {
               background: "transparent",
               border: "none",
               padding: "14px 0",
-              color: "#1A2E28",
+              color: textColor ?? "#1A2E28",
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: ".06em",
