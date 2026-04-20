@@ -605,7 +605,8 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
 
   // Expenses → sharks: 0 = good (no sharks), 5 = bad (5 sharks).
   const SHARK_COUNT_MAP = [0, 5, 5, 4, 3, 2, 1, 0, 0]
-  const sharkCount = SHARK_COUNT_MAP[expScore] ?? 0
+  // No sharks at night — they've gone deep. Jellyfish take the stage.
+  const sharkCount = isNight ? 0 : (SHARK_COUNT_MAP[expScore] ?? 0)
   const sharkOp = isNight ? 0.5 : 0.75
 
   // Social → dolphins (active + frequency when good)
@@ -912,19 +913,22 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               below the wave troughs but well above the bottom edge. Bigger
               and more opaque than the first pass so they actually read. */}
           {isNight && [
-            { x:  78, y: 178, hue: '#6AD0FF', size: 1.3, spd: 3.2, drift: 18, dl: 0.0 },
-            { x: 168, y: 188, hue: '#B088FF', size: 1.1, spd: 3.8, drift: 22, dl: 1.3 },
-            { x: 260, y: 182, hue: '#58E8D8', size: 1.45, spd: 3.4, drift: 26, dl: 0.6 },
+            // dir=r drifts L→R, dir=l drifts R→L. Long cycle + negative
+            // delay means each jelly enters the scene at a different time.
+            { y: 178, hue: '#6AD0FF', size: 1.3,  spd: 3.2, dir: 'r', dur: 48, dl: -8  },
+            { y: 188, hue: '#B088FF', size: 1.1,  spd: 3.8, dir: 'l', dur: 62, dl: -26 },
+            { y: 182, hue: '#58E8D8', size: 1.45, spd: 3.4, dir: 'r', dur: 54, dl: -40 },
           ].map((j, i) => (
-            // NB: SVG `transform=` attribute and CSS `transform` on the same
-            // element don't compose — CSS wins and clobbers the position.
-            // We split static position (SVG attr) from the animations (CSS)
-            // onto separate nested <g>s so they compose correctly.
-            <g key={`jelly-${i}`} transform={`translate(${j.x}, ${j.y})`}>
-              <g style={{ animation: `cs-jelly-drift ${j.drift}s ease-in-out infinite alternate ${j.dl}s` }}>
+            // NB: SVG `transform=` and CSS `transform` on the same element
+            // don't compose — CSS wins and drops the SVG attr. So we split
+            // static position + scale (SVG attrs) from the animations (CSS)
+            // onto separate nested <g>s. Outer drift sweeps the whole scene.
+            <g key={`jelly-${i}`}
+               style={{ animation: `cs-drift-${j.dir} ${j.dur}s linear infinite ${j.dl}s` }}>
+              <g transform={`translate(0, ${j.y})`}>
                 <g transform={`scale(${j.size})`}>
-                  <g style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite ${j.dl}s` }}>
-                    <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite ${j.dl}s` }}>
+                  <g style={{ animation: `cs-jelly ${j.spd}s ease-in-out infinite` }}>
+                    <g style={{ animation: `cs-jelly-pulse ${j.spd * 1.3}s ease-in-out infinite` }}>
                   {/* Outer halo glow so it reads against dark water */}
                   <ellipse cx={0} cy={0} rx={14} ry={10} fill={j.hue} opacity={.18} />
                   <ellipse cx={0} cy={0} rx={9} ry={6.5} fill={j.hue} opacity={.35} />
