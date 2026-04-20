@@ -24,6 +24,7 @@ import { EventsDrillDown } from "./components/EventsDrillDown";
 import { InvoicesTab } from "./components/tabs/InvoicesTab";
 import { LogTab } from "./components/tabs/LogTab";
 import { GizmoTab } from "./components/tabs/GizmoTab";
+import { useIsDusky, useIsNight } from "./hooks/useTimeOfDay";
 
 type WeatherData = { condition: WeatherCondition; tempF: number | null };
 
@@ -186,15 +187,31 @@ export default function App() {
   // Pull indicator progress 0→1
   const pullProgress = Math.min(pullY / PULL_THRESHOLD, 1);
 
+  // ── Nocturnal UI (option B + mild C) ─────────────────────────────────────
+  // After sundown: darken the page/phone bg and apply a gentle brightness +
+  // saturation filter to all the UI chrome below the scene card so the
+  // pastel KPI tiles stop yelling when the scene has gone dark.
+  const isNight = useIsNight();
+  const isDusky = useIsDusky();
+  const pageBg  = isDusky ? "#1E1A17" : coastal.pageBg;
+  const phoneBg = isNight ? "#1E1A17" : isDusky ? "#2A2320" : coastal.phoneBg;
+  // Filter strength — sundown gets a tiny dim, full night gets the real one.
+  const chromeFilter = isNight
+    ? "brightness(0.78) saturate(0.72)"
+    : isDusky
+      ? "brightness(0.9)  saturate(0.85)"
+      : undefined;
+
   return (
     <div
       style={{
         minHeight: "100dvh",
-        background: coastal.pageBg,
+        background: pageBg,
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-start",
         fontFamily: coastal.fonts.manrope,
+        transition: "background 1.2s ease",
       }}
     >
       <div
@@ -202,10 +219,11 @@ export default function App() {
           width: "100%",
           maxWidth: 480,
           minHeight: "100dvh",
-          background: coastal.phoneBg,
+          background: phoneBg,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          transition: "background 1.2s ease",
         }}
       >
         {/* Scrollable content */}
@@ -241,7 +259,8 @@ export default function App() {
             overscrollBehavior: "none",
             display: "flex",
             flexDirection: "column",
-            background: coastal.phoneBg,
+            background: phoneBg,
+            transition: "background 1.2s ease",
           }}
         >
           {/* Framed painting with nameplate along the bottom of the frame */}
@@ -289,28 +308,39 @@ export default function App() {
               </span>
             </div>
           </div>
-          <KpiBar
-            kind="sales"
-            label={sales.label}
-            value={salesDisplay}
-            sub={sales.sub}
-            score={salesScore}
-            alerting={alertingKeys.has("sales")}
-            onClick={() => setDrillKey("sales" as KpiKey)}
-          />
-          <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} />
-          <KpiBar
-            kind="net"
-            label={net.label}
-            value={net.value}
-            valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
-            sub="today"
-            score={netScore}
-            isLast
-            alerting={alertingKeys.has("net")}
-            onClick={() => setDrillKey("net" as KpiKey)}
-          />
-          <MarqueeFeed onLongPress={setOpenFeed} />
+          {/* Nocturnal dimming — applied only to the UI chrome below the
+              scene card. The scene renders its own day/night sky internally. */}
+          <div
+            style={{
+              filter: chromeFilter,
+              transition: "filter 1.2s ease",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <KpiBar
+              kind="sales"
+              label={sales.label}
+              value={salesDisplay}
+              sub={sales.sub}
+              score={salesScore}
+              alerting={alertingKeys.has("sales")}
+              onClick={() => setDrillKey("sales" as KpiKey)}
+            />
+            <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} />
+            <KpiBar
+              kind="net"
+              label={net.label}
+              value={net.value}
+              valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
+              sub="today"
+              score={netScore}
+              isLast
+              alerting={alertingKeys.has("net")}
+              onClick={() => setDrillKey("net" as KpiKey)}
+            />
+            <MarqueeFeed onLongPress={setOpenFeed} />
+          </div>
         </div>{/* end scroll container */}
         </div>{/* end relative wrapper */}
 
