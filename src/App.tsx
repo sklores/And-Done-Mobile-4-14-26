@@ -204,9 +204,9 @@ export default function App() {
       : undefined;
   // Scene frame + nameplate + bottom-tab bar all share one tan color during
   // the day and swap to a dark walnut after sundown so they stop glowing.
-  const frameColor     = isDusky ? "#3A2E24" : "#C4B090";
-  const frameSeamColor = isDusky ? "#2A2018" : "#A89070";
-  const namePlateText  = isDusky ? "#E0D4BC" : "#3A2A10";
+  const frameColor     = isDusky ? "#1A2438" : "#C4B090";
+  const frameSeamColor = isDusky ? "#101828" : "#A89070";
+  const namePlateText  = isDusky ? "#D8E0F0" : "#3A2A10";
 
   return (
     <div
