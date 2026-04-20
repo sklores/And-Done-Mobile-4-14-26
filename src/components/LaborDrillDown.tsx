@@ -6,6 +6,15 @@ type Props = { open: boolean; onClose: () => void };
 
 function fmt$(n: number) { return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`; }
 function fmtDec$(n: number) { return `$${n.toFixed(2)}`; }
+/** "18:00:00" → "6pm", "07:30:00" → "7:30am" */
+function fmtTime(hms: string): string {
+  const [hStr, mStr = "0"] = hms.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  const period = h >= 12 ? "pm" : "am";
+  const h12 = ((h + 11) % 12) + 1;
+  return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2, "0")}${period}`;
+}
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -64,9 +73,13 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub={detail?.openCount ? "accruing (open shifts)" : "clock-in wages · Toast"}
       />
       <DrillRow
-        label="Elsie Zavala"
-        value={detail ? fmt$(detail.salaryCost) : "$222"}
-        sub="salary · $200/day prorated"
+        label="Salary"
+        value={detail ? fmt$(detail.salaryCost) : "--"}
+        sub={schedule && schedule.weeklySalary > 0 && schedule.todayWindowStart && schedule.todayWindowEnd
+          ? `of ${fmt$(schedule.salaryTodayCap)} today · amortized ${fmtTime(schedule.todayWindowStart)}–${fmtTime(schedule.todayWindowEnd)}`
+          : schedule && schedule.weeklySalary === 0
+            ? "no weekly salary set in scheduler"
+            : "no schedule today"}
       />
       <DrillRow
         label="Est. Payroll Taxes"

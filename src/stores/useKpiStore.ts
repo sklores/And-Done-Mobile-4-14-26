@@ -129,12 +129,6 @@ function scoreStatus(score: number): string {
 
 const COGS_PCT_MOCK = 26.4;
 
-// ── Salaried staff (not tracked by Toast clock-in) ────────────────────────
-const SALARIED_STAFF = [
-  { name: "Elsie Zavala", dailyRate: 200 },
-];
-const DAILY_SALARY_COST = SALARIED_STAFF.reduce((s, e) => s + e.dailyRate, 0);
-
 // ── Employer payroll tax estimate (FICA 7.65% + FUTA 0.6% + DC SUTA 2.7%) ─
 const PAYROLL_TAX_RATE = 0.11;
 
@@ -318,22 +312,11 @@ export const useKpiStore = create<KpiState>((set, get) => ({
         const hoursWorked  = laborResult.totalHours;
         const hourlyCost   = laborResult.totalLaborCost;
 
-        // Amortize salary from first clock-in to last clock-out.
-        // While shifts are open we prorate over a 12-hour standard day.
-        // Once all closed the full daily rate is earned.
-        const STANDARD_DAY_MS = 12 * 60 * 60 * 1000;
-        let salaryCost = 0;
-        if (laborResult.firstClockIn) {
-          if (laborResult.openCount === 0 && laborResult.lastClockOut) {
-            // Day complete — full daily rate
-            salaryCost = DAILY_SALARY_COST;
-          } else {
-            // Day in progress — prorate elapsed vs 12-hour day
-            const elapsedMs = Date.now() - new Date(laborResult.firstClockIn).getTime();
-            const fraction   = Math.min(elapsedMs / STANDARD_DAY_MS, 1);
-            salaryCost = Math.round(DAILY_SALARY_COST * fraction * 100) / 100;
-          }
-        }
+        // Salary is now schedule-driven: the weekly_salary pool (from
+        // shift_settings) amortized across the sum of daily operating
+        // windows (Mon–Sun earliest-start → latest-end). `scheduledResult`
+        // carries the live accrued-today figure.
+        const salaryCost = scheduledResult?.salaryAccruedToday ?? 0;
 
         const payrollTax   = Math.round((hourlyCost + salaryCost) * PAYROLL_TAX_RATE * 100) / 100;
         const laborCost    = hourlyCost + salaryCost + payrollTax;
