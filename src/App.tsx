@@ -276,25 +276,48 @@ export default function App() {
           }}
         >
           {/* Framed painting with nameplate along the bottom of the frame */}
+          {/* DIAGNOSTIC: at night, parent wrapper forced transparent + no
+              shadow so the nameplate row is the only thing that can draw
+              a dark strip below the scene. */}
           <div
             style={{
               margin: "8px 12px 0",
               borderTop: `6px solid ${frameColor}`,
               borderLeft: `6px solid ${frameColor}`,
               borderRight: `6px solid ${frameColor}`,
-              // At night the bottom lip of the frame matches the nameplate
-              // so there's no extra strip below the ocean-colored footer.
-              borderBottom: `3px solid ${isDusky ? namePlateBg : frameColor}`,
+              borderBottom: isDusky ? "none" : `3px solid ${frameColor}`,
               borderRadius: 8,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              boxShadow: isDusky ? "none" : "0 4px 16px rgba(0,0,0,0.15)",
               overflow: "hidden",
-              background: frameColor,
+              background: isDusky ? "transparent" : frameColor,
               flexShrink: 0,
             }}
           >
             <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
-              style={{
+              style={isDusky ? {
+                // DIAGNOSTIC: hot pink + hard-force every layering prop.
+                // If the strip under the scene is pink, this is the right
+                // element and we swap the color. If it's still dark, the
+                // strip comes from an overlay/pseudo we haven't located.
+                background: "#FF00FF",
+                backgroundColor: "#FF00FF",
+                backgroundImage: "none",
+                color: namePlateText,
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "7px 12px",
+                display: "flex",
+                justifyContent: "space-between",
+                letterSpacing: ".06em",
+                borderTop: "none",
+                borderBottom: "none",
+                boxShadow: "none",
+                opacity: 1,
+                filter: "none",
+                mixBlendMode: "normal",
+                backdropFilter: "none",
+              } : {
                 background: namePlateBg,
                 color: namePlateText,
                 fontSize: 12,
@@ -303,9 +326,7 @@ export default function App() {
                 display: "flex",
                 justifyContent: "space-between",
                 letterSpacing: ".06em",
-                // No seam at night — the ocean-colored nameplate needs to
-                // bleed into the water with no visible divider.
-                borderTop: isDusky ? "none" : `1px solid ${frameSeamColor}`,
+                borderTop: `1px solid ${frameSeamColor}`,
                 boxShadow: "none",
                 transition: "background 1.2s ease",
               }}
