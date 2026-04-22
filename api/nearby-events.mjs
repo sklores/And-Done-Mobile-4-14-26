@@ -1,43 +1,34 @@
 // Vercel serverless: GET /api/nearby-events
 // Pulls foot-traffic signals for GCDC (1730 Penn Ave NW, DC 20006) from:
-//   1. NWS alerts  — free, no key       (weather events)
-//   2. Firecrawl   — $FIRECRAWL_API_KEY  (competitor/trend/venue events)
-// Returns { events: NearbyEvent[] } matching the shape the mobile adapter expects.
-// Cached 30 min at the edge — keeps Firecrawl spend small.
+//   1. NWS alerts — free JSON API, no key           (weather)
+//   2. RSS feeds  — Eater DC, Washingtonian, DCist  (competitor + trend + community)
+// No Firecrawl, no external keys. Cached 30 min at the edge.
 
-const FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape";
-
-// ── Source list (tweak freely) ─────────────────────────────────────────────
-// Each entry is one Firecrawl scrape. We keep it short for v1; more can be
-// added without schema changes. `kind` drives category + default severity.
-const FIRECRAWL_SOURCES = [
+// ── RSS sources ────────────────────────────────────────────────────────────
+const RSS_SOURCES = [
   {
     name: "eater-dc",
-    url: "https://dc.eater.com/",
+    url: "https://dc.eater.com/rss/index.xml",
     category: "competitor",
     severity: 5,
     impactHint: "neutral",
     venueName: "Eater DC",
-    urlMustInclude: "dc.eater.com/",     // article URLs only
   },
   {
     name: "washingtonian-food",
-    url: "https://www.washingtonian.com/sections/food-drink/",
+    url: "https://www.washingtonian.com/sections/food-drink/feed/",
     category: "trend",
     severity: 5,
     impactHint: "neutral",
     venueName: "Washingtonian",
-    urlMustInclude: "washingtonian.com/",
   },
   {
-    name: "capital-one-arena",
-    url: "https://www.capitalonearena.com/events",
-    category: "venue",
-    severity: 7,
-    impactHint: "increases foot traffic",
-    venueName: "Capital One Arena",
-    distanceM: 1300,
-    urlMustInclude: "capitalonearena.com/",
+    name: "dcist",
+    url: "https://dcist.com/feed/",
+    category: "community",
+    severity: 5,
+    impactHint: "neutral",
+    venueName: "DCist",
   },
 ];
 
@@ -85,140 +76,119 @@ function mapNwsSeverity(raw) {
   }
 }
 
-// ── Firecrawl: scrape a URL, return markdown ──────────────────────────────
-async function firecrawlScrape(url, key) {
+// ── RSS fetch + minimal XML parse ──────────────────────────────────────────
+// Deliberately regex-based so we don't need an XML dep in the serverless bundle.
+async function fetchRssItems(url) {
   try {
-    const res = await fetch(FIRECRAWL_URL, {
-      method: "POST",
+    const res = await fetch(url, {
       headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${key}`,
+        "user-agent": "and-done-mobile/1.0 (+https://and-done-mobile.vercel.app)",
+        accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      body: JSON.stringify({
-        url,
-        formats: ["markdown"],
-        onlyMainContent: true,
-      }),
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.data?.markdown || null;
+    if (!res.ok) return [];
+    const xml = await res.text();
+    return parseRss(xml);
   } catch {
-    return null;
+    return [];
   }
 }
 
-// Extract up to N article-like [headline](url) links from markdown.
-// Filters out nav chrome, logos, "skip to content", login/subscribe, etc.
-function extractHeadlineLinks(md, limit = 6, mustInclude = "") {
-  if (!md) return [];
-  const out = [];
-  const seen = new Set();
-  const seenTitles = new Set();
-
-  // Junk-text filter — anything a headline would never actually say
-  const JUNK_RE = /^(skip|app\s*icon|home|menu|search|subscribe|log\s*in|sign\s*(in|up)|contact|more|view\s+all|next|previous|return|share|comment|follow|save|read\s+more|get\s+our|download|the\s+homepage|logo|icon|back\s+to\s+top|show\s+more|\d+)\b/i;
-  const GARBAGE_RE = /(logo|icon)$/i;
-  const NON_ARTICLE_PATHS = /\/(tag|tags|author|authors|category|categories|about|contact|privacy|terms|rss|feed|login|signin|signup|subscribe|newsletter)\/?($|\/|#|\?)/i;
-  const FILE_EXT = /\.(svg|png|jpe?g|ico|webp|gif|css|js|pdf)($|\?)/i;
-
-  // Markdown links: [text](url) — require at least 12 chars of text
-  const re = /\[([^\]\n]{12,200})\]\((https?:\/\/[^\s)]+)\)/g;
+function parseRss(xml) {
+  if (!xml) return [];
+  const items = [];
+  const itemRe = /<item[^>]*>([\s\S]*?)<\/item>/g;
   let m;
-  while ((m = re.exec(md)) !== null && out.length < limit) {
-    // Clean text: strip markdown escape backslashes, collapse whitespace
-    const text = m[1]
-      .replace(/\\\\/g, "")
-      .replace(/\\/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const href = m[2].trim().split("#")[0];
-
-    // Word count ≥ 3 — headlines always have several words
-    const wordCount = text.split(/\s+/).filter((w) => w.length > 1).length;
-    if (wordCount < 3) continue;
-    if (JUNK_RE.test(text)) continue;
-    if (GARBAGE_RE.test(text)) continue;
-
-    // URL must be an article-looking path
-    if (FILE_EXT.test(href)) continue;
-    if (NON_ARTICLE_PATHS.test(href)) continue;
-    if (mustInclude && !href.includes(mustInclude)) continue;
-
-    // Prefer paths with a dated or slugged article shape (≥ 2 path segs with hyphens)
-    const path = href.replace(/^https?:\/\/[^/]+/, "");
-    const segs = path.split("/").filter(Boolean);
-    if (segs.length < 2) continue;
-    const lastSeg = segs[segs.length - 1];
-    if (!/[a-z].*-.*[a-z]/i.test(lastSeg)) continue; // slug must have hyphens + letters
-
-    if (seen.has(href)) continue;
-    const titleKey = text.toLowerCase();
-    if (seenTitles.has(titleKey)) continue;
-
-    seen.add(href);
-    seenTitles.add(titleKey);
-    out.push({ title: text, url: href });
+  while ((m = itemRe.exec(xml)) !== null && items.length < 8) {
+    const block = m[1];
+    const title = cdataField(block, "title");
+    const link = cdataField(block, "link");
+    const description = cdataField(block, "description");
+    const pubDate = cdataField(block, "pubDate");
+    if (!title) continue;
+    items.push({ title, link, description, pubDate });
   }
-  return out;
+  return items;
 }
 
-async function fetchFirecrawlEvents(key) {
-  if (!key) return [];
-  const now = new Date().toISOString();
+function cdataField(block, tag) {
+  const re = new RegExp(
+    `<${tag}[^>]*>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*<\\/${tag}>`,
+  );
+  const m = block.match(re);
+  if (!m) return "";
+  return stripHtml(m[1]).trim();
+}
+
+function stripHtml(s) {
+  return String(s)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function truncate(s, n) {
+  const clean = stripHtml(s).trim();
+  return clean.length > n ? clean.slice(0, n - 1) + "…" : clean;
+}
+
+async function fetchRssEvents() {
   const results = await Promise.all(
-    FIRECRAWL_SOURCES.map(async (src) => {
-      const md = await firecrawlScrape(src.url, key);
-      const links = extractHeadlineLinks(md, 6, src.urlMustInclude || "");
-      return links.map((l, i) => ({
-        id: `${src.name}-${hash(l.url)}-${i}`,
-        source: `firecrawl:${src.name}`,
-        category: src.category,
-        title: l.title,
-        description: null,
-        startsAt: now,        // news-style entries anchor to now
-        endsAt: null,
-        allDay: false,
-        venueName: src.venueName,
-        distanceM: src.distanceM ?? null,
-        severity: src.severity,
-        impactHint: src.impactHint,
-        url: l.url,
-      }));
+    RSS_SOURCES.map(async (src) => {
+      const items = await fetchRssItems(src.url);
+      return items.map((it, i) => {
+        const startsAt = parseRssDate(it.pubDate) || new Date().toISOString();
+        return {
+          id: `${src.name}-${hash(it.link || it.title)}-${i}`,
+          source: `rss:${src.name}`,
+          category: src.category,
+          title: it.title,
+          description: truncate(it.description, 180) || null,
+          startsAt,
+          endsAt: null,
+          allDay: false,
+          venueName: src.venueName,
+          distanceM: null,
+          severity: src.severity,
+          impactHint: src.impactHint,
+          url: it.link || null,
+        };
+      });
     }),
   );
   return results.flat();
 }
 
-function hash(s) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  return Math.abs(h).toString(36);
+function parseRssDate(s) {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function truncate(s, n) {
-  if (!s) return "";
-  // strip HTML-ish and collapse whitespace
-  const clean = String(s).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-  return clean.length > n ? clean.slice(0, n - 1) + "…" : clean;
+function hash(s) {
+  let h = 0;
+  for (let i = 0; i < (s || "").length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
 export default async function handler(_req, res) {
   res.setHeader("content-type", "application/json");
-  // 30 min edge cache, allow stale while revalidating
   res.setHeader("cache-control", "s-maxage=1800, stale-while-revalidate=3600");
 
   try {
-    const key = process.env.FIRECRAWL_API_KEY || "";
-
-    const [nws, fc] = await Promise.all([
+    const [nws, rss] = await Promise.all([
       fetchNwsAlerts(),
-      fetchFirecrawlEvents(key),
+      fetchRssEvents(),
     ]);
 
-    const events = [...nws, ...fc].sort(
-      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+    const events = [...nws, ...rss].sort(
+      (a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
     );
 
     res.statusCode = 200;
@@ -226,8 +196,7 @@ export default async function handler(_req, res) {
       events,
       sources: {
         nws: nws.length,
-        firecrawl: fc.length,
-        firecrawlConfigured: !!key,
+        rss: rss.length,
       },
       fetchedAt: new Date().toISOString(),
     }));
