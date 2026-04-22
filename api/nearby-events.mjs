@@ -13,11 +13,12 @@ const FIRECRAWL_URL = "https://api.firecrawl.dev/v1/scrape";
 const FIRECRAWL_SOURCES = [
   {
     name: "eater-dc",
-    url: "https://dc.eater.com/maps/best-new-restaurants-washington-dc",
+    url: "https://dc.eater.com/",
     category: "competitor",
     severity: 5,
     impactHint: "neutral",
     venueName: "Eater DC",
+    urlMustInclude: "dc.eater.com/",     // article URLs only
   },
   {
     name: "washingtonian-food",
@@ -26,6 +27,7 @@ const FIRECRAWL_SOURCES = [
     severity: 5,
     impactHint: "neutral",
     venueName: "Washingtonian",
+    urlMustInclude: "washingtonian.com/",
   },
   {
     name: "capital-one-arena",
@@ -35,6 +37,7 @@ const FIRECRAWL_SOURCES = [
     impactHint: "increases foot traffic",
     venueName: "Capital One Arena",
     distanceM: 1300,
+    urlMustInclude: "capitalonearena.com/",
   },
 ];
 
@@ -105,23 +108,56 @@ async function firecrawlScrape(url, key) {
   }
 }
 
-// Extract up to N [headline](url) links from markdown.
-// Good enough for v1 — pulls real article headlines as event cards.
-function extractHeadlineLinks(md, limit = 8) {
+// Extract up to N article-like [headline](url) links from markdown.
+// Filters out nav chrome, logos, "skip to content", login/subscribe, etc.
+function extractHeadlineLinks(md, limit = 6, mustInclude = "") {
   if (!md) return [];
   const out = [];
   const seen = new Set();
-  // Markdown links: [text](url)
-  const re = /\[([^\]]{8,140})\]\((https?:\/\/[^\s)]+)\)/g;
+  const seenTitles = new Set();
+
+  // Junk-text filter — anything a headline would never actually say
+  const JUNK_RE = /^(skip|app\s*icon|home|menu|search|subscribe|log\s*in|sign\s*(in|up)|contact|more|view\s+all|next|previous|return|share|comment|follow|save|read\s+more|get\s+our|download|the\s+homepage|logo|icon|back\s+to\s+top|show\s+more|\d+)\b/i;
+  const GARBAGE_RE = /(logo|icon)$/i;
+  const NON_ARTICLE_PATHS = /\/(tag|tags|author|authors|category|categories|about|contact|privacy|terms|rss|feed|login|signin|signup|subscribe|newsletter)\/?($|\/|#|\?)/i;
+  const FILE_EXT = /\.(svg|png|jpe?g|ico|webp|gif|css|js|pdf)($|\?)/i;
+
+  // Markdown links: [text](url) — require at least 12 chars of text
+  const re = /\[([^\]\n]{12,200})\]\((https?:\/\/[^\s)]+)\)/g;
   let m;
   while ((m = re.exec(md)) !== null && out.length < limit) {
-    const text = m[1].trim();
-    const href = m[2].trim();
-    // Skip nav links, pagination, "View all", ad-like text
-    if (/^(home|menu|search|subscribe|contact|more|view all|next|previous|\d+)$/i.test(text)) continue;
-    if (text.length < 10) continue;
+    // Clean text: strip markdown escape backslashes, collapse whitespace
+    const text = m[1]
+      .replace(/\\\\/g, "")
+      .replace(/\\/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const href = m[2].trim().split("#")[0];
+
+    // Word count ≥ 3 — headlines always have several words
+    const wordCount = text.split(/\s+/).filter((w) => w.length > 1).length;
+    if (wordCount < 3) continue;
+    if (JUNK_RE.test(text)) continue;
+    if (GARBAGE_RE.test(text)) continue;
+
+    // URL must be an article-looking path
+    if (FILE_EXT.test(href)) continue;
+    if (NON_ARTICLE_PATHS.test(href)) continue;
+    if (mustInclude && !href.includes(mustInclude)) continue;
+
+    // Prefer paths with a dated or slugged article shape (≥ 2 path segs with hyphens)
+    const path = href.replace(/^https?:\/\/[^/]+/, "");
+    const segs = path.split("/").filter(Boolean);
+    if (segs.length < 2) continue;
+    const lastSeg = segs[segs.length - 1];
+    if (!/[a-z].*-.*[a-z]/i.test(lastSeg)) continue; // slug must have hyphens + letters
+
     if (seen.has(href)) continue;
+    const titleKey = text.toLowerCase();
+    if (seenTitles.has(titleKey)) continue;
+
     seen.add(href);
+    seenTitles.add(titleKey);
     out.push({ title: text, url: href });
   }
   return out;
@@ -133,7 +169,7 @@ async function fetchFirecrawlEvents(key) {
   const results = await Promise.all(
     FIRECRAWL_SOURCES.map(async (src) => {
       const md = await firecrawlScrape(src.url, key);
-      const links = extractHeadlineLinks(md, 6);
+      const links = extractHeadlineLinks(md, 6, src.urlMustInclude || "");
       return links.map((l, i) => ({
         id: `${src.name}-${hash(l.url)}-${i}`,
         source: `firecrawl:${src.name}`,
