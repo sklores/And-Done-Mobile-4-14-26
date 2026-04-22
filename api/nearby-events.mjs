@@ -5,30 +5,31 @@
 // No Firecrawl, no external keys. Cached 30 min at the edge.
 
 // ── RSS sources ────────────────────────────────────────────────────────────
+// Format "auto" handles both RSS 2.0 (<item>) and Atom (<entry>).
 const RSS_SOURCES = [
   {
     name: "eater-dc",
-    url: "https://dc.eater.com/rss/index.xml",
+    url: "https://dc.eater.com/rss/index.xml",   // Atom
     category: "competitor",
     severity: 5,
     impactHint: "neutral",
     venueName: "Eater DC",
   },
   {
-    name: "washingtonian-food",
-    url: "https://www.washingtonian.com/sections/food-drink/feed/",
+    name: "washingtonian",
+    url: "https://washingtonian.com/feed/",      // RSS 2.0 (bare domain — www. 301s)
     category: "trend",
     severity: 5,
     impactHint: "neutral",
     venueName: "Washingtonian",
   },
   {
-    name: "dcist",
-    url: "https://dcist.com/feed/",
+    name: "popville",
+    url: "https://www.popville.com/feed/",       // RSS 2.0 — DC neighborhood
     category: "community",
     severity: 5,
     impactHint: "neutral",
-    venueName: "DCist",
+    venueName: "PoPville",
   },
 ];
 
@@ -82,20 +83,27 @@ async function fetchRssItems(url) {
   try {
     const res = await fetch(url, {
       headers: {
-        "user-agent": "and-done-mobile/1.0 (+https://and-done-mobile.vercel.app)",
-        accept: "application/rss+xml, application/xml, text/xml, */*",
+        "user-agent": "Mozilla/5.0 (compatible; and-done-mobile/1.0; +https://and-done-mobile.vercel.app)",
+        accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
       },
+      redirect: "follow",
     });
     if (!res.ok) return [];
     const xml = await res.text();
-    return parseRss(xml);
+    return parseFeed(xml);
   } catch {
     return [];
   }
 }
 
-function parseRss(xml) {
+// Handles RSS 2.0 (<item>) and Atom (<entry>) in a single pass.
+function parseFeed(xml) {
   if (!xml) return [];
+  const isAtom = /<feed[\s>]/i.test(xml) && /xmlns=["']http:\/\/www\.w3\.org\/2005\/Atom/i.test(xml);
+  return isAtom ? parseAtom(xml) : parseRss(xml);
+}
+
+function parseRss(xml) {
   const items = [];
   const itemRe = /<item[^>]*>([\s\S]*?)<\/item>/g;
   let m;
@@ -103,17 +111,55 @@ function parseRss(xml) {
     const block = m[1];
     const title = cdataField(block, "title");
     const link = cdataField(block, "link");
-    const description = cdataField(block, "description");
-    const pubDate = cdataField(block, "pubDate");
+    const description =
+      cdataField(block, "description") || cdataField(block, "content:encoded");
+    const pubDate = cdataField(block, "pubDate") || cdataField(block, "dc:date");
     if (!title) continue;
     items.push({ title, link, description, pubDate });
   }
   return items;
 }
 
+function parseAtom(xml) {
+  const items = [];
+  const entryRe = /<entry[\s>][\s\S]*?<\/entry>/g;
+  let m;
+  while ((m = entryRe.exec(xml)) !== null && items.length < 8) {
+    const block = m[0];
+    const title = cdataField(block, "title");
+    // Atom link: <link rel="alternate" href="..."/> — prefer rel=alternate, fall back to first.
+    const link = atomLink(block);
+    const description =
+      cdataField(block, "summary") || cdataField(block, "content");
+    const pubDate =
+      cdataField(block, "published") || cdataField(block, "updated");
+    if (!title) continue;
+    items.push({ title, link, description, pubDate });
+  }
+  return items;
+}
+
+function atomLink(block) {
+  // Prefer <link rel="alternate" ... href="..."/>
+  const alt = block.match(
+    /<link\b[^>]*\brel=["']alternate["'][^>]*\bhref=["']([^"']+)["']/i,
+  );
+  if (alt) return alt[1];
+  // Or the href comes before rel
+  const alt2 = block.match(
+    /<link\b[^>]*\bhref=["']([^"']+)["'][^>]*\brel=["']alternate["']/i,
+  );
+  if (alt2) return alt2[1];
+  // Fallback: first <link href="..."/>
+  const any = block.match(/<link\b[^>]*\bhref=["']([^"']+)["']/i);
+  return any ? any[1] : "";
+}
+
 function cdataField(block, tag) {
+  // Escape ":" in tag names (e.g. content:encoded, dc:date) for the regex.
+  const safeTag = tag.replace(/:/g, "\\:");
   const re = new RegExp(
-    `<${tag}[^>]*>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*<\\/${tag}>`,
+    `<${safeTag}(?:\\s[^>]*)?>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*<\\/${safeTag}>`,
   );
   const m = block.match(re);
   if (!m) return "";
@@ -123,12 +169,30 @@ function cdataField(block, tag) {
 function stripHtml(s) {
   return String(s)
     .replace(/<[^>]+>/g, "")
+    // Numeric entities: &#038; &#8217; &#8220; etc.
+    .replace(/&#(\d+);/g, (_, d) => {
+      const n = parseInt(d, 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : "";
+    })
+    // Hex entities: &#x2019;
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => {
+      const n = parseInt(h, 16);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : "";
+    })
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&nbsp;/g, " ")
+    .replace(/&hellip;/g, "…")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&rdquo;/g, "\u201D")
+    .replace(/&ldquo;/g, "\u201C")
     .replace(/\s+/g, " ");
 }
 
