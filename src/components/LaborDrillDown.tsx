@@ -102,18 +102,36 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub="hours × hourly rate · pre-tax"
       />
       {schedule && detail && schedule.hours > 0 && (() => {
-        const pct      = (detail.hoursWorked / schedule.hours) * 100; // 100 = exact, >100 = over, <100 = under
-        const variance = detail.hoursWorked - schedule.hours;
+        // Pace-based: compare hours worked against scheduled hours that
+        // should have elapsed by NOW, not against the full day. Prevents
+        // a 1-hour-into-the-day shift from looking like 5% of schedule.
+        const expected = schedule.hoursScheduledSoFar;
+
+        // Before the first shift has started — nothing to compare yet.
+        if (expected <= 0.05) {
+          return (
+            <DrillRow
+              label="Schedule Accuracy"
+              value="--"
+              sub={detail.hoursWorked > 0
+                ? `${detail.hoursWorked.toFixed(1)} hrs worked · no shifts started yet`
+                : "no shifts started yet"}
+            />
+          );
+        }
+
+        const pct      = (detail.hoursWorked / expected) * 100; // 100 = on pace, >100 = over, <100 = under
+        const variance = detail.hoursWorked - expected;
         const direction = Math.abs(variance) < 0.1
-          ? "on schedule"
+          ? "on pace"
           : variance > 0
-            ? `+${variance.toFixed(1)} hrs over schedule`
-            : `${variance.toFixed(1)} hrs under schedule`;
+            ? `+${variance.toFixed(1)} hrs over pace`
+            : `${variance.toFixed(1)} hrs under pace`;
         return (
           <DrillRow
             label="Schedule Accuracy"
             value={`${pct.toFixed(0)}%`}
-            sub={`${detail.hoursWorked.toFixed(1)} worked / ${schedule.hours.toFixed(1)} scheduled · ${direction}`}
+            sub={`${detail.hoursWorked.toFixed(1)} worked / ${expected.toFixed(1)} expected so far · ${direction}`}
           />
         );
       })()}

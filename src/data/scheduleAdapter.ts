@@ -6,7 +6,10 @@ import { supabase, supabaseReady } from "../lib/supabase";
 
 export type ScheduledLaborResult = {
   // Today's schedule
-  hours: number;                     // total scheduled hours today
+  hours: number;                     // total scheduled hours today (full-day)
+  hoursScheduledSoFar: number;       // scheduled hours that should have been worked by now
+                                     //   Σ max(0, min(now, shift.end) − shift.start) across today's shifts
+                                     //   0 before first shift start, == `hours` after last shift end
   cost: number;                      // total scheduled hourly cost today
   employeeCount: number;
 
@@ -101,8 +104,12 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
 
   // ── Today's scheduled totals + daily window map ──────────────────────
   let todayHours = 0;
+  let todayHoursSoFar = 0;
   let todayCost = 0;
   const todayEmps = new Set<string>();
+
+  // Current ET time (hoisted out of the loop)
+  const nowH = nowETHours();
 
   // windows[date] = { start, end } — min start, max end across ALL shifts that day
   const windows = new Map<string, { start: number; end: number }>();
@@ -134,6 +141,13 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
       todayHours += dur;
       todayCost  += dur * rate;
       todayEmps.add(e.id);
+
+      // Hours from THIS shift that should have been worked by now.
+      //   before shift starts: 0
+      //   mid-shift:           now − start
+      //   after shift ends:    full duration
+      const elapsed = Math.max(0, Math.min(nowH, endH) - startH);
+      todayHoursSoFar += elapsed;
     }
   }
 
@@ -154,11 +168,10 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
 
   let salaryAccruedToday = 0;
   if (salaryHourlyRate > 0 && todayWin) {
-    const now = nowETHours();
     let elapsed: number;
-    if      (now <= todayWin.start) elapsed = 0;
-    else if (now >= todayWin.end)   elapsed = todayWindowHours;
-    else                             elapsed = now - todayWin.start;
+    if      (nowH <= todayWin.start) elapsed = 0;
+    else if (nowH >= todayWin.end)   elapsed = todayWindowHours;
+    else                             elapsed = nowH - todayWin.start;
     salaryAccruedToday = elapsed * salaryHourlyRate;
   }
 
@@ -166,6 +179,7 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
 
   return {
     hours:              round2(todayHours),
+    hoursScheduledSoFar: round2(todayHoursSoFar),
     cost:               round2(todayCost),
     employeeCount:      todayEmps.size,
     todayWindowStart,
