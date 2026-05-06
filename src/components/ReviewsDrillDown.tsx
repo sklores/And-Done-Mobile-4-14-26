@@ -1,34 +1,17 @@
+import { useEffect, useState } from "react";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
 import { FEED_SCORES } from "../data/feedScores";
+import {
+  fetchReviewsBundle,
+  timeAgo,
+  PLATFORM_LABEL,
+  PLATFORM_COLOR,
+  type ReviewsBundle,
+  type ReviewRow,
+} from "../data/reviewsAdapter";
 
 type Props = { open: boolean; onClose: () => void };
-
-// ── Mock data (replace with Google/Yelp API when ready) ──────────────────────
-const PLATFORMS = [
-  { name: "Google",    rating: 4.9, count: 128, color: "#4285F4" },
-  { name: "Yelp",      rating: 4.7, count:  89, color: "#D32323" },
-  { name: "Toast",     rating: 4.8, count:  42, color: "#FF6B00" },
-];
-
-const STAR_DIST = [
-  { stars: 5, pct: 82 },
-  { stars: 4, pct: 12 },
-  { stars: 3, pct:  4 },
-  { stars: 2, pct:  1 },
-  { stars: 1, pct:  1 },
-];
-
-const TOTAL_REVIEWS = PLATFORMS.reduce((s, p) => s + p.count, 0);
-const OVERALL_RATING = (
-  PLATFORMS.reduce((s, p) => s + p.rating * p.count, 0) / TOTAL_REVIEWS
-).toFixed(1);
-
-const RECENT = [
-  { text: "Best grilled cheese in DC!",          author: "Sarah M.", stars: 5, platform: "Google", ago: "2h ago"     },
-  { text: "Cozy vibe and lightning-fast service", author: "Jon P.",   stars: 5, platform: "Yelp",   ago: "5h ago"     },
-  { text: "Loved the tomato soup pairing",        author: "Aly R.",   stars: 4, platform: "Google", ago: "Yesterday"  },
-];
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
   return (
@@ -47,99 +30,238 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
   );
 }
 
+function StarRow({ stars, pct, count }: { stars: number; pct: number; count: number }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8,
+      padding: "7px 18px",
+      borderBottom: "1px solid rgba(0,0,0,0.05)",
+    }}>
+      <div style={{
+        fontFamily: coastal.fonts.manrope, fontSize: 11,
+        fontWeight: 700, color: "#4A5A54", width: 14, textAlign: "right",
+      }}>{stars}</div>
+      <span style={{ color: "#F4C430", fontSize: 10 }}>★</span>
+      <div style={{ flex: 1, height: 7, background: "rgba(0,0,0,0.07)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{
+          height: "100%", width: `${pct}%`,
+          background: stars >= 4 ? "#4EC89A" : stars === 3 ? "#FFE070" : "#FFAAA0",
+          borderRadius: 4,
+        }} />
+      </div>
+      <div style={{
+        fontFamily: coastal.fonts.condensed, fontSize: 13,
+        fontWeight: 700, color: "#1A2E28", width: 56, textAlign: "right",
+      }}>{pct}%<span style={{ fontSize: 10, color: "#8A9C9C", marginLeft: 4 }}>({count})</span></div>
+    </div>
+  );
+}
+
+function PlatformRow({
+  platform, label, color, count, avgRating, status,
+}: {
+  platform: string;
+  label: string;
+  color: string;
+  count: number;
+  avgRating: number | null;
+  status: "live" | "no-data";
+}) {
+  const isNoData = status === "no-data";
+  const hasRating = avgRating != null;
+  return (
+    <div key={platform} style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "11px 18px", borderBottom: "1px solid rgba(0,0,0,0.06)",
+      opacity: isNoData ? 0.5 : 1,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{
+          width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0,
+        }} />
+        <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
+          {label}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        {isNoData ? (
+          <div style={{ fontSize: 11, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontStyle: "italic" }}>
+            no data yet
+          </div>
+        ) : (
+          <>
+            <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
+              {hasRating ? `${avgRating} ★` : "no rating"}
+            </div>
+            <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
+              {count} review{count === 1 ? "" : "s"}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecentReviewRow({ review }: { review: ReviewRow }) {
+  const stars = review.rating != null ? Math.round(Number(review.rating)) : null;
+  const platformLabel = PLATFORM_LABEL[review.platform] ?? review.platform;
+  const ago = timeAgo(review.review_date);
+  const text = (review.review_text || "").trim();
+  const author = (review.reviewer_name || "Anonymous").trim();
+
+  return (
+    <div style={{
+      padding: "12px 18px",
+      borderBottom: "1px solid rgba(0,0,0,0.06)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "center" }}>
+        {stars != null ? (
+          <div style={{ color: "#F4C430", fontSize: 11, letterSpacing: 1 }}>
+            {"★".repeat(stars)}{"☆".repeat(5 - stars)}
+          </div>
+        ) : (
+          <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontStyle: "italic" }}>
+            no rating
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>
+          {platformLabel}{ago ? ` · ${ago}` : ""}
+        </div>
+      </div>
+      {text && (
+        <div style={{
+          fontFamily: coastal.fonts.manrope, fontSize: 12, color: "#1A2E28",
+          fontStyle: "italic", marginBottom: 2, lineHeight: 1.4,
+        }}>
+          “{truncate(text, 220)}”
+        </div>
+      )}
+      <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C", fontWeight: 600 }}>
+        — {author}
+      </div>
+    </div>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
 export function ReviewsDrillDown({ open, onClose }: Props) {
+  const [bundle, setBundle] = useState<ReviewsBundle | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchReviewsBundle()
+      .then((b) => {
+        if (!cancelled) {
+          setBundle(b);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBundle(null);
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // Header values
+  const headerValue = !bundle
+    ? "--"
+    : bundle.overallRating != null
+      ? `${bundle.overallRating} ★`
+      : "—";
+
+  const headerStatus = !bundle
+    ? loading ? "Loading" : "No data"
+    : bundle.totalReviews === 0
+      ? "No reviews yet"
+      : `${bundle.totalReviews} review${bundle.totalReviews === 1 ? "" : "s"} across ${bundle.platforms.filter(p => p.status === "live").length} platforms`;
+
   return (
     <DrillDownModal
       open={open}
       onClose={onClose}
       score={FEED_SCORES.reviews}
       label="Reviews"
-      value={`${OVERALL_RATING} ★`}
-      status={`${TOTAL_REVIEWS} reviews across all platforms`}
+      value={headerValue}
+      status={headerStatus}
     >
-      {/* ── Star distribution bar ─────────────────────── */}
-      <SectionHeader title="Rating Distribution" right={`${TOTAL_REVIEWS} total`} />
-      {STAR_DIST.map(({ stars, pct }) => (
-        <div key={stars} style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "7px 18px",
-          borderBottom: "1px solid rgba(0,0,0,0.05)",
+      {loading && (
+        <div style={{
+          padding: "24px 18px", color: "#8A9C9C",
+          fontFamily: coastal.fonts.manrope, fontSize: 12, textAlign: "center",
         }}>
-          <div style={{
-            fontFamily: coastal.fonts.manrope, fontSize: 11,
-            fontWeight: 700, color: "#4A5A54", width: 14, textAlign: "right",
-          }}>{stars}</div>
-          <span style={{ color: "#F4C430", fontSize: 10 }}>★</span>
-          <div style={{ flex: 1, height: 7, background: "rgba(0,0,0,0.07)", borderRadius: 4, overflow: "hidden" }}>
-            <div style={{
-              height: "100%", width: `${pct}%`,
-              background: stars >= 4 ? "#4EC89A" : stars === 3 ? "#FFE070" : "#FFAAA0",
-              borderRadius: 4,
-            }} />
-          </div>
-          <div style={{
-            fontFamily: coastal.fonts.condensed, fontSize: 13,
-            fontWeight: 700, color: "#1A2E28", width: 32, textAlign: "right",
-          }}>{pct}%</div>
+          Loading reviews…
         </div>
-      ))}
+      )}
 
-      {/* ── Platform breakdown ────────────────────────── */}
-      <SectionHeader title="By Platform" />
-      {PLATFORMS.map((p) => (
-        <div key={p.name} style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "11px 18px", borderBottom: "1px solid rgba(0,0,0,0.06)",
+      {!loading && bundle && bundle.totalReviews === 0 && (
+        <div style={{
+          padding: "28px 18px", color: "#8A9C9C",
+          fontFamily: coastal.fonts.manrope, fontSize: 12, textAlign: "center", lineHeight: 1.5,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0,
-            }} />
-            <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
-              {p.name}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
-              {p.rating} ★
-            </div>
-            <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
-              {p.count} reviews
-            </div>
-          </div>
+          No reviews on file yet.
+          <br />
+          <span style={{ opacity: 0.65, fontSize: 10 }}>
+            Daily sync runs at 08:30 UTC across Yelp, Tripadvisor, and Uber Eats.
+          </span>
         </div>
-      ))}
+      )}
 
-      {/* ── Recent reviews ────────────────────────────── */}
-      <SectionHeader title="Recent" right="mock · connect API" />
-      {RECENT.map((r, i) => (
-        <div key={i} style={{
-          padding: "12px 18px",
-          borderBottom: "1px solid rgba(0,0,0,0.06)",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <div style={{ color: "#F4C430", fontSize: 11, letterSpacing: 1 }}>
-              {"★".repeat(r.stars)}{"☆".repeat(5 - r.stars)}
-            </div>
-            <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>
-              {r.platform} · {r.ago}
-            </div>
-          </div>
-          <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, color: "#1A2E28", fontStyle: "italic", marginBottom: 2 }}>
-            "{r.text}"
-          </div>
-          <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C", fontWeight: 600 }}>
-            — {r.author}
-          </div>
-        </div>
-      ))}
+      {!loading && bundle && bundle.totalReviews > 0 && (
+        <>
+          {bundle.totalRatedReviews > 0 && (
+            <>
+              <SectionHeader
+                title="Rating Distribution"
+                right={`${bundle.totalRatedReviews} rated`}
+              />
+              {bundle.starDistribution.map((b) => (
+                <StarRow key={b.stars} stars={b.stars} pct={b.pct} count={b.count} />
+              ))}
+            </>
+          )}
 
-      <DrillRow
-        label="Respond to reviews"
-        value="→"
-        sub="connect Google Business API to reply in-app"
-        dimmed
-      />
+          <SectionHeader title="By Platform" />
+          {bundle.platforms.map((p) => (
+            <PlatformRow
+              key={p.platform}
+              platform={p.platform}
+              label={PLATFORM_LABEL[p.platform]}
+              color={PLATFORM_COLOR[p.platform]}
+              count={p.count}
+              avgRating={p.avgRating}
+              status={p.status}
+            />
+          ))}
+
+          {bundle.recent.length > 0 && (
+            <>
+              <SectionHeader title="Recent" right={`${bundle.recent.length} most recent`} />
+              {bundle.recent.map((r) => (
+                <RecentReviewRow key={r.id} review={r} />
+              ))}
+            </>
+          )}
+
+          <DrillRow
+            label="Respond to reviews"
+            value="→"
+            sub="connect Google Business API to reply in-app"
+            dimmed
+          />
+        </>
+      )}
     </DrillDownModal>
   );
 }
