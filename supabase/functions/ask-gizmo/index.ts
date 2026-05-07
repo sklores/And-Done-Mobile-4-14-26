@@ -41,9 +41,19 @@ CRITICAL RULES
 
 TOOLS
 - get_current_kpis: today's live snapshot (sales, labor %, COGS %, net %). Fast, call freely.
+- get_kpi_subsplits: today's snapshot broken down — sales channels (in-store/takeout/delivery/3rd-party/tips), labor splits (FOH/BOH/Mgmt), COGS splits (food/bev/alcohol), covers, check_average. Use for channel mix or labor-composition questions.
 - query_invoices: filter by date range, vendor, category, paid status. Returns rows with line items.
 - query_sales_history: daily sales totals for the last N days.
 - query_labor_history: daily labor % for the last N days.
+- query_reviews: recent customer reviews (Google, Yelp, etc). Filter by platform, rating, recency. Use for "what's the latest review?" or "any 1-star reviews lately?".
+- get_ap_aging: latest A/P aging snapshot — total open balance + buckets (current, 1-30, 31-60, 61-90, 90+) + per-vendor breakdown. From forwarded QuickBooks reports.
+- get_vendors: vendor master list with categories, payment terms, delivery days, contact info.
+- get_pro_forma: monthly fixed costs and variable cost percentages from the planning config. Use for "what's our planned rent?" or "what did we project for COGS?".
+- get_cashflow_day: drilldown for a specific YYYY-MM-DD — channel mix that day plus every invoice with that invoice_date.
+- get_profit_loss: period-aware financial summary (wtd/mtd/ytd/last_week/last_month/last_year/q1-q4). Returns revenue, labor, COGS, invoice totals, rough net. For full hierarchical view, send the user to /financials/profit-loss.
+- get_period_comparison: compare two consecutive periods (today vs yesterday, WTD vs last week same-days, last_7 vs prior_7, etc). Returns each side plus deltas.
+- get_traffic_metrics: social/web traffic by platform (Instagram, Google, etc).
+- query_log_history: search past activity-log entries by date range, text contains, or type. You CAN read your own previous log notes — use this to avoid duplicating an entry or to recall what was logged before.
 - add_log_note: insert a timestamped note into the activity log. Use when the user explicitly says "log", "note", "remind me", "record that", etc. Never invoke speculatively.
 
 SCHEDULE WRITES (the app has a scheduling module — these tools mutate it)
@@ -221,6 +231,125 @@ const TOOLS = [
         confirm:       { type: "boolean", description: "false = preview only (default); true = write." },
       },
       required: ["employee_name", "shift_date"],
+    },
+  },
+
+  // ── Read-only data tools (added) ──────────────────────────────────────────
+  {
+    name: "query_reviews",
+    description:
+      "Recent reviews (Yelp, Google, etc). Filter by platform, rating range, or recency. Returns reviewer, rating, text, platform, review_date. Sorted newest first, capped at 30.",
+    input_schema: {
+      type: "object",
+      properties: {
+        platform:   { type: "string", description: "Case-insensitive substring (e.g. 'google', 'yelp')." },
+        min_rating: { type: "number", description: "Only reviews with rating >= this." },
+        max_rating: { type: "number", description: "Only reviews with rating <= this. Useful for finding negative reviews (e.g. max_rating: 3)." },
+        since_days: { type: "integer", description: "Only reviews from the last N days (1–365)." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_ap_aging",
+    description:
+      "Latest A/P (accounts payable) aging snapshot — total open balance plus aging buckets (current, 1–30, 31–60, 61–90, 90+ days), and per-vendor breakdown. Sourced from forwarded QuickBooks A/P Aging Summary reports.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "query_log_history",
+    description:
+      "Search the activity log (notes Gizmo or the user has written). Filter by date range, text contains, or type. Sorted newest first, capped at 50.",
+    input_schema: {
+      type: "object",
+      properties: {
+        since_days: { type: "integer", description: "Only entries from the last N days (1–365)." },
+        contains:   { type: "string", description: "Case-insensitive substring match on entry text." },
+        type:       { type: "string", description: "Filter by entry type (e.g. 'gizmo', 'user', 'system')." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_vendors",
+    description:
+      "Vendor master list — names, categories, payment terms, delivery days, contact info. Capped at 200 rows.",
+    input_schema: {
+      type: "object",
+      properties: {
+        category:      { type: "string", description: "Filter by vendor category (case-insensitive substring)." },
+        name_contains: { type: "string", description: "Case-insensitive name substring." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_pro_forma",
+    description:
+      "Pro Forma planning config: monthly fixed costs (rent, insurance, utilities, etc.) and variable cost percentages. Use to answer questions about plan/projection assumptions ('what's our planned rent?').",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_kpi_subsplits",
+    description:
+      "Detailed sub-breakdowns from the most recent kpi_snapshot: sales channel mix (in-store / takeout / delivery / 3rd-party / tips), labor splits (FOH / BOH / Management), COGS splits (Food / Beverage / Alcohol), covers, and check_average. Use when the user asks about channel mix or labor/COGS composition.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_cashflow_day",
+    description:
+      "Per-day cashflow drilldown for a single business date: sales channel breakdown (last snapshot of that day) plus every invoice with that invoice_date. Useful when the user asks about a specific day.",
+    input_schema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "YYYY-MM-DD business date in ET." },
+      },
+      required: ["date"],
+    },
+  },
+  {
+    name: "get_profit_loss",
+    description:
+      "Period-aware financial summary: revenue (sales_total), labor, COGS, invoice totals, and rough operational net. Period choices: wtd, mtd, ytd, last_week, last_month, last_year, q1, q2, q3, q4. Quick view — for a full hierarchical P&L the user should open /financials/profit-loss.",
+    input_schema: {
+      type: "object",
+      properties: {
+        period: {
+          type: "string",
+          enum: ["wtd", "mtd", "ytd", "last_week", "last_month", "last_year", "q1", "q2", "q3", "q4"],
+          description: "Which period to summarize.",
+        },
+      },
+      required: ["period"],
+    },
+  },
+  {
+    name: "get_period_comparison",
+    description:
+      "Compare two consecutive periods on revenue and labor %. Returns each side's totals plus absolute and % deltas. Use for 'this week vs last week' or 'today vs yesterday' style questions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        window: {
+          type: "string",
+          enum: ["today_vs_yesterday", "wtd_vs_last", "mtd_vs_last", "last_7_vs_prior_7", "last_30_vs_prior_30"],
+          description: "Which comparison window.",
+        },
+      },
+      required: ["window"],
+    },
+  },
+  {
+    name: "get_traffic_metrics",
+    description:
+      "Social & web traffic metrics from the traffic_metrics table. Latest reading per platform/period. Use for 'how's Instagram doing' style questions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        platform: { type: "string", description: "Filter to one platform (e.g. 'instagram', 'facebook', 'google_my_business')." },
+        period:   { type: "string", description: "Filter to a specific period bucket (e.g. 'week', 'month')." },
+      },
+      required: [],
     },
   },
 ];
@@ -633,9 +762,481 @@ async function runTool(
       return { status: "done", action: "remove_shift", shift_id: shift.id, employee: emp.name, shift_date: shiftDate };
     }
 
+    // ── Read-only data tools (added) ──────────────────────────────────────
+    case "query_reviews": {
+      let q = supabase
+        .from("reviews")
+        .select("platform, reviewer_name, rating, review_text, review_date, fetched_at, responded")
+        .order("review_date", { ascending: false, nullsFirst: false })
+        .order("fetched_at", { ascending: false })
+        .limit(30);
+      if (input.platform) q = q.ilike("platform", `%${String(input.platform)}%`);
+      if (typeof input.min_rating === "number") q = q.gte("rating", input.min_rating as number);
+      if (typeof input.max_rating === "number") q = q.lte("rating", input.max_rating as number);
+      if (typeof input.since_days === "number" && (input.since_days as number) > 0) {
+        const days = Math.max(1, Math.min(365, input.since_days as number));
+        const sinceISO = new Date(Date.now() - days * 86400_000)
+          .toISOString()
+          .slice(0, 10);
+        q = q.gte("review_date", sinceISO);
+      }
+      const { data, error } = await q;
+      if (error) return { error: error.message };
+      return { count: data?.length ?? 0, rows: data ?? [] };
+    }
+
+    case "get_ap_aging": {
+      const { data, error } = await supabase
+        .from("ap_aging_snapshots")
+        .select("*")
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return { error: error.message };
+      if (!data) return { note: "No A/P aging snapshots yet — forward a QuickBooks A/P Aging Summary to ingest." };
+      return {
+        report_date: data.report_date,
+        received_at: data.received_at,
+        total_open: Number(data.total_open) || 0,
+        buckets: {
+          current:    Number(data.total_current)  || 0,
+          days_1_30:  Number(data.total_1_30)     || 0,
+          days_31_60: Number(data.total_31_60)    || 0,
+          days_61_90: Number(data.total_61_90)    || 0,
+          days_90_plus: Number(data.total_over_90) || 0,
+        },
+        vendors: Array.isArray(data.vendors) ? data.vendors : [],
+      };
+    }
+
+    case "query_log_history": {
+      let q = supabase
+        .from("activity_log")
+        .select("id, text, type, source, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (typeof input.since_days === "number" && (input.since_days as number) > 0) {
+        const days = Math.max(1, Math.min(365, input.since_days as number));
+        const sinceISO = new Date(Date.now() - days * 86400_000).toISOString();
+        q = q.gte("created_at", sinceISO);
+      }
+      if (input.contains) q = q.ilike("text", `%${String(input.contains)}%`);
+      if (input.type) q = q.eq("type", String(input.type));
+      const { data, error } = await q;
+      if (error) return { error: error.message };
+      return { count: data?.length ?? 0, rows: data ?? [] };
+    }
+
+    case "get_vendors": {
+      let q = supabase
+        .from("vendors")
+        .select("name, category, email, phone, payment_terms, delivery_days, delivery_minimum, address, notes")
+        .order("name", { ascending: true })
+        .limit(200);
+      if (input.category)      q = q.ilike("category", `%${String(input.category)}%`);
+      if (input.name_contains) q = q.ilike("name", `%${String(input.name_contains)}%`);
+      const { data, error } = await q;
+      if (error) return { error: error.message };
+      return { count: data?.length ?? 0, rows: data ?? [] };
+    }
+
+    case "get_pro_forma": {
+      const { data, error } = await supabase
+        .from("org_settings")
+        .select("pro_forma_json")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return { error: error.message };
+      const pf = (data?.pro_forma_json ?? {}) as {
+        fixed?: { projected?: Array<{ label: string; amount: number }> };
+        variable?: { projected?: Array<{ label: string; pct: number }> };
+      };
+      const fixed = (pf.fixed?.projected ?? []).filter((f) => Number(f.amount) > 0);
+      const fixedMonthlyTotal = fixed.reduce((s, f) => s + Number(f.amount || 0), 0);
+      return {
+        fixed_items: fixed,
+        fixed_monthly_total: fixedMonthlyTotal,
+        variable_items: pf.variable?.projected ?? [],
+      };
+    }
+
+    case "get_kpi_subsplits": {
+      const { data, error } = await supabase
+        .from("kpi_snapshots")
+        .select(
+          "captured_at, sales_total, sales_instore, sales_takeout, sales_delivery, sales_third_party, sales_tips, labor_total, labor_foh, labor_boh, labor_management, cogs_total, cogs_food, cogs_beverage, cogs_alcohol, covers, check_average",
+        )
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return { error: error.message };
+      if (!data) return { note: "No KPI snapshots yet." };
+      return {
+        captured_at: data.captured_at,
+        sales: {
+          total: Number(data.sales_total) || 0,
+          instore: Number(data.sales_instore) || 0,
+          takeout: Number(data.sales_takeout) || 0,
+          delivery: Number(data.sales_delivery) || 0,
+          third_party: Number(data.sales_third_party) || 0,
+          tips: Number(data.sales_tips) || 0,
+        },
+        labor: {
+          total: Number(data.labor_total) || 0,
+          foh: Number(data.labor_foh) || 0,
+          boh: Number(data.labor_boh) || 0,
+          management: Number(data.labor_management) || 0,
+        },
+        cogs: {
+          total: Number(data.cogs_total) || 0,
+          food: Number(data.cogs_food) || 0,
+          beverage: Number(data.cogs_beverage) || 0,
+          alcohol: Number(data.cogs_alcohol) || 0,
+        },
+        covers: data.covers,
+        check_average: data.check_average,
+      };
+    }
+
+    case "get_cashflow_day": {
+      const date = String(input.date ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return { error: "date must be YYYY-MM-DD" };
+      }
+      // ±24h UTC buffer around the biz date in ET, then filter.
+      const startBound = new Date(`${date}T00:00:00.000Z`);
+      startBound.setUTCDate(startBound.getUTCDate() - 1);
+      const endBound = new Date(`${date}T00:00:00.000Z`);
+      endBound.setUTCDate(endBound.getUTCDate() + 2);
+
+      const [snapsRes, invRes] = await Promise.all([
+        supabase
+          .from("kpi_snapshots")
+          .select(
+            "captured_at, sales_total, sales_instore, sales_takeout, sales_delivery, sales_third_party, sales_tips, labor_total, cogs_total",
+          )
+          .gte("captured_at", startBound.toISOString())
+          .lt("captured_at", endBound.toISOString())
+          .order("captured_at", { ascending: false }),
+        supabase
+          .from("invoices")
+          .select("vendor_name, total_amount, category, status")
+          .eq("invoice_date", date)
+          .order("total_amount", { ascending: false }),
+      ]);
+
+      let snap: Record<string, unknown> | null = null;
+      for (const s of snapsRes.data ?? []) {
+        const bd = new Date(s.captured_at as string).toLocaleDateString("en-CA", {
+          timeZone: "America/New_York",
+        });
+        if (bd === date) {
+          snap = s as Record<string, unknown>;
+          break;
+        }
+      }
+
+      const invoices = invRes.data ?? [];
+      const invoiceTotal = invoices.reduce(
+        (s: number, i: { total_amount: number }) => s + Number(i.total_amount || 0),
+        0,
+      );
+
+      return {
+        date,
+        snapshot: snap
+          ? {
+              sales_total: Number(snap.sales_total) || 0,
+              channels: {
+                instore: Number(snap.sales_instore) || 0,
+                takeout: Number(snap.sales_takeout) || 0,
+                delivery: Number(snap.sales_delivery) || 0,
+                third_party: Number(snap.sales_third_party) || 0,
+                tips: Number(snap.sales_tips) || 0,
+              },
+              labor_total: Number(snap.labor_total) || 0,
+              cogs_total: Number(snap.cogs_total) || 0,
+            }
+          : null,
+        invoices,
+        invoice_count: invoices.length,
+        invoice_total: invoiceTotal,
+      };
+    }
+
+    case "get_profit_loss": {
+      const period = String(input.period ?? "mtd");
+      const bounds = computePeriodBounds(period);
+      if (!bounds) return { error: `unknown period: ${period}` };
+
+      const { startDate, endDate, label } = bounds;
+      const summary = await fetchPeriodFinancials(supabase, startDate, endDate);
+      return {
+        period: { id: period, label, start_date: startDate, end_date: endDate },
+        ...summary,
+      };
+    }
+
+    case "get_period_comparison": {
+      const window = String(input.window ?? "");
+      const pair = computeComparisonPair(window);
+      if (!pair) return { error: `unknown window: ${window}` };
+
+      const [a, b] = await Promise.all([
+        fetchPeriodFinancials(supabase, pair.a.startDate, pair.a.endDate),
+        fetchPeriodFinancials(supabase, pair.b.startDate, pair.b.endDate),
+      ]);
+
+      const delta = (curr: number, prev: number) => {
+        const diff = curr - prev;
+        const pct = prev > 0 ? diff / prev : null;
+        return { abs: Math.round(diff * 100) / 100, pct };
+      };
+
+      return {
+        window,
+        current:  { ...pair.a, ...a },
+        previous: { ...pair.b, ...b },
+        deltas: {
+          revenue:  delta(a.revenue,  b.revenue),
+          labor:    delta(a.labor,    b.labor),
+          cogs:     delta(a.cogs,     b.cogs),
+        },
+      };
+    }
+
+    case "get_traffic_metrics": {
+      let q = supabase
+        .from("traffic_metrics")
+        .select("*")
+        .order("captured_at", { ascending: false, nullsFirst: false })
+        .limit(50);
+      if (input.platform) q = q.eq("platform", String(input.platform));
+      if (input.period)   q = q.eq("period", String(input.period));
+      const { data, error } = await q;
+      if (error) return { error: error.message };
+      return { count: data?.length ?? 0, rows: data ?? [] };
+    }
+
     default:
       return { error: `unknown tool: ${name}` };
   }
+}
+
+// ── Period helpers (used by get_profit_loss + get_period_comparison) ─────────
+type Bounds = { startDate: string; endDate: string; label: string };
+
+function todayET(): { y: number; m: number; d: number; dow: number } {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const wkMap: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return {
+    y: parseInt(get("year"), 10),
+    m: parseInt(get("month"), 10) - 1,
+    d: parseInt(get("day"), 10),
+    dow: wkMap[get("weekday")] ?? 1,
+  };
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function computePeriodBounds(period: string): Bounds | null {
+  const t = todayET();
+  const today = new Date(t.y, t.m, t.d);
+  const backToMon = t.dow === 0 ? -6 : -(t.dow - 1);
+
+  if (period === "wtd") {
+    const start = new Date(t.y, t.m, t.d + backToMon);
+    return { startDate: isoDate(start), endDate: isoDate(today), label: "Week to date" };
+  }
+  if (period === "mtd") {
+    return { startDate: isoDate(new Date(t.y, t.m, 1)), endDate: isoDate(today), label: "Month to date" };
+  }
+  if (period === "ytd") {
+    return { startDate: isoDate(new Date(t.y, 0, 1)), endDate: isoDate(today), label: `YTD ${t.y}` };
+  }
+  if (period === "last_week") {
+    const start = new Date(t.y, t.m, t.d + backToMon - 7);
+    const end = new Date(t.y, t.m, t.d + backToMon - 1);
+    return { startDate: isoDate(start), endDate: isoDate(end), label: "Last week" };
+  }
+  if (period === "last_month") {
+    const start = new Date(t.y, t.m - 1, 1);
+    const end = new Date(t.y, t.m, 0);
+    return { startDate: isoDate(start), endDate: isoDate(end), label: "Last month" };
+  }
+  if (period === "last_year") {
+    return { startDate: `${t.y - 1}-01-01`, endDate: `${t.y - 1}-12-31`, label: `${t.y - 1}` };
+  }
+  if (["q1", "q2", "q3", "q4"].includes(period)) {
+    const qIdx = parseInt(period.slice(1), 10) - 1;
+    const qStart = qIdx * 3;
+    return {
+      startDate: isoDate(new Date(t.y, qStart, 1)),
+      endDate: isoDate(new Date(t.y, qStart + 3, 0)),
+      label: `Q${qIdx + 1} ${t.y}`,
+    };
+  }
+  return null;
+}
+
+function computeComparisonPair(
+  window: string,
+): { a: Bounds & { label: string }; b: Bounds & { label: string } } | null {
+  const t = todayET();
+  const today = new Date(t.y, t.m, t.d);
+  const backToMon = t.dow === 0 ? -6 : -(t.dow - 1);
+
+  if (window === "today_vs_yesterday") {
+    const yest = new Date(t.y, t.m, t.d - 1);
+    return {
+      a: { startDate: isoDate(today), endDate: isoDate(today), label: "Today" },
+      b: { startDate: isoDate(yest), endDate: isoDate(yest), label: "Yesterday" },
+    };
+  }
+  if (window === "wtd_vs_last") {
+    const thisMon = new Date(t.y, t.m, t.d + backToMon);
+    const elapsed = (today.getTime() - thisMon.getTime()) / 86400_000; // days into the week
+    const lastMon = new Date(t.y, t.m, t.d + backToMon - 7);
+    const lastAtSameOffset = new Date(t.y, t.m, t.d + backToMon - 7 + Math.round(elapsed));
+    return {
+      a: { startDate: isoDate(thisMon), endDate: isoDate(today), label: "WTD" },
+      b: { startDate: isoDate(lastMon), endDate: isoDate(lastAtSameOffset), label: "Last week (same days)" },
+    };
+  }
+  if (window === "mtd_vs_last") {
+    const thisStart = new Date(t.y, t.m, 1);
+    const lastStart = new Date(t.y, t.m - 1, 1);
+    const lastSameDay = new Date(t.y, t.m - 1, t.d);
+    return {
+      a: { startDate: isoDate(thisStart), endDate: isoDate(today), label: "MTD" },
+      b: { startDate: isoDate(lastStart), endDate: isoDate(lastSameDay), label: "Last month (same days)" },
+    };
+  }
+  if (window === "last_7_vs_prior_7") {
+    const aEnd   = new Date(t.y, t.m, t.d - 1);
+    const aStart = new Date(t.y, t.m, t.d - 7);
+    const bEnd   = new Date(t.y, t.m, t.d - 8);
+    const bStart = new Date(t.y, t.m, t.d - 14);
+    return {
+      a: { startDate: isoDate(aStart), endDate: isoDate(aEnd), label: "Last 7 days" },
+      b: { startDate: isoDate(bStart), endDate: isoDate(bEnd), label: "Prior 7 days" },
+    };
+  }
+  if (window === "last_30_vs_prior_30") {
+    const aEnd   = new Date(t.y, t.m, t.d - 1);
+    const aStart = new Date(t.y, t.m, t.d - 30);
+    const bEnd   = new Date(t.y, t.m, t.d - 31);
+    const bStart = new Date(t.y, t.m, t.d - 60);
+    return {
+      a: { startDate: isoDate(aStart), endDate: isoDate(aEnd), label: "Last 30 days" },
+      b: { startDate: isoDate(bStart), endDate: isoDate(bEnd), label: "Prior 30 days" },
+    };
+  }
+  return null;
+}
+
+/**
+ * Aggregate per-period financials from kpi_snapshots (last snapshot per ET
+ * biz date) plus invoice totals. Same source the desktop P&L uses, kept
+ * intentionally simple here — for the full hierarchical view, point users
+ * at /financials/profit-loss.
+ *
+ * Pages through kpi_snapshots in 1000-row chunks because Supabase REST
+ * has a hard 1000-row cap and wide periods (YTD, last_year) need more.
+ */
+async function fetchPeriodFinancials(
+  supabase: SupabaseClient,
+  startDate: string,
+  endDate: string,
+): Promise<{
+  revenue: number;
+  labor: number;
+  cogs: number;
+  invoice_total: number;
+  invoice_count: number;
+  rough_net: number;
+  days_with_data: number;
+}> {
+  // ±24h UTC buffer around the biz-date range
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - 1);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() + 2);
+
+  const PAGE = 1000;
+  type SnapRow = {
+    captured_at: string;
+    sales_total: number | null;
+    labor_total: number | null;
+    cogs_total: number | null;
+  };
+  const snaps: SnapRow[] = [];
+  for (let page = 0; page < 100; page++) {
+    const { data, error } = await supabase
+      .from("kpi_snapshots")
+      .select("captured_at, sales_total, labor_total, cogs_total")
+      .gte("captured_at", start.toISOString())
+      .lt("captured_at", end.toISOString())
+      .order("captured_at", { ascending: false })
+      .range(page * PAGE, (page + 1) * PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    snaps.push(...(data as SnapRow[]));
+    if (data.length < PAGE) break;
+  }
+
+  const seen = new Set<string>();
+  let revenue = 0;
+  let labor = 0;
+  let cogs = 0;
+  for (const s of snaps) {
+    const bd = new Date(s.captured_at).toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    if (bd < startDate || bd > endDate) continue;
+    if (seen.has(bd)) continue;
+    seen.add(bd);
+    revenue += Number(s.sales_total ?? 0);
+    labor   += Number(s.labor_total ?? 0);
+    cogs    += Number(s.cogs_total ?? 0);
+  }
+
+  const { data: invRows } = await supabase
+    .from("invoices")
+    .select("total_amount")
+    .gte("invoice_date", startDate)
+    .lte("invoice_date", endDate);
+  const invoiceTotal = (invRows ?? []).reduce(
+    (s, r: { total_amount: number }) => s + Number(r.total_amount || 0),
+    0,
+  );
+
+  // Rough operational net — revenue minus Toast-reported labor + COGS.
+  // Doesn't include fixed costs or invoice-derived spend (which would
+  // double-count COGS), so it's a quick gut-check, not the full P&L.
+  const roughNet = revenue - labor - cogs;
+
+  return {
+    revenue: Math.round(revenue * 100) / 100,
+    labor: Math.round(labor * 100) / 100,
+    cogs: Math.round(cogs * 100) / 100,
+    invoice_total: Math.round(invoiceTotal * 100) / 100,
+    invoice_count: invRows?.length ?? 0,
+    rough_net: Math.round(roughNet * 100) / 100,
+    days_with_data: seen.size,
+  };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
