@@ -9,9 +9,9 @@ const TOAST_AUTH_URL =
   "https://ws-api.toasttab.com/authentication/v1/authentication/login";
 const TOAST_BASE = "https://ws-api.toasttab.com";
 
-// GCDC-specific labor constants (mirror mobile app)
-const SALARIED_STAFF = [{ name: "Elsie Zavala", dailyRate: 200 }];
-const DAILY_SALARY_COST = SALARIED_STAFF.reduce((s, e) => s + e.dailyRate, 0);
+// Labor: payroll tax estimate. Salary itself is now schedule-driven, see
+// computeScheduleSalary() — pulls weekly_salary + shift windows from
+// shift_settings + shift_shifts. Mobile uses the same formula.
 const PAYROLL_TAX_RATE  = 0.11; // FICA 7.65% + FUTA 0.6% + DC SUTA 2.7%
 
 // COGS rates
@@ -21,6 +21,21 @@ const COGS_ALCOHOL_PCT  = 22;
 const PAPER_DINEIN_PCT  = 0.01;
 const PAPER_TAKEOUT_PCT = 0.04;
 const THIRD_PARTY_COMM  = 0.18;
+
+// Fixed costs (mirror src/config/fixedCostConfig.ts on the mobile side).
+// When tenancy lands these become per-org config rows.
+const RENT_PCT = 0.10;
+const FIXED_LINE_ITEMS = [
+  { label: "Pest Control",     monthly: 220  },
+  { label: "Dishwasher Rental", monthly: 270 },
+  { label: "Insurance",         monthly: 1500 },
+  { label: "Utilities",         monthly: 2200 },
+  { label: "Bookkeeper",         monthly: 1000 },
+  { label: "Loan Payment",      monthly: 2000 },
+];
+const MONTHLY_FIXED_TOTAL = FIXED_LINE_ITEMS.reduce((s, i) => s + i.monthly, 0);
+const FIXED_WINDOW_START_HOUR = 10;  // amortization drip starts at 10am ET
+const FIXED_WINDOW_END_HOUR   = 16;  // …and finishes at 4pm ET
 
 // ── Eastern Time helpers (DST-aware) ─────────────────────────────────────────
 function easternDateStr(d = new Date()): string {
@@ -42,6 +57,135 @@ function easternStartOfDay(d = new Date()): Date {
 }
 function todayBusinessDate(d = new Date()): string {
   return easternDateStr(d).replace(/-/g, "");
+}
+
+/** "14:30:00" or "14:30" → 14.5 */
+function timeToHours(t: string): number {
+  const [h, m = "0", s = "0"] = t.split(":");
+  return Number(h) + Number(m) / 60 + Number(s) / 3600;
+}
+
+/** Current ET wall-clock hour as decimal. */
+function nowETHours(d = new Date()): number {
+  const s = d.toLocaleString("sv-SE", { timeZone: "America/New_York" });
+  const time = s.split(" ")[1] ?? "00:00:00";
+  return timeToHours(time);
+}
+
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+function mondayOf(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun
+  const offsetToMon = (dow + 6) % 7;
+  return addDays(iso, -offsetToMon);
+}
+
+// ── Schedule-driven salary ──────────────────────────────────────────────────
+// Mirrors src/data/scheduleAdapter.ts → fetchTodayScheduled() exactly.
+//   salaryHourlyRate  = weekly_salary / Σ daily-window-hours (Mon-Sun)
+//   salaryAccruedToday = elapsed_in_today_window × salaryHourlyRate
+async function computeScheduleSalary(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  now = new Date(),
+): Promise<number> {
+  const today  = easternDateStr(now);
+  const monday = mondayOf(today);
+  const sunday = addDays(monday, 6);
+
+  const [shiftsRes, settingsRes] = await Promise.all([
+    supabase
+      .from("shift_shifts")
+      .select(`shift_date, start_time, end_time, employee_id, shift_employees!inner ( id, is_active, hourly_rate )`)
+      .gte("shift_date", monday)
+      .lte("shift_date", sunday),
+    supabase
+      .from("shift_settings")
+      .select("value")
+      .eq("key", "weekly_salary")
+      .maybeSingle(),
+  ]);
+
+  const weeklySalary = Number(settingsRes?.data?.value ?? 0) || 0;
+  if (weeklySalary <= 0) return 0;
+
+  // windows[date] = { start, end } — earliest start, latest end across all
+  // active employees that day.
+  const windows = new Map<string, { start: number; end: number }>();
+  for (const row of shiftsRes?.data ?? []) {
+    const empRaw = row.shift_employees;
+    const emp = Array.isArray(empRaw) ? empRaw[0] : empRaw;
+    if (!emp || !emp.is_active) continue;
+    const startH = timeToHours(String(row.start_time));
+    const endH   = timeToHours(String(row.end_time));
+    const date   = String(row.shift_date);
+    const w = windows.get(date);
+    if (!w) windows.set(date, { start: startH, end: endH });
+    else {
+      if (startH < w.start) w.start = startH;
+      if (endH   > w.end  ) w.end   = endH;
+    }
+  }
+
+  let weekWindowHours = 0;
+  for (const w of windows.values()) weekWindowHours += Math.max(0, w.end - w.start);
+  if (weekWindowHours <= 0) return 0;
+
+  const todayWin = windows.get(today);
+  if (!todayWin) return 0;
+
+  const salaryHourlyRate = weeklySalary / weekWindowHours;
+  const todayWindowHours = Math.max(0, todayWin.end - todayWin.start);
+  const nowH = nowETHours(now);
+
+  let elapsed: number;
+  if      (nowH <= todayWin.start) elapsed = 0;
+  else if (nowH >= todayWin.end)   elapsed = todayWindowHours;
+  else                             elapsed = nowH - todayWin.start;
+
+  return Math.round(elapsed * salaryHourlyRate * 100) / 100;
+}
+
+// ── Fixed cost helpers (mirror src/config/fixedCostConfig.ts) ───────────────
+function dailyFixedAmortized(now = new Date()): number {
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return MONTHLY_FIXED_TOTAL / daysInMonth;
+}
+
+/** 0 before 10am ET, 1 after 4pm ET, linear in between. */
+function fixedAmortizationFactor(now = new Date()): number {
+  const etDecimal = nowETHours(now);
+  if (etDecimal <  FIXED_WINDOW_START_HOUR) return 0;
+  if (etDecimal >= FIXED_WINDOW_END_HOUR)   return 1;
+  const span = FIXED_WINDOW_END_HOUR - FIXED_WINDOW_START_HOUR;
+  return (etDecimal - FIXED_WINDOW_START_HOUR) / span;
+}
+
+function hourlyAmortized(now = new Date()): number {
+  return dailyFixedAmortized(now) * fixedAmortizationFactor(now);
+}
+
+// ── M&R: today's maintenance entries from the new table ─────────────────────
+async function fetchTodayMRTotal(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  orgId: string,
+  now = new Date(),
+): Promise<number> {
+  const today = easternDateStr(now);
+  const { data, error } = await supabase
+    .from("maintenance_entries")
+    .select("amount")
+    .eq("org_id", orgId)
+    .eq("entry_date", today);
+  if (error || !data) return 0;
+  return data.reduce((s: number, r: { amount: number | string }) => s + Number(r.amount || 0), 0);
 }
 
 // ── Toast auth ───────────────────────────────────────────────────────────────
@@ -289,26 +433,27 @@ Deno.serve(async (_req) => {
       }
     }
 
-    // Salary proration (same logic as mobile app)
-    let salaryCost = 0;
-    const STANDARD_DAY_MS = 12 * 60 * 60 * 1000;
-    if (firstClockInMs < Infinity) {
-      if (openCount === 0 && lastClockOutMs > -Infinity) {
-        salaryCost = DAILY_SALARY_COST;
-      } else {
-        const elapsedMs = nowMs - firstClockInMs;
-        salaryCost = Math.round(DAILY_SALARY_COST * Math.min(elapsedMs / STANDARD_DAY_MS, 1) * 100) / 100;
-      }
-    }
+    // ── Schedule-driven salary (replaces the old hardcoded $200/day) ──────
+    // Reads weekly_salary from shift_settings + the week's shift windows
+    // and prorates by today's elapsed window. Mobile applies the same
+    // formula via fetchTodayScheduled(). When weekly_salary=0 → returns 0.
+    const salaryCost = await computeScheduleSalary(supabase, now);
+    void firstClockInMs; void lastClockOutMs; // formerly used for $200/day proration
 
     const payrollTax  = (hourlyCost + salaryCost) * PAYROLL_TAX_RATE;
     const laborTotal  = hourlyCost + salaryCost + payrollTax;
     const laborPct    = salesTotal > 0 ? (laborTotal / salesTotal) * 100 : 0;
     const primePct    = cogsPct + laborPct;
 
-    // ── Net profit ────────────────────────────────────────────────────────
-    // Fixed costs not included in snapshot — net here is prime cost only
-    const netProfit   = salesTotal - cogsTotal - laborTotal;
+    // ── Fixed cost (rent + amortized monthly + M&R) ───────────────────────
+    const rentDollars      = salesTotal * RENT_PCT;
+    const amortizedDollars = hourlyAmortized(now);
+    const mrDollars        = await fetchTodayMRTotal(supabase, orgId, now);
+    const fixedTotal       = rentDollars + amortizedDollars + mrDollars;
+    const fixedPct         = salesTotal > 0 ? (fixedTotal / salesTotal) * 100 : 0;
+
+    // ── Net profit (now subtracts fixed costs to match mobile) ────────────
+    const netProfit    = salesTotal - cogsTotal - laborTotal - fixedTotal;
     const netProfitPct = salesTotal > 0 ? (netProfit / salesTotal) * 100 : 0;
 
     const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -325,15 +470,28 @@ Deno.serve(async (_req) => {
       sales_tips:      r2(salesTips),
       check_average:   checkCount > 0 ? r2(salesTotal / checkCount) : null,
       covers:          checkCount,
+      // Labor breakouts
+      labor_hourly:    r2(hourlyCost),
+      salary_total:    r2(salaryCost),
+      payroll_tax:     r2(payrollTax),
       labor_total:     r2(laborTotal),
       labor_pct:       r2(laborPct),
       worked_hours:    r2(workedHours),
+      // COGS
       cogs_total:      r2(cogsTotal),
       cogs_pct:        r2(cogsPct),
       cogs_food:       r2(cogsFood),
       cogs_beverage:   r2(cogsBev),
       cogs_alcohol:    r2(cogsAlcohol),
+      // Prime
       prime_cost_pct:  r2(primePct),
+      // Fixed cost breakouts (new)
+      rent_dollars:      r2(rentDollars),
+      amortized_dollars: r2(amortizedDollars),
+      mr_dollars:        r2(mrDollars),
+      fixed_total:       r2(fixedTotal),
+      fixed_pct:         r2(fixedPct),
+      // Net (now subtracts fixed)
       net_profit:      r2(netProfit),
       net_profit_pct:  r2(netProfitPct),
       data_source:     "toast",
@@ -341,15 +499,17 @@ Deno.serve(async (_req) => {
 
     if (insertErr) throw insertErr;
 
-    console.log(`[sync-toast-kpis] Snapshot written — sales: $${r2(salesTotal)}, labor: ${r2(laborPct)}%, COGS: ${r2(cogsPct)}%`);
+    console.log(`[sync-toast-kpis] Snapshot written — sales: $${r2(salesTotal)}, labor: ${r2(laborPct)}%, COGS: ${r2(cogsPct)}%, fixed: ${r2(fixedPct)}%, net: ${r2(netProfitPct)}%`);
 
     return new Response(
       JSON.stringify({
         ok: true,
-        sales: r2(salesTotal),
+        sales:    r2(salesTotal),
         laborPct: r2(laborPct),
-        cogsPct: r2(cogsPct),
+        cogsPct:  r2(cogsPct),
         primePct: r2(primePct),
+        fixedPct: r2(fixedPct),
+        netPct:   r2(netProfitPct),
       }),
       { headers: { "Content-Type": "application/json" } },
     );

@@ -32,6 +32,7 @@ function laborScore(pct: number) { return pct<=28?8:pct<=30?7:pct<=32?6:pct<=34?
 function primeScore(pct: number) { return pct<=55?8:pct<=60?7:pct<=65?6:pct<=68?5:pct<=72?4:pct<=78?3:2; }
 function netScore(pct: number)   { return pct>=20?8:pct>=15?7:pct>=10?6:pct>=5?5:pct>=2?4:pct>=0?3:2; }
 function salesScore(val: number) { return val>=2500?8:val>=2000?7:val>=1500?6:val>=1000?5:val>=700?4:val>=400?3:2; }
+function fixedScore(pct: number) { return pct<=20?8:pct<=23?7:pct<=26?6:pct<=30?5:pct<=35?4:pct<=42?3:2; }
 
 // ── KPI pill HTML ────────────────────────────────────────────────────────────
 function kpiPill(label: string, value: string, score: number): string {
@@ -84,12 +85,21 @@ function buildEmail(data: {
 }): string {
   const { orgName, date, snap, alerts, reviews, invoices, logNotes } = data;
 
-  const salesVal   = snap.sales_total   ?? 0;
-  const laborPct   = snap.labor_pct     ?? 0;
-  const cogsPct    = snap.cogs_pct      ?? 0;
-  const primePct   = snap.prime_cost_pct ?? 0;
-  const netPct     = snap.net_profit_pct ?? 0;
-  const netDollars = snap.net_profit     ?? 0;
+  const salesVal       = snap.sales_total       ?? 0;
+  const laborPct       = snap.labor_pct         ?? 0;
+  const laborTotal     = snap.labor_total       ?? 0;
+  const laborHourly    = snap.labor_hourly      ?? 0;
+  const salaryTotal    = snap.salary_total      ?? 0;
+  const payrollTax     = snap.payroll_tax       ?? 0;
+  const cogsPct        = snap.cogs_pct          ?? 0;
+  const primePct       = snap.prime_cost_pct    ?? 0;
+  const fixedPct       = snap.fixed_pct         ?? 0;
+  const fixedTotal     = snap.fixed_total       ?? 0;
+  const rentDollars    = snap.rent_dollars      ?? 0;
+  const amortDollars   = snap.amortized_dollars ?? 0;
+  const mrDollars      = snap.mr_dollars        ?? 0;
+  const netPct         = snap.net_profit_pct    ?? 0;
+  const netDollars     = snap.net_profit        ?? 0;
 
   const fmt$ = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   const fmtPct = (n: number) => `${n.toFixed(1)}%`;
@@ -144,14 +154,15 @@ function buildEmail(data: {
     <!-- Alerts -->
     <div style="margin-bottom:16px;">${alertsHtml}</div>
 
-    <!-- KPI Pills -->
+    <!-- KPI Pills (6 across — Sales, COGS, Labor, Fixed, Prime, Net) -->
     <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:8px;">
       <tr>
-        ${kpiPill("Sales", fmt$(salesVal), salesScore(salesVal))}
-        ${kpiPill("COGS", fmtPct(cogsPct), cogsScore(cogsPct))}
-        ${kpiPill("Labor", fmtPct(laborPct), laborScore(laborPct))}
-        ${kpiPill("Prime", fmtPct(primePct), primeScore(primePct))}
-        ${kpiPill("Net", fmtPct(netPct), netScore(netPct))}
+        ${kpiPill("Sales", fmt$(salesVal),       salesScore(salesVal))}
+        ${kpiPill("COGS",  fmtPct(cogsPct),       cogsScore(cogsPct))}
+        ${kpiPill("Labor", fmtPct(laborPct),      laborScore(laborPct))}
+        ${kpiPill("Fixed", fmtPct(fixedPct),      fixedScore(fixedPct))}
+        ${kpiPill("Prime", fmtPct(primePct),      primeScore(primePct))}
+        ${kpiPill("Net",   fmtPct(netPct),        netScore(netPct))}
       </tr>
     </table>
 
@@ -160,8 +171,9 @@ function buildEmail(data: {
       ${sectionHeader("Financial Summary")}
       ${row("Net Sales", fmt$(salesVal))}
       ${row("COGS", fmtPct(cogsPct), `${fmt$(snap.cogs_total ?? 0)} — Food ${fmtPct(snap.cogs_food && salesVal ? (snap.cogs_food/salesVal)*100 : 0)} · Bev ${fmtPct(snap.cogs_beverage && salesVal ? (snap.cogs_beverage/salesVal)*100 : 0)} · Alc ${fmtPct(snap.cogs_alcohol && salesVal ? (snap.cogs_alcohol/salesVal)*100 : 0)}`)}
-      ${row("Labor", fmtPct(laborPct), fmt$(snap.labor_total ?? 0))}
+      ${row("Labor", fmtPct(laborPct), `${fmt$(laborTotal)} — Hourly ${fmt$(laborHourly)} · Salary ${fmt$(salaryTotal)} · Tax ${fmt$(payrollTax)}`)}
       ${row("Prime Cost", fmtPct(primePct))}
+      ${row("Fixed Cost", fmtPct(fixedPct), `${fmt$(fixedTotal)} — Rent ${fmt$(rentDollars)} · Amortized ${fmt$(amortDollars)} · M&R ${fmt$(mrDollars)}`)}
       ${row("Net Profit", `${fmtPct(netPct)}`, fmt$(netDollars))}
 
       ${sectionHeader("Reviews")}
@@ -254,6 +266,7 @@ Deno.serve(async (_req) => {
     const alerts: string[] = [];
     if ((snap.cogs_pct ?? 0) > 42)         alerts.push(`COGS at ${snap.cogs_pct?.toFixed(1)}% — above 42% threshold`);
     if ((snap.labor_pct ?? 0) > 50)        alerts.push(`Labor at ${snap.labor_pct?.toFixed(1)}% — above 50% threshold`);
+    if ((snap.fixed_pct ?? 0) > 42)        alerts.push(`Fixed Cost at ${snap.fixed_pct?.toFixed(1)}% — above 42% threshold`);
     if ((snap.prime_cost_pct ?? 0) > 90)   alerts.push(`Prime Cost at ${snap.prime_cost_pct?.toFixed(1)}% — above 90% threshold`);
     if ((snap.net_profit_pct ?? 0) < -15)  alerts.push(`Net Profit at ${snap.net_profit_pct?.toFixed(1)}% — below -15% threshold`);
     if ((snap.sales_total ?? 0) < 400)     alerts.push(`Sales at $${Math.round(snap.sales_total ?? 0)} — below $400 daily minimum`);

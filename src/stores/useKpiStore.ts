@@ -67,6 +67,11 @@ type KpiSnapshot = {
   sales_delivery: number;
   check_average: number | null;
   covers: number | null;
+  // Labor breakouts (added 2026-05-10 with the full P&L migration; older
+  // snapshots have these as null and we fall back to deriving from labor_total)
+  labor_hourly: number | null;
+  salary_total: number | null;
+  payroll_tax: number | null;
   labor_total: number;
   labor_pct: number;
   worked_hours: number | null;
@@ -76,6 +81,14 @@ type KpiSnapshot = {
   cogs_beverage: number | null;
   cogs_alcohol: number | null;
   prime_cost_pct: number;
+  // Fixed cost breakouts (also new). Mobile prefers these from the
+  // snapshot but recomputes M&R locally so a fresh entry doesn't have to
+  // wait 5 min for the next sync.
+  rent_dollars: number | null;
+  amortized_dollars: number | null;
+  mr_dollars: number | null;
+  fixed_total: number | null;
+  fixed_pct: number | null;
   net_profit: number;
   net_profit_pct: number;
   captured_at: string;
@@ -158,17 +171,21 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     const totalSales = snap.sales_total ?? 0;
     if (totalSales <= 0) return;
 
-    // Fixed costs (still computed locally)
+    // Fixed costs: prefer snapshot fields (rent + amortized are deterministic
+    // and computed server-side), but always recompute M&R locally so a
+    // freshly-added entry doesn't have to wait 5 min for the next sync.
     const todayMR       = getTodayMRTotal();
-    const rentCost      = totalSales * RENT_PCT;
-    const amortizedCost = hourlyAmortized(); // drips 10 AM → 4 PM ET
+    const rentCost      = snap.rent_dollars      ?? (totalSales * RENT_PCT);
+    const amortizedCost = snap.amortized_dollars ?? hourlyAmortized();
     const totalFixed    = rentCost + amortizedCost + todayMR;
 
-    const laborCost = snap.labor_total ?? 0;
-    const cogsDollars = snap.cogs_total ?? 0;
-    const netDollars = totalSales - cogsDollars - laborCost - totalFixed;
-    const netPct     = (netDollars / totalSales) * 100;
-    const nScore     = netScore(netPct);
+    const laborCost   = snap.labor_total ?? 0;
+    const cogsDollars = snap.cogs_total  ?? 0;
+    // Net: server now subtracts fixed costs too. Recompute locally so the
+    // M&R override (above) flows through.
+    const netDollars  = totalSales - cogsDollars - laborCost - totalFixed;
+    const netPct      = (netDollars / totalSales) * 100;
+    const nScore      = netScore(netPct);
 
     function cogsScore(pct: number) {
       if (pct <= 25) return 8; if (pct <= 28) return 7; if (pct <= 31) return 6;

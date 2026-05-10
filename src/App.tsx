@@ -4,6 +4,7 @@ import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
+import { useMaintenanceStore } from "./stores/useMaintenanceStore";
 import type { KpiKey } from "./stores/useKpiStore";
 import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
@@ -52,6 +53,7 @@ export default function App() {
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
+  const hydrateMaintenance    = useMaintenanceStore((s) => s.hydrate);
 
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
@@ -101,6 +103,11 @@ export default function App() {
   useEffect(() => {
     hydrateLog();
   }, [hydrateLog]);
+
+  // ── Maintenance & Repair: hydrate from Supabase ──────────────────────────
+  useEffect(() => {
+    hydrateMaintenance();
+  }, [hydrateMaintenance]);
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
