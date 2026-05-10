@@ -1,6 +1,7 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
+import { computeSalesState, getDailyTarget } from "../config/salesTargetConfig";
 import type { PmixItem, HourlySales } from "../data/toastAdapter";
 
 type Props = { open: boolean; onClose: () => void };
@@ -177,18 +178,21 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
 }
 
 export function SalesDrillDown({ open, onClose }: Props) {
-  const sales  = useKpiStore((s) => s.sales);
-  const detail = useKpiStore((s) => s.salesDetail);
+  const sales           = useKpiStore((s) => s.sales);
+  const detail          = useKpiStore((s) => s.salesDetail);
+  const scheduleDetail  = useKpiStore((s) => s.scheduleDetail);
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // Sales score: $500 (weak/1) → $2,500 (excellent/8)
-  const salesScore = (() => {
-    const v = sales.value, min = 500, max = 2500;
-    if (!Number.isFinite(v) || v <= min) return 1;
-    if (v >= max) return 8;
-    return Math.round(1 + ((v - min) / (max - min)) * 7);
-  })();
+  // Sales score: projection-based (see salesTargetConfig.ts)
+  const target = getDailyTarget();
+  const salesState = computeSalesState(
+    sales.value,
+    scheduleDetail?.todayWindowStart ?? null,
+    scheduleDetail?.todayWindowEnd   ?? null,
+    target,
+  );
+  const salesScore = salesState.score;
 
   // Derive total 3rd party
   const ch = detail?.channels;
@@ -207,8 +211,41 @@ export function SalesDrillDown({ open, onClose }: Props) {
       score={salesScore}
       label="Sales"
       value={salesDisplay}
-      status={detail ? `${detail.pmixTop.length + detail.pmixBottom.length} items sold today` : "Today"}
+      status={salesState.message}
     >
+      {/* ── Projection breakdown ──────────────────────── */}
+      <SectionHeader title="Day Projection" />
+      <DrillRow
+        label="Daily target"
+        value={target > 0 ? fmt$(target) : "Closed"}
+        sub={target > 0 ? `today's day-of-week target` : "no target — tile shows neutral"}
+      />
+      {salesState.projected !== null && (
+        <DrillRow
+          label="Projected end-of-day"
+          value={fmt$(salesState.projected)}
+          sub={target > 0 ? `${Math.round((salesState.projected / target) * 100)}% of target` : undefined}
+        />
+      )}
+      {salesState.pace !== null && salesState.state !== "post-close" && (
+        <DrillRow
+          label="Running pace"
+          value={`${Math.round(salesState.pace * 100)}%`}
+          sub={
+            salesState.pace >= 1.10 ? "ahead of expected curve"
+            : salesState.pace >= 0.95 ? "on track"
+            : salesState.pace >= 0.80 ? "slightly behind"
+            : "well behind expected curve"
+          }
+        />
+      )}
+      {salesState.state === "pre-open" && (
+        <DrillRow label="Status" value="Pre-open" dimmed />
+      )}
+      {salesState.state === "just-opened" && (
+        <DrillRow label="Status" value="Just opened" sub="too early to project — wait until ~10% of window" dimmed />
+      )}
+
       {/* ── Channel Breakdown ─────────────────────────── */}
       <SectionHeader title="Sales by Channel" />
 

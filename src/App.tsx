@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { coastal } from "./theme/skins";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
+import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
@@ -50,6 +51,7 @@ export default function App() {
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
   const tiles                 = useKpiStore((s) => s.tiles);
+  const scheduleDetail        = useKpiStore((s) => s.scheduleDetail);
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
@@ -163,14 +165,27 @@ export default function App() {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // ── Color-grading scores for the headline bars ────────────────────────────
+  // ── Sales score: projection-based, anchored to operating window ──────────
+  // Uses today's first-shift-start → last-shift-end as the window so the
+  // score is meaningful relative to where we are in the day (not just the
+  // raw running total). See src/config/salesTargetConfig.ts for shape curve
+  // and per-day-of-week targets.
+  const salesState = computeSalesState(
+    sales.value,
+    scheduleDetail?.todayWindowStart ?? null,
+    scheduleDetail?.todayWindowEnd   ?? null,
+    getDailyTarget(),
+  );
+  const salesScore = salesState.score;
+  const salesSubLine = salesState.message;
+
+  // ── Color-grading score for net (still simple range) ─────────────────────
   const scoreFromRange = (v: number, min: number, max: number) => {
     if (!Number.isFinite(v)) return 5;
     if (v <= min) return 1;
     if (v >= max) return 8;
     return Math.round(1 + ((v - min) / (max - min)) * 7);
   };
-  const salesScore = scoreFromRange(sales.value, 500, 2500);
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
   const netScore   = scoreFromRange(netPctNum, -5, 15);
 
@@ -368,7 +383,7 @@ export default function App() {
               kind="sales"
               label={sales.label}
               value={salesDisplay}
-              sub={sales.sub}
+              sub={salesSubLine}
               score={salesScore}
               alerting={alertingKeys.has("sales")}
               onClick={() => setDrillKey("sales" as KpiKey)}

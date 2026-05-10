@@ -31,8 +31,32 @@ function cogsScore(pct: number)  { return pct<=25?8:pct<=28?7:pct<=31?6:pct<=34?
 function laborScore(pct: number) { return pct<=28?8:pct<=30?7:pct<=32?6:pct<=34?5:pct<=36?4:pct<=38?3:2; }
 function primeScore(pct: number) { return pct<=55?8:pct<=60?7:pct<=65?6:pct<=68?5:pct<=72?4:pct<=78?3:2; }
 function netScore(pct: number)   { return pct>=20?8:pct>=15?7:pct>=10?6:pct>=5?5:pct>=2?4:pct>=0?3:2; }
-function salesScore(val: number) { return val>=2500?8:val>=2000?7:val>=1500?6:val>=1000?5:val>=700?4:val>=400?3:2; }
 function fixedScore(pct: number) { return pct<=20?8:pct<=23?7:pct<=26?6:pct<=30?5:pct<=35?4:pct<=42?3:2; }
+
+// Sales scoring: at 8pm ET the day's window is closed, so we score actual
+// against a per-day-of-week target (mirrors src/config/salesTargetConfig.ts).
+// 0=Sun ... 6=Sat; 0 = closed.
+const DAILY_SALES_TARGETS: Record<number, number> = {
+  0: 0, 1: 1400, 2: 1400, 3: 1300, 4: 1500, 5: 1800, 6: 2300,
+};
+function dailyTargetET(d = new Date()): number {
+  const isoET = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const [y, m, day] = isoET.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+  return DAILY_SALES_TARGETS[dow] ?? 1400;
+}
+function salesScore(val: number, target: number): number {
+  if (target <= 0) return 5;       // closed day → neutral
+  const r = val / target;
+  if (r >= 1.20) return 8;
+  if (r >= 1.10) return 7;
+  if (r >= 1.00) return 6;
+  if (r >= 0.90) return 5;
+  if (r >= 0.80) return 4;
+  if (r >= 0.65) return 3;
+  if (r >= 0.50) return 2;
+  return 1;
+}
 
 // ── KPI pill HTML ────────────────────────────────────────────────────────────
 function kpiPill(label: string, value: string, score: number): string {
@@ -157,7 +181,7 @@ function buildEmail(data: {
     <!-- KPI Pills (6 across — Sales, COGS, Labor, Fixed, Prime, Net) -->
     <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:8px;">
       <tr>
-        ${kpiPill("Sales", fmt$(salesVal),       salesScore(salesVal))}
+        ${kpiPill("Sales", fmt$(salesVal),       salesScore(salesVal, dailyTargetET()))}
         ${kpiPill("COGS",  fmtPct(cogsPct),       cogsScore(cogsPct))}
         ${kpiPill("Labor", fmtPct(laborPct),      laborScore(laborPct))}
         ${kpiPill("Fixed", fmtPct(fixedPct),      fixedScore(fixedPct))}
@@ -169,7 +193,7 @@ function buildEmail(data: {
     <!-- Financial detail -->
     <table width="100%" cellpadding="0" cellspacing="0">
       ${sectionHeader("Financial Summary")}
-      ${row("Net Sales", fmt$(salesVal))}
+      ${row("Net Sales", fmt$(salesVal), `target ${fmt$(dailyTargetET())} · ${dailyTargetET() > 0 ? Math.round((salesVal / dailyTargetET()) * 100) + "% of target" : "closed day"}`)}
       ${row("COGS", fmtPct(cogsPct), `${fmt$(snap.cogs_total ?? 0)} — Food ${fmtPct(snap.cogs_food && salesVal ? (snap.cogs_food/salesVal)*100 : 0)} · Bev ${fmtPct(snap.cogs_beverage && salesVal ? (snap.cogs_beverage/salesVal)*100 : 0)} · Alc ${fmtPct(snap.cogs_alcohol && salesVal ? (snap.cogs_alcohol/salesVal)*100 : 0)}`)}
       ${row("Labor", fmtPct(laborPct), `${fmt$(laborTotal)} — Hourly ${fmt$(laborHourly)} · Salary ${fmt$(salaryTotal)} · Tax ${fmt$(payrollTax)}`)}
       ${row("Prime Cost", fmtPct(primePct))}
@@ -269,7 +293,13 @@ Deno.serve(async (_req) => {
     if ((snap.fixed_pct ?? 0) > 42)        alerts.push(`Fixed Cost at ${snap.fixed_pct?.toFixed(1)}% — above 42% threshold`);
     if ((snap.prime_cost_pct ?? 0) > 90)   alerts.push(`Prime Cost at ${snap.prime_cost_pct?.toFixed(1)}% — above 90% threshold`);
     if ((snap.net_profit_pct ?? 0) < -15)  alerts.push(`Net Profit at ${snap.net_profit_pct?.toFixed(1)}% — below -15% threshold`);
-    if ((snap.sales_total ?? 0) < 400)     alerts.push(`Sales at $${Math.round(snap.sales_total ?? 0)} — below $400 daily minimum`);
+    {
+      const tgt = dailyTargetET();
+      const sales = snap.sales_total ?? 0;
+      if (tgt > 0 && sales < tgt * 0.65) {
+        alerts.push(`Sales at $${Math.round(sales)} — below 65% of $${tgt} daily target`);
+      }
+    }
 
     const html = buildEmail({
       orgName: org.name,
