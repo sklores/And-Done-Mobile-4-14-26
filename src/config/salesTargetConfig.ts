@@ -19,7 +19,7 @@
 // ── Per-day targets (Sunday=0 ... Saturday=6) ───────────────────────────────
 // Set to 0 for closed days — tile renders as "Closed", no scoring.
 export const DAILY_TARGETS: Record<number, number> = {
-  0: 0,      // Sunday — currently no sales recorded
+  0: 1200,   // Sunday
   1: 1400,   // Monday
   2: 1400,   // Tuesday
   3: 1300,   // Wednesday

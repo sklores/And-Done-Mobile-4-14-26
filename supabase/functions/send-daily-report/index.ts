@@ -37,7 +37,7 @@ function fixedScore(pct: number) { return pct<=20?8:pct<=23?7:pct<=26?6:pct<=30?
 // against a per-day-of-week target (mirrors src/config/salesTargetConfig.ts).
 // 0=Sun ... 6=Sat; 0 = closed.
 const DAILY_SALES_TARGETS: Record<number, number> = {
-  0: 0, 1: 1400, 2: 1400, 3: 1300, 4: 1500, 5: 1800, 6: 2300,
+  0: 1200, 1: 1400, 2: 1400, 3: 1300, 4: 1500, 5: 1800, 6: 2300,
 };
 function dailyTargetET(d = new Date()): number {
   const isoET = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
