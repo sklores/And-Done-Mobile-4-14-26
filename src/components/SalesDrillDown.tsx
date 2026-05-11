@@ -220,6 +220,14 @@ export function SalesDrillDown({ open, onClose }: Props) {
         value={target > 0 ? fmt$(target) : "Closed"}
         sub={target > 0 ? `today's day-of-week target` : "no target — tile shows neutral"}
       />
+      {salesState.usingDefaultWindow && (
+        <DrillRow
+          label="Operating window"
+          value="typical hours"
+          sub="no shifts scheduled — using default day-of-week window"
+          dimmed
+        />
+      )}
       {salesState.projected !== null && (
         <DrillRow
           label="Projected end-of-day"

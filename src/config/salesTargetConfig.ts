@@ -28,6 +28,21 @@ export const DAILY_TARGETS: Record<number, number> = {
   6: 2300,   // Saturday
 };
 
+// ── Default operating windows per day-of-week (HH:MM:SS) ────────────────────
+// Used when shift_shifts has no rows for today (forgot to enter the week,
+// new location bootstrapping, etc.). Sourced from the last 28 days of
+// actual shift windows. Real shifts override these via fetchTodayScheduled.
+type Window = { start: string; end: string };
+export const DEFAULT_WINDOWS: Record<number, Window | null> = {
+  0: { start: "10:00:00", end: "16:00:00" }, // Sun
+  1: { start: "06:00:00", end: "16:30:00" }, // Mon
+  2: { start: "06:00:00", end: "16:30:00" }, // Tue
+  3: { start: "06:00:00", end: "16:30:00" }, // Wed
+  4: { start: "06:00:00", end: "16:30:00" }, // Thu
+  5: { start: "07:00:00", end: "19:30:00" }, // Fri
+  6: { start: "09:30:00", end: "19:30:00" }, // Sat
+};
+
 // ── Shape curve: window-elapsed-% → expected-done-% ─────────────────────────
 // One curve shared across days. Lunch-rush peak is roughly mid-window, so
 // expected % accumulates faster in the middle than at the edges. Tune by
@@ -118,12 +133,12 @@ export function elapsedWindowPct(
 }
 
 export type SalesScoreState =
-  | { state: "closed";       score: 5; projected: null; pace: null;   message: string }
-  | { state: "no-schedule";  score: 5; projected: null; pace: null;   message: string }
-  | { state: "pre-open";     score: 5; projected: null; pace: null;   message: string }
-  | { state: "just-opened";  score: 5; projected: null; pace: number; message: string }
-  | { state: "in-progress";  score: number; projected: number; pace: number; message: string }
-  | { state: "post-close";   score: number; projected: number; pace: 1;     message: string };
+  | { state: "closed";       score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
+  | { state: "no-schedule";  score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
+  | { state: "pre-open";     score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
+  | { state: "just-opened";  score: 5; projected: null; pace: number; message: string; usingDefaultWindow?: boolean }
+  | { state: "in-progress";  score: number; projected: number; pace: number; message: string; usingDefaultWindow?: boolean }
+  | { state: "post-close";   score: number; projected: number; pace: 1;     message: string; usingDefaultWindow?: boolean };
 
 /** Map a projection/target ratio to a 1..8 score. */
 function bucketRatio(ratio: number): number {
@@ -159,7 +174,21 @@ export function computeSalesState(
     };
   }
 
-  const elapsed = elapsedWindowPct(windowStart, windowEnd, now);
+  // Fall back to default per-day-of-week window when no shifts entered.
+  // Lets the tile keep scoring even if the schedule isn't filled in yet.
+  let usingDefaultWindow = false;
+  let resolvedStart = windowStart;
+  let resolvedEnd   = windowEnd;
+  if (!resolvedStart || !resolvedEnd) {
+    const fallback = DEFAULT_WINDOWS[dowET(now)];
+    if (fallback) {
+      resolvedStart = fallback.start;
+      resolvedEnd   = fallback.end;
+      usingDefaultWindow = true;
+    }
+  }
+
+  const elapsed = elapsedWindowPct(resolvedStart, resolvedEnd, now);
   if (elapsed === null) {
     return {
       state: "no-schedule",
@@ -167,6 +196,7 @@ export function computeSalesState(
       projected: null,
       pace: null,
       message: "No schedule today",
+      usingDefaultWindow,
     };
   }
 
@@ -176,7 +206,8 @@ export function computeSalesState(
       score: 5,
       projected: null,
       pace: null,
-      message: windowStart ? `Opens at ${formatTime(windowStart)}` : "Pre-open",
+      message: resolvedStart ? `Opens at ${formatTime(resolvedStart)}` : "Pre-open",
+      usingDefaultWindow,
     };
   }
 
@@ -191,6 +222,7 @@ export function computeSalesState(
       projected: actualSales,
       pace: 1,
       message: `Final $${Math.round(actualSales)} · ${Math.round(ratio * 100)}% of target`,
+      usingDefaultWindow,
     };
   }
 
@@ -204,6 +236,7 @@ export function computeSalesState(
       projected: null,
       pace,
       message: "Just opened — too early to project",
+      usingDefaultWindow,
     };
   }
 
@@ -218,6 +251,7 @@ export function computeSalesState(
     projected,
     pace,
     message: `Proj $${Math.round(projected).toLocaleString()} · ${Math.round(ratio * 100)}% of target`,
+    usingDefaultWindow,
   };
 }
 
