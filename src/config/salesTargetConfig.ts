@@ -31,16 +31,16 @@ export const DAILY_TARGETS: Record<number, number> = {
 // ── Business hours per day-of-week (HH:MM:SS) ───────────────────────────────
 // Sales scoring is anchored to *business hours*, not shift schedules. The two
 // are independent — shifts are a labor concern, hours are when the restaurant
-// is open for customers. Sourced from typical operating pattern; edit here.
+// is open for customers. Currently 10am-4pm all 7 days.
 type BusinessHours = { open: string; close: string };
 export const BUSINESS_HOURS: Record<number, BusinessHours | null> = {
   0: { open: "10:00:00", close: "16:00:00" }, // Sun
-  1: { open: "06:00:00", close: "16:30:00" }, // Mon
-  2: { open: "06:00:00", close: "16:30:00" }, // Tue
-  3: { open: "06:00:00", close: "16:30:00" }, // Wed
-  4: { open: "06:00:00", close: "16:30:00" }, // Thu
-  5: { open: "07:00:00", close: "19:30:00" }, // Fri
-  6: { open: "09:30:00", close: "19:30:00" }, // Sat
+  1: { open: "10:00:00", close: "16:00:00" }, // Mon
+  2: { open: "10:00:00", close: "16:00:00" }, // Tue
+  3: { open: "10:00:00", close: "16:00:00" }, // Wed
+  4: { open: "10:00:00", close: "16:00:00" }, // Thu
+  5: { open: "10:00:00", close: "16:00:00" }, // Fri
+  6: { open: "10:00:00", close: "16:00:00" }, // Sat
 };
 
 /** Today's open/close (in ET). Returns null on closed days. */
@@ -49,16 +49,22 @@ export function getTodayBusinessHours(d = new Date()): BusinessHours | null {
 }
 
 // ── Shape curve: window-elapsed-% → expected-done-% ─────────────────────────
-// One curve shared across days. Lunch-rush peak is roughly mid-window, so
-// expected % accumulates faster in the middle than at the edges. Tune by
-// inspecting actual hour-by-hour distribution from kpi_snapshots if needed.
+// 10am-4pm window with 70% of sales between 11am and 1pm.
+//   10am (0%)   → 0%
+//   11am (17%)  → 5%   (pre-lunch trickle)
+//   12pm (33%)  → 40%  (mid-lunch surge)
+//   1pm  (50%)  → 75%  (lunch done; 5% + 70% = 75%)
+//   2pm  (67%)  → 85%
+//   3pm  (83%)  → 92%
+//   4pm (100%)  → 100% (close)
 const SHAPE_CURVE: Array<[number, number]> = [
   [0.00, 0.00],
-  [0.15, 0.10],   // first hour or so — slow open
-  [0.35, 0.35],   // ramping into lunch
-  [0.55, 0.65],   // lunch rush peaks ~mid-window
-  [0.75, 0.85],   // afternoon slowdown
-  [1.00, 1.00],   // close
+  [0.17, 0.05],
+  [0.33, 0.40],
+  [0.50, 0.75],
+  [0.67, 0.85],
+  [0.83, 0.92],
+  [1.00, 1.00],
 ];
 
 // Below this elapsed-pct, projection becomes too noisy (small denominator).
