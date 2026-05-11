@@ -180,18 +180,12 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
 export function SalesDrillDown({ open, onClose }: Props) {
   const sales           = useKpiStore((s) => s.sales);
   const detail          = useKpiStore((s) => s.salesDetail);
-  const scheduleDetail  = useKpiStore((s) => s.scheduleDetail);
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // Sales score: projection-based (see salesTargetConfig.ts)
+  // Sales score: projection-based, anchored to BUSINESS_HOURS (not shifts).
   const target = getDailyTarget();
-  const salesState = computeSalesState(
-    sales.value,
-    scheduleDetail?.todayWindowStart ?? null,
-    scheduleDetail?.todayWindowEnd   ?? null,
-    target,
-  );
+  const salesState = computeSalesState(sales.value, target);
   const salesScore = salesState.score;
 
   // Derive total 3rd party
@@ -220,14 +214,6 @@ export function SalesDrillDown({ open, onClose }: Props) {
         value={target > 0 ? fmt$(target) : "Closed"}
         sub={target > 0 ? `today's day-of-week target` : "no target — tile shows neutral"}
       />
-      {salesState.usingDefaultWindow && (
-        <DrillRow
-          label="Operating window"
-          value="typical hours"
-          sub="no shifts scheduled — using default day-of-week window"
-          dimmed
-        />
-      )}
       {salesState.projected !== null && (
         <DrillRow
           label="Projected end-of-day"

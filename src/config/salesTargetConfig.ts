@@ -28,20 +28,25 @@ export const DAILY_TARGETS: Record<number, number> = {
   6: 2300,   // Saturday
 };
 
-// ── Default operating windows per day-of-week (HH:MM:SS) ────────────────────
-// Used when shift_shifts has no rows for today (forgot to enter the week,
-// new location bootstrapping, etc.). Sourced from the last 28 days of
-// actual shift windows. Real shifts override these via fetchTodayScheduled.
-type Window = { start: string; end: string };
-export const DEFAULT_WINDOWS: Record<number, Window | null> = {
-  0: { start: "10:00:00", end: "16:00:00" }, // Sun
-  1: { start: "06:00:00", end: "16:30:00" }, // Mon
-  2: { start: "06:00:00", end: "16:30:00" }, // Tue
-  3: { start: "06:00:00", end: "16:30:00" }, // Wed
-  4: { start: "06:00:00", end: "16:30:00" }, // Thu
-  5: { start: "07:00:00", end: "19:30:00" }, // Fri
-  6: { start: "09:30:00", end: "19:30:00" }, // Sat
+// ── Business hours per day-of-week (HH:MM:SS) ───────────────────────────────
+// Sales scoring is anchored to *business hours*, not shift schedules. The two
+// are independent — shifts are a labor concern, hours are when the restaurant
+// is open for customers. Sourced from typical operating pattern; edit here.
+type BusinessHours = { open: string; close: string };
+export const BUSINESS_HOURS: Record<number, BusinessHours | null> = {
+  0: { open: "10:00:00", close: "16:00:00" }, // Sun
+  1: { open: "06:00:00", close: "16:30:00" }, // Mon
+  2: { open: "06:00:00", close: "16:30:00" }, // Tue
+  3: { open: "06:00:00", close: "16:30:00" }, // Wed
+  4: { open: "06:00:00", close: "16:30:00" }, // Thu
+  5: { open: "07:00:00", close: "19:30:00" }, // Fri
+  6: { open: "09:30:00", close: "19:30:00" }, // Sat
 };
+
+/** Today's open/close (in ET). Returns null on closed days. */
+export function getTodayBusinessHours(d = new Date()): BusinessHours | null {
+  return BUSINESS_HOURS[dowET(d)] ?? null;
+}
 
 // ── Shape curve: window-elapsed-% → expected-done-% ─────────────────────────
 // One curve shared across days. Lunch-rush peak is roughly mid-window, so
@@ -133,12 +138,11 @@ export function elapsedWindowPct(
 }
 
 export type SalesScoreState =
-  | { state: "closed";       score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
-  | { state: "no-schedule";  score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
-  | { state: "pre-open";     score: 5; projected: null; pace: null;   message: string; usingDefaultWindow?: boolean }
-  | { state: "just-opened";  score: 5; projected: null; pace: number; message: string; usingDefaultWindow?: boolean }
-  | { state: "in-progress";  score: number; projected: number; pace: number; message: string; usingDefaultWindow?: boolean }
-  | { state: "post-close";   score: number; projected: number; pace: 1;     message: string; usingDefaultWindow?: boolean };
+  | { state: "closed";       score: 5; projected: null; pace: null;   message: string }
+  | { state: "pre-open";     score: 5; projected: null; pace: null;   message: string }
+  | { state: "just-opened";  score: 5; projected: null; pace: number; message: string }
+  | { state: "in-progress";  score: number; projected: number; pace: number; message: string }
+  | { state: "post-close";   score: number; projected: number; pace: 1;     message: string };
 
 /** Map a projection/target ratio to a 1..8 score. */
 function bucketRatio(ratio: number): number {
@@ -151,16 +155,15 @@ function bucketRatio(ratio: number): number {
 /**
  * Compute the projection-based sales score + supporting display data.
  *
+ * Self-contained — uses BUSINESS_HOURS for today's open/close window, NOT
+ * shift schedule data. Sales scoring is independent of labor.
+ *
  * @param actualSales running sales total today
- * @param windowStart "HH:MM:SS" — earliest shift start today
- * @param windowEnd   "HH:MM:SS" — latest shift end today
  * @param target      today's daily $ target (0 = closed)
  * @param now         override for testing
  */
 export function computeSalesState(
   actualSales: number,
-  windowStart: string | null,
-  windowEnd: string | null,
   target: number,
   now = new Date(),
 ): SalesScoreState {
@@ -174,40 +177,26 @@ export function computeSalesState(
     };
   }
 
-  // Fall back to default per-day-of-week window when no shifts entered.
-  // Lets the tile keep scoring even if the schedule isn't filled in yet.
-  let usingDefaultWindow = false;
-  let resolvedStart = windowStart;
-  let resolvedEnd   = windowEnd;
-  if (!resolvedStart || !resolvedEnd) {
-    const fallback = DEFAULT_WINDOWS[dowET(now)];
-    if (fallback) {
-      resolvedStart = fallback.start;
-      resolvedEnd   = fallback.end;
-      usingDefaultWindow = true;
-    }
-  }
-
-  const elapsed = elapsedWindowPct(resolvedStart, resolvedEnd, now);
-  if (elapsed === null) {
+  const hours = getTodayBusinessHours(now);
+  if (!hours) {
+    // No business hours configured for this day-of-week → treat as closed.
     return {
-      state: "no-schedule",
+      state: "closed",
       score: 5,
       projected: null,
       pace: null,
-      message: "No schedule today",
-      usingDefaultWindow,
+      message: "Closed today",
     };
   }
 
-  if (elapsed === 0) {
+  const elapsed = elapsedWindowPct(hours.open, hours.close, now);
+  if (elapsed === null || elapsed === 0) {
     return {
       state: "pre-open",
       score: 5,
       projected: null,
       pace: null,
-      message: resolvedStart ? `Opens at ${formatTime(resolvedStart)}` : "Pre-open",
-      usingDefaultWindow,
+      message: `Opens at ${formatTime(hours.open)}`,
     };
   }
 
@@ -222,7 +211,6 @@ export function computeSalesState(
       projected: actualSales,
       pace: 1,
       message: `Final $${Math.round(actualSales)} · ${Math.round(ratio * 100)}% of target`,
-      usingDefaultWindow,
     };
   }
 
@@ -236,7 +224,6 @@ export function computeSalesState(
       projected: null,
       pace,
       message: "Just opened — too early to project",
-      usingDefaultWindow,
     };
   }
 
@@ -251,7 +238,6 @@ export function computeSalesState(
     projected,
     pace,
     message: `Proj $${Math.round(projected).toLocaleString()} · ${Math.round(ratio * 100)}% of target`,
-    usingDefaultWindow,
   };
 }
 
