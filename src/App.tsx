@@ -164,12 +164,10 @@ export default function App() {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // ── Sales score: projection-based, anchored to business hours ────────────
-  // Self-contained — uses BUSINESS_HOURS per day-of-week, NOT shift schedule
-  // data. Sales is its own concept. See src/config/salesTargetConfig.ts.
+  // ── Sales score: projection-based (see salesTargetConfig.ts) ─────────────
+  // Tile shows ONLY "Sales" + dollar amount. No sub-line.
   const salesState = computeSalesState(sales.value, getDailyTarget());
   const salesScore = salesState.score;
-  const salesSubLine = salesState.message;
 
   // ── Color-grading score for net (still simple range) ─────────────────────
   const scoreFromRange = (v: number, min: number, max: number) => {
@@ -375,7 +373,7 @@ export default function App() {
               kind="sales"
               label={sales.label}
               value={salesDisplay}
-              sub={salesSubLine}
+              sub=""
               score={salesScore}
               alerting={alertingKeys.has("sales")}
               onClick={() => setDrillKey("sales" as KpiKey)}

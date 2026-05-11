@@ -184,9 +184,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
   // Sales score: projection-based, anchored to BUSINESS_HOURS (not shifts).
-  const target = getDailyTarget();
-  const salesState = computeSalesState(sales.value, target);
-  const salesScore = salesState.score;
+  const salesScore = computeSalesState(sales.value, getDailyTarget()).score;
 
   // Derive total 3rd party
   const ch = detail?.channels;
@@ -205,41 +203,8 @@ export function SalesDrillDown({ open, onClose }: Props) {
       score={salesScore}
       label="Sales"
       value={salesDisplay}
-      status={salesState.message}
+      status={detail ? `${detail.pmixTop.length + detail.pmixBottom.length} items sold today` : "Today"}
     >
-      {/* ── Projection breakdown ──────────────────────── */}
-      <SectionHeader title="Day Projection" />
-      <DrillRow
-        label="Daily target"
-        value={target > 0 ? fmt$(target) : "Closed"}
-        sub={target > 0 ? `today's day-of-week target` : "no target — tile shows neutral"}
-      />
-      {salesState.projected !== null && (
-        <DrillRow
-          label="Projected end-of-day"
-          value={fmt$(salesState.projected)}
-          sub={target > 0 ? `${Math.round((salesState.projected / target) * 100)}% of target` : undefined}
-        />
-      )}
-      {salesState.pace !== null && salesState.state !== "post-close" && (
-        <DrillRow
-          label="Running pace"
-          value={`${Math.round(salesState.pace * 100)}%`}
-          sub={
-            salesState.pace >= 1.10 ? "ahead of expected curve"
-            : salesState.pace >= 0.95 ? "on track"
-            : salesState.pace >= 0.80 ? "slightly behind"
-            : "well behind expected curve"
-          }
-        />
-      )}
-      {salesState.state === "pre-open" && (
-        <DrillRow label="Status" value="Pre-open" dimmed />
-      )}
-      {salesState.state === "just-opened" && (
-        <DrillRow label="Status" value="Just opened" sub="too early to project — wait until ~10% of window" dimmed />
-      )}
-
       {/* ── Channel Breakdown ─────────────────────────── */}
       <SectionHeader title="Sales by Channel" />
 
