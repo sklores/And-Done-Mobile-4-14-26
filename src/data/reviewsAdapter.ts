@@ -9,7 +9,13 @@ import { supabase, supabaseReady } from "../lib/supabase";
 const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
 
 // ── Types ────────────────────────────────────────────────────────────────
-export type ReviewPlatform = "google" | "yelp" | "tripadvisor" | "ubereats";
+export type ReviewPlatform =
+  | "google"
+  | "yelp"
+  | "tripadvisor"
+  | "ubereats"
+  | "doordash"
+  | "findmeglutenfree";
 
 export type ReviewRow = {
   id: string;
@@ -49,7 +55,14 @@ export type ReviewsBundle = {
 };
 
 // ── Fetch + roll up ──────────────────────────────────────────────────────
-const PLATFORM_ORDER: ReviewPlatform[] = ["google", "yelp", "tripadvisor", "ubereats"];
+const PLATFORM_ORDER: ReviewPlatform[] = [
+  "google",
+  "yelp",
+  "tripadvisor",
+  "ubereats",
+  "doordash",
+  "findmeglutenfree",
+];
 const RECENT_LIMIT = 5;
 
 /** Fetches all reviews for GCDC and rolls them into the shape the UI needs. */
@@ -148,15 +161,19 @@ export function timeAgo(dateStr: string | null): string {
 }
 
 export const PLATFORM_LABEL: Record<ReviewPlatform, string> = {
-  google:      "Google",
-  yelp:        "Yelp",
-  tripadvisor: "Tripadvisor",
-  ubereats:    "Uber Eats",
+  google:           "Google",
+  yelp:             "Yelp",
+  tripadvisor:      "Tripadvisor",
+  ubereats:         "Uber Eats",
+  doordash:         "DoorDash",
+  findmeglutenfree: "Find Me Gluten Free",
 };
 
 export const PLATFORM_COLOR: Record<ReviewPlatform, string> = {
-  google:      "#4285F4",
-  yelp:        "#D32323",
-  tripadvisor: "#34E0A1",
-  ubereats:    "#142328",
+  google:           "#4285F4",
+  yelp:             "#D32323",
+  tripadvisor:      "#34E0A1",
+  ubereats:         "#142328",
+  doordash:         "#FF3008",
+  findmeglutenfree: "#3FA34D",
 };
