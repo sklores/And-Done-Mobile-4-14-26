@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { coastal } from "./theme/skins";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
+import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
@@ -109,6 +110,19 @@ export default function App() {
   useEffect(() => {
     hydrateMaintenance();
   }, [hydrateMaintenance]);
+
+  // ── Reviews chip: live score from Supabase reviews aggregate ─────────────
+  const [reviewsScore, setReviewsScore] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchReviewsBundle().then((b) => {
+      if (cancelled) return;
+      if (b && b.overallRating != null) {
+        setReviewsScore(ratingToReviewScore(b.overallRating));
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
@@ -390,7 +404,10 @@ export default function App() {
               alerting={alertingKeys.has("net")}
               onClick={() => setDrillKey("net" as KpiKey)}
             />
-            <MarqueeFeed onLongPress={setOpenFeed} />
+            <MarqueeFeed
+              onLongPress={setOpenFeed}
+              scoreOverrides={reviewsScore != null ? { reviews: reviewsScore } : undefined}
+            />
           </div>
         </div>{/* end scroll container */}
         </div>{/* end relative wrapper */}

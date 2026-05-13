@@ -41,9 +41,11 @@ const FEED_LABELS: Record<FeedKey, string> = {
 
 type Props = {
   onLongPress: (key: FeedKey) => void;
+  /** Per-feed score overrides — falls back to FEED_SCORES if not provided. */
+  scoreOverrides?: Partial<Record<FeedKey, number>>;
 };
 
-export function MarqueeFeed({ onLongPress }: Props) {
+export function MarqueeFeed({ onLongPress, scoreOverrides }: Props) {
   // At night the tan driftwood border + pale bg reads as a bright "blue
   // bar" above the tab bar (the saturation filter applied to this chrome
   // section turns the tan into a grey-blue stripe). Swap to the deep
@@ -225,7 +227,7 @@ export function MarqueeFeed({ onLongPress }: Props) {
       }}>
         {(Object.keys(FEEDS) as FeedKey[]).map((k) => {
           const on      = active[k];
-          const score   = FEED_SCORES[k];
+          const score   = scoreOverrides?.[k] ?? FEED_SCORES[k];
           const palette = tileForScore(score);
           const statusLabels: Record<number, string> = {
             8: "Excellent", 7: "Good", 6: "Watch",

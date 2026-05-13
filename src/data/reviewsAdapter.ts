@@ -177,3 +177,16 @@ export const PLATFORM_COLOR: Record<ReviewPlatform, string> = {
   doordash:         "#FF3008",
   findmeglutenfree: "#3FA34D",
 };
+
+/** Map an average star rating (1–5) to the tile/chip 1–8 score scale. */
+export function ratingToReviewScore(avg: number | null): number {
+  if (avg == null || !Number.isFinite(avg)) return 5;
+  if (avg >= 4.7) return 8;
+  if (avg >= 4.4) return 7;
+  if (avg >= 4.1) return 6;
+  if (avg >= 3.8) return 5;
+  if (avg >= 3.4) return 4;
+  if (avg >= 3.0) return 3;
+  if (avg >= 2.5) return 2;
+  return 1;
+}
