@@ -22,6 +22,17 @@ const PAPER_DINEIN_PCT  = 0.01;
 const PAPER_TAKEOUT_PCT = 0.04;
 const THIRD_PARTY_COMM  = 0.18;
 
+// Third-party marker substrings — used by both the diningOption-name match
+// (in classifyChannel) and the per-platform split below.
+const THIRD_PARTY_MARKERS = ["doordash", "uber eats", "ubereats", "grubhub", "chownow", "seamless"];
+
+// Toast's diningOptions catalog row shape.
+type DiningOption = {
+  guid: string;
+  name: string;
+  behavior: "DINE_IN" | "TAKE_OUT" | "DELIVERY";
+};
+
 // Fixed costs (mirror src/config/fixedCostConfig.ts on the mobile side).
 // When tenancy lands these become per-org config rows.
 const RENT_PCT = 0.10;
@@ -188,6 +199,44 @@ async function fetchTodayMRTotal(
   return data.reduce((s: number, r: { amount: number | string }) => s + Number(r.amount || 0), 0);
 }
 
+// ── Dining options catalog + channel classifier ─────────────────────────────
+// Toast's ordersBulk response only carries diningOption as { guid, entityType }
+// — no name, no behavior. Those live on the diningOptions catalog endpoint,
+// which we fetch once at the top of the sync and look up by guid per order.
+async function fetchDiningOptions(token: string, guid: string): Promise<Map<string, DiningOption>> {
+  const r = await fetch(`${TOAST_BASE}/config/v2/diningOptions`, {
+    headers: { Authorization: `Bearer ${token}`, "Toast-Restaurant-External-ID": guid },
+  });
+  if (!r.ok) {
+    // Non-fatal: fall back to source-string classification if the catalog fails.
+    console.warn(`[sync-toast-kpis] diningOptions fetch failed: ${r.status}`);
+    return new Map();
+  }
+  const arr = (await r.json()) as DiningOption[];
+  const map = new Map<string, DiningOption>();
+  for (const o of arr) map.set(o.guid, o);
+  return map;
+}
+
+// deno-lint-ignore no-explicit-any
+function classifyChannel(order: any, doMap: Map<string, DiningOption>):
+  "instore" | "takeout" | "delivery" | "thirdparty" {
+  const ref = order?.diningOption?.guid
+    ?? (typeof order?.diningOption === "string" ? order.diningOption : null);
+  const opt = ref ? doMap.get(ref) : null;
+  const name = (opt?.name ?? "").toLowerCase();
+  const behavior = opt?.behavior;
+  if (THIRD_PARTY_MARKERS.some((m) => name.includes(m))) return "thirdparty";
+  if (behavior === "DINE_IN")  return "instore";
+  if (behavior === "DELIVERY") return "delivery";
+  if (behavior === "TAKE_OUT") return "takeout";
+  // Catalog miss → fall back to source-string heuristics.
+  const src = (order?.source ?? "").toLowerCase();
+  if (src.includes("in store") || src.includes("kiosk")) return "instore";
+  if (THIRD_PARTY_MARKERS.some((m) => src.includes(m))) return "thirdparty";
+  return "takeout";
+}
+
 // ── Toast auth ───────────────────────────────────────────────────────────────
 async function getToken(creds: { clientId: string; clientSecret: string }): Promise<string> {
   const res = await fetch(TOAST_AUTH_URL, {
@@ -295,9 +344,10 @@ Deno.serve(async (_req) => {
       return all;
     }
 
-    const [orders, laborRes] = await Promise.all([
+    const [orders, laborRes, doMap] = await Promise.all([
       fetchAllOrders(),
       fetch(`${TOAST_BASE}/labor/v1/timeEntries?startDate=${encodeURIComponent(startISO)}&endDate=${encodeURIComponent(now.toISOString())}`, { headers: authHeaders }),
+      fetchDiningOptions(token, guid),
     ]);
 
     if (!laborRes.ok) throw new Error(`Toast labor: ${laborRes.status}`);
@@ -325,21 +375,27 @@ Deno.serve(async (_req) => {
             if (typeof p.tipAmount === "number") salesTips += p.tipAmount;
           }
 
-          // Channel classification
-          const src = (o.source ?? "").toLowerCase();
-          const dd = src.includes("doordash") || src.includes("door dash");
-          const ub = src.includes("uber");
-          const gh = src.includes("grubhub");
-          const tp = dd || ub || gh || src.includes("delivery");
-          if (dd) salesDoordash += checkAmt;
-          else if (ub) salesUbereats += checkAmt;
-          else if (gh) salesGrubhub += checkAmt;
-          else if (tp) salesOther3p += checkAmt;
+          // Channel classification — use the dining-options catalog as the
+          // source of truth. Toast's per-order diningOption is only
+          // { guid, entityType }; name + behavior live on /config/v2/diningOptions.
+          // Falls back to source-string heuristics when the catalog misses.
+          const channel = classifyChannel(o, doMap);
 
-          const diningOption = (o.diningOption?.name ?? o.diningOption ?? "").toString().toLowerCase();
-          const isDineIn = diningOption.includes("dine") || diningOption.includes("table") || diningOption === "";
-          if (isDineIn && !tp) dineInSales += checkAmt;
-          else takeoutSales += checkAmt;
+          // Disjoint buckets — each check counted exactly once.
+          // takeoutDelivery (= takeoutSales + salesDelivery) is the paper-cost
+          // base; salesDelivery comes from the per-platform buckets below.
+          if (channel === "thirdparty") {
+            const src = (o.source ?? "").toLowerCase();
+            if      (src.includes("doordash") || src.includes("door dash")) salesDoordash += checkAmt;
+            else if (src.includes("uber"))                                   salesUbereats += checkAmt;
+            else if (src.includes("grubhub"))                                salesGrubhub  += checkAmt;
+            else                                                             salesOther3p  += checkAmt;
+          } else if (channel === "instore") {
+            dineInSales += checkAmt;
+          } else {
+            // "takeout" + in-house "delivery" both use takeout-rate paper costs.
+            takeoutSales += checkAmt;
+          }
 
           // Comps
           for (const d of c.appliedDiscounts ?? []) {
