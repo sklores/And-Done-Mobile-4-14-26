@@ -7,6 +7,7 @@ import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
 import { useMaintenanceStore } from "./stores/useMaintenanceStore";
+import { useFixedCostStore } from "./stores/useFixedCostStore";
 import type { KpiKey } from "./stores/useKpiStore";
 import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
@@ -56,6 +57,7 @@ export default function App() {
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
   const hydrateMaintenance    = useMaintenanceStore((s) => s.hydrate);
+  const hydrateFixedCost      = useFixedCostStore((s) => s.hydrate);
 
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
@@ -110,6 +112,11 @@ export default function App() {
   useEffect(() => {
     hydrateMaintenance();
   }, [hydrateMaintenance]);
+
+  // ── Fixed-cost line items: hydrate from org_settings.pro_forma_json ──────
+  useEffect(() => {
+    hydrateFixedCost();
+  }, [hydrateFixedCost]);
 
   // ── Reviews chip: live score from Supabase reviews aggregate ─────────────
   const [reviewsScore, setReviewsScore] = useState<number | null>(null);

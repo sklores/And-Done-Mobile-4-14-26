@@ -33,20 +33,21 @@ type DiningOption = {
   behavior: "DINE_IN" | "TAKE_OUT" | "DELIVERY";
 };
 
-// Fixed costs (mirror src/config/fixedCostConfig.ts on the mobile side).
-// When tenancy lands these become per-org config rows.
+// Fixed cost amortization window — same shape as mobile.
 const RENT_PCT = 0.10;
-const FIXED_LINE_ITEMS = [
-  { label: "Pest Control",     monthly: 220  },
-  { label: "Dishwasher Rental", monthly: 270 },
-  { label: "Insurance",         monthly: 1500 },
-  { label: "Utilities",         monthly: 2200 },
-  { label: "Bookkeeper",         monthly: 1000 },
-  { label: "Loan Payment",      monthly: 2000 },
-];
-const MONTHLY_FIXED_TOTAL = FIXED_LINE_ITEMS.reduce((s, i) => s + i.monthly, 0);
 const FIXED_WINDOW_START_HOUR = 10;  // amortization drip starts at 10am ET
 const FIXED_WINDOW_END_HOUR   = 16;  // …and finishes at 4pm ET
+
+// Line items computed live elsewhere — excluded from the amortized monthly
+// total so they aren't double-counted in the Fixed Cost tile.
+//   - rent          → RENT_PCT × sales (here)
+//   - labor         → Toast time entries + schedule salary (here)
+//   - payroll tax   → 11% of labor (here)
+//   - m&r           → today's rows from maintenance_entries (here)
+const LIVE_FIXED_LABELS = new Set(["rent", "labor", "payroll tax", "m&r", "mr"]);
+
+// Fallback if the org_settings fetch fails on cold start.
+const FALLBACK_MONTHLY_FIXED = 10750;
 
 // ── Eastern Time helpers (DST-aware) ─────────────────────────────────────────
 function easternDateStr(d = new Date()): string {
@@ -164,9 +165,36 @@ async function computeScheduleSalary(
 }
 
 // ── Fixed cost helpers (mirror src/config/fixedCostConfig.ts) ───────────────
-function dailyFixedAmortized(now = new Date()): number {
+// Pulls the monthly total from org_settings.pro_forma_json.fixed.projected,
+// excluding the live-computed labels above. Falls back to a stale constant
+// only if the Supabase fetch fails.
+async function fetchMonthlyFixedTotal(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  orgId: string,
+): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from("org_settings")
+      .select("pro_forma_json")
+      .eq("org_id", orgId)
+      .single();
+    if (error || !data) return FALLBACK_MONTHLY_FIXED;
+    const raw = data.pro_forma_json?.fixed?.projected;
+    if (!Array.isArray(raw)) return FALLBACK_MONTHLY_FIXED;
+    return raw
+      .filter((r: { label: string }) =>
+        !LIVE_FIXED_LABELS.has(String(r.label ?? "").trim().toLowerCase()),
+      )
+      .reduce((s: number, r: { amount: number | string }) => s + (Number(r.amount) || 0), 0);
+  } catch {
+    return FALLBACK_MONTHLY_FIXED;
+  }
+}
+
+function dailyFixedAmortized(monthlyTotal: number, now = new Date()): number {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return MONTHLY_FIXED_TOTAL / daysInMonth;
+  return monthlyTotal / daysInMonth;
 }
 
 /** 0 before 10am ET, 1 after 4pm ET, linear in between. */
@@ -178,8 +206,8 @@ function fixedAmortizationFactor(now = new Date()): number {
   return (etDecimal - FIXED_WINDOW_START_HOUR) / span;
 }
 
-function hourlyAmortized(now = new Date()): number {
-  return dailyFixedAmortized(now) * fixedAmortizationFactor(now);
+function hourlyAmortized(monthlyTotal: number, now = new Date()): number {
+  return dailyFixedAmortized(monthlyTotal, now) * fixedAmortizationFactor(now);
 }
 
 // ── M&R: today's maintenance entries from the new table ─────────────────────
@@ -502,8 +530,11 @@ Deno.serve(async (_req) => {
     const primePct    = cogsPct + laborPct;
 
     // ── Fixed cost (rent + amortized monthly + M&R) ───────────────────────
+    // Monthly amortized total comes from org_settings.pro_forma_json.fixed.projected
+    // (desktop's "expenses > breakdown"), excluding the four live-computed lines.
+    const monthlyFixed     = await fetchMonthlyFixedTotal(supabase, orgId);
     const rentDollars      = salesTotal * RENT_PCT;
-    const amortizedDollars = hourlyAmortized(now);
+    const amortizedDollars = hourlyAmortized(monthlyFixed, now);
     const mrDollars        = await fetchTodayMRTotal(supabase, orgId, now);
     const fixedTotal       = rentDollars + amortizedDollars + mrDollars;
     const fixedPct         = salesTotal > 0 ? (fixedTotal / salesTotal) * 100 : 0;

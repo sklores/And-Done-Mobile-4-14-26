@@ -1,35 +1,29 @@
-// Fixed cost configuration — edit monthly amounts here, logic is automatic.
-// Costs are amortized daily using days in the current calendar month.
-// Rent is variable: RENT_PCT × today's net sales.
+// Fixed cost configuration.
+// Monthly line items now live in Supabase at
+// org_settings.pro_forma_json.fixed.projected — hydrated by
+// useFixedCostStore on app boot. This module exposes pure sync helpers
+// that read from the store at call time.
+//
+// Rent is variable (RENT_PCT × today's net sales) and stays a constant here.
+
+import { useFixedCostStore, type FixedLineItem } from "../stores/useFixedCostStore";
 
 export const RENT_PCT = 0.10; // 10% of daily net sales
 
-export type FixedLineItem = {
-  key: string;
-  label: string;
-  monthlyAmount: number;
-  note?: string;
-};
+export type { FixedLineItem };
 
-export const FIXED_LINE_ITEMS: FixedLineItem[] = [
-  { key: "pest",       label: "Pest Control",     monthlyAmount: 220  },
-  { key: "dishwasher", label: "Dishwasher Rental", monthlyAmount: 270  },
-  { key: "insurance",  label: "Insurance",         monthlyAmount: 1500 },
-  { key: "utilities",  label: "Utilities",         monthlyAmount: 2200, note: "seasonal avg" },
-  { key: "bookkeeper", label: "Bookkeeper",         monthlyAmount: 1000 },
-  { key: "loan",       label: "Loan Payment",      monthlyAmount: 2000, note: "principal + interest" },
-];
-
-export const MONTHLY_FIXED_TOTAL = FIXED_LINE_ITEMS.reduce((s, i) => s + i.monthlyAmount, 0);
-// = $7,190 / month
-
-/** Daily amortized cost for a given month */
-export function dailyFixed(date = new Date()): number {
-  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  return MONTHLY_FIXED_TOTAL / daysInMonth;
+/** Current monthly total of non-live-computed line items (from store). */
+export function getMonthlyFixedTotal(): number {
+  return useFixedCostStore.getState().monthlyTotal;
 }
 
-/** Daily cost per line item */
+/** Daily amortized cost for a given month (monthly total / days in month). */
+export function dailyFixed(date = new Date()): number {
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return getMonthlyFixedTotal() / daysInMonth;
+}
+
+/** Daily cost per line item. */
 export function dailyLineItem(item: FixedLineItem, date = new Date()): number {
   const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   return item.monthlyAmount / daysInMonth;

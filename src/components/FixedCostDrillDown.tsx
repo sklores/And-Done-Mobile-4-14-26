@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useKpiStore } from "../stores/useKpiStore";
 import { useMaintenanceStore } from "../stores/useMaintenanceStore";
+import { useFixedCostStore } from "../stores/useFixedCostStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
 import {
-  FIXED_LINE_ITEMS,
-  MONTHLY_FIXED_TOTAL,
   RENT_PCT,
   dailyFixed,
   dailyLineItem,
@@ -116,10 +115,16 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
 }
 
 export function FixedCostDrillDown({ open, onClose }: Props) {
-  const fixedTile   = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
-  const salesVal    = useKpiStore((s) => s.sales.value);
-  const allEntries  = useMaintenanceStore((s) => s.entries);
-  const removeEntry = useMaintenanceStore((s) => s.removeEntry);
+  const fixedTile    = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
+  const salesVal     = useKpiStore((s) => s.sales.value);
+  const allEntries   = useMaintenanceStore((s) => s.entries);
+  const removeEntry  = useMaintenanceStore((s) => s.removeEntry);
+  const lineItems    = useFixedCostStore((s) => s.lineItems);
+  const monthlyTotal = useFixedCostStore((s) => s.monthlyTotal);
+
+  // Line items shown in the "Overhead — Hourly" section are the non-live ones.
+  // Rent / Labor / Payroll Tax / M&R have their own sections fed by live data.
+  const amortizedItems = lineItems.filter((i) => !i.liveComputed);
 
   const todayStr    = new Date().toISOString().slice(0, 10);
   const todayEntries = allEntries.filter((e) => e.date === todayStr);
@@ -170,17 +175,17 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
       {/* ── Monthly fixed amortized ────────────────────── */}
       <SectionHeader
         title="Overhead — Hourly (10 AM – 4 PM)"
-        right={`${fmt$(MONTHLY_FIXED_TOTAL)}/mo`}
+        right={`${fmt$(monthlyTotal)}/mo`}
       />
-      {FIXED_LINE_ITEMS.map((item) => {
-        const daily = dailyLineItem(item);
+      {amortizedItems.map((item) => {
+        const daily  = dailyLineItem(item);
         const earned = daily * factor;
         return (
           <DrillRow
-            key={item.key}
+            key={item.label}
             label={item.label}
             value={fmtDec$(earned)}
-            sub={`daily target: ${fmtDec$(daily)} · ${fmt$(item.monthlyAmount)}/mo${item.note ? ` · ${item.note}` : ""}`}
+            sub={`daily target: ${fmtDec$(daily)} · ${fmt$(item.monthlyAmount)}/mo`}
           />
         );
       })}
