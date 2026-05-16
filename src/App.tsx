@@ -53,6 +53,8 @@ export default function App() {
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
   const tiles                 = useKpiStore((s) => s.tiles);
+  const lastRefresh           = useKpiStore((s) => s.lastRefresh);
+  const lastSnapshotAt        = useKpiStore((s) => s.lastSnapshotAt);
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
@@ -149,9 +151,22 @@ export default function App() {
   }, []);
 
   // ── Pull-to-refresh handlers ──────────────────────────────────────────────
+  // Tracks whether the "ready to refresh" haptic has already fired during
+  // the current pull gesture so it only buzzes once.
+  const thresholdHapticFired = useRef(false);
+
+  // Safe wrapper around the Vibration API — no-ops on iOS Safari (no support)
+  // and any other environment that doesn't implement it.
+  const haptic = (pattern: number | number[]) => {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      try { navigator.vibrate(pattern); } catch { /* ignore */ }
+    }
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (scrollRef.current && scrollRef.current.scrollTop === 0) {
       touchStartY.current = e.touches[0].clientY;
+      thresholdHapticFired.current = false;
     } else {
       touchStartY.current = 0;
     }
@@ -162,7 +177,13 @@ export default function App() {
     const delta = e.touches[0].clientY - touchStartY.current;
     if (delta > 0) {
       // Dampen pull so it feels springy
-      setPullY(Math.min(delta * 0.45, PULL_THRESHOLD));
+      const next = Math.min(delta * 0.45, PULL_THRESHOLD);
+      // One-shot haptic the moment we cross the threshold (only once per pull)
+      if (next >= PULL_THRESHOLD && !thresholdHapticFired.current) {
+        thresholdHapticFired.current = true;
+        haptic(20);
+      }
+      setPullY(next);
     }
   };
 
@@ -177,10 +198,14 @@ export default function App() {
         new Promise((r) => setTimeout(r, 600)), // minimum spinner time
       ]);
       setIsRefreshing(false);
+      // Confirmation haptic — two short taps so it feels distinct from the
+      // single-buzz "threshold crossed" cue above.
+      haptic([10, 40, 10]);
     } else {
       setPullY(0);
     }
     touchStartY.current = 0;
+    thresholdHapticFired.current = false;
   };
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -190,15 +215,15 @@ export default function App() {
   const salesState = computeSalesState(sales.value, getDailyTarget());
   const salesScore = salesState.score;
 
-  // ── Color-grading score for net (still simple range) ─────────────────────
-  const scoreFromRange = (v: number, min: number, max: number) => {
-    if (!Number.isFinite(v)) return 5;
-    if (v <= min) return 1;
-    if (v >= max) return 8;
-    return Math.round(1 + ((v - min) / (max - min)) * 7);
-  };
+  // Net score comes from the store (bucketed thresholds in useKpiStore).
+  // Avoids the prior divergence where the home tile used a different scale
+  // than the drill-down + email.
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
-  const netScore   = scoreFromRange(netPctNum, -5, 15);
+  const netScore   = net.score;
+
+  // Loading state for skeletons — true until we have any real data
+  // (either a snapshot or a Toast refresh has completed).
+  const isLoadingKpis = lastRefresh === null && lastSnapshotAt === null;
 
   // ── Crisis-level pulse alerts ─────────────────────────────────────────────
   const alertingKeys = useMemo(() => {
@@ -397,9 +422,10 @@ export default function App() {
               sub=""
               score={salesScore}
               alerting={alertingKeys.has("sales")}
+              loading={isLoadingKpis}
               onClick={() => setDrillKey("sales" as KpiKey)}
             />
-            <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} />
+            <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} />
             <KpiBar
               kind="net"
               label={net.label}
@@ -407,6 +433,7 @@ export default function App() {
               valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
               sub="today"
               score={netScore}
+              loading={isLoadingKpis}
               isLast
               alerting={alertingKeys.has("net")}
               onClick={() => setDrillKey("net" as KpiKey)}

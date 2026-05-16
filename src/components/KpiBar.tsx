@@ -12,10 +12,11 @@ type Props = {
   /** Last stacked bar before the marquee — needs bottom margin for rhythm */
   isLast?: boolean;
   alerting?: boolean;
+  loading?: boolean;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loading, onClick }: Props) {
   const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
 
@@ -53,41 +54,56 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, onC
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        {/* Dollar amount shown to the left of % on net bar */}
-        {valueSub && (
+        {loading ? (
           <div
+            aria-hidden
             style={{
-              color: valueSubCol,
-              fontSize: 16,
-              fontWeight: 700,
-              fontFamily: coastal.fonts.condensed,
+              width: 110,
+              height: 24,
+              borderRadius: 4,
+              background: "rgba(0,0,0,0.08)",
+              animation: "kpiSkeleton 1.4s ease-in-out infinite",
             }}
-          >
-            {valueSub}
-          </div>
+          />
+        ) : (
+          <>
+            {/* Dollar amount shown to the left of % on net bar */}
+            {valueSub && (
+              <div
+                style={{
+                  color: valueSubCol,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  fontFamily: coastal.fonts.condensed,
+                }}
+              >
+                {valueSub}
+              </div>
+            )}
+            <div
+              style={{
+                color: valueColor,
+                fontSize: 24,
+                fontWeight: 800,
+                fontFamily: coastal.fonts.condensed,
+                lineHeight: 1,
+              }}
+            >
+              {value}
+            </div>
+            <div
+              style={{
+                color: subColor,
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: ".08em",
+              }}
+            >
+              {sub}
+            </div>
+          </>
         )}
-        <div
-          style={{
-            color: valueColor,
-            fontSize: 24,
-            fontWeight: 800,
-            fontFamily: coastal.fonts.condensed,
-            lineHeight: 1,
-          }}
-        >
-          {value}
-        </div>
-        <div
-          style={{
-            color: subColor,
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: ".08em",
-          }}
-        >
-          {sub}
-        </div>
       </div>
     </div>
   );

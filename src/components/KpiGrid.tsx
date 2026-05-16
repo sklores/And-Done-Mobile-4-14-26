@@ -6,9 +6,10 @@ type Props = {
   tiles: Kpi[];
   onTileClick?: (key: KpiKey) => void;
   alertingKeys?: Set<string>;
+  loading?: boolean;
 };
 
-export function KpiGrid({ tiles, onTileClick, alertingKeys }: Props) {
+export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
   const isNight = useIsNight();
   const isDusky = useIsDusky();
   // At night we let the phone wrapper's dark bg show through so the KPI
@@ -30,6 +31,7 @@ export function KpiGrid({ tiles, onTileClick, alertingKeys }: Props) {
           key={k.key}
           kpi={k}
           alerting={alertingKeys?.has(k.key)}
+          loading={loading}
           onClick={onTileClick ? () => onTileClick(k.key) : undefined}
         />
       ))}

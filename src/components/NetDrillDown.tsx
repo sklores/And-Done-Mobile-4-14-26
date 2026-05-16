@@ -110,7 +110,9 @@ export function NetDrillDown({ open, onClose }: Props) {
       <DrillRow
         label="COGS"
         value={detail ? fmt$(detail.cogsDollars) : "--"}
-        sub={detail ? `26.4% of sales · mocked` : undefined}
+        sub={detail && detail.salesDollars > 0
+          ? `${((detail.cogsDollars / detail.salesDollars) * 100).toFixed(1)}% of sales`
+          : undefined}
         dimmed
       />
       <DrillRow
