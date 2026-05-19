@@ -243,7 +243,9 @@ export default function App() {
   }, [sales.value, netPctNum, tiles]);
 
   // Pull indicator progress 0→1
-  const pullProgress = Math.min(pullY / PULL_THRESHOLD, 1);
+  // pullProgress used to drive the now-removed pull-to-refresh spinner.
+  // The lighthouse beam pulse in the coastal scene is the only refresh
+  // affordance we need (triggered via setBeamPulseKey on refresh).
 
   // ── Nocturnal UI (option B + mild C) ─────────────────────────────────────
   // After sundown: darken the page/phone bg and apply a gentle brightness +
@@ -316,24 +318,8 @@ export default function App() {
         {/* Scrollable content */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
-          {/* Pull-to-refresh indicator — overlays content, never moves it */}
-          {(pullY > 10 || isRefreshing) && (
-            <div style={{
-              position: "absolute",
-              top: isRefreshing ? 10 : pullY - 32,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 10,
-              width: 28, height: 28,
-              borderRadius: "50%",
-              border: "2.5px solid rgba(255,255,255,0.25)",
-              borderTopColor: "#fff",
-              opacity: isRefreshing ? 1 : pullProgress,
-              animation: isRefreshing ? "ptr-spin 0.7s linear infinite" : "none",
-              rotate: isRefreshing ? undefined : `${pullProgress * 270}deg`,
-              transition: pullY === 0 ? "top 0.25s ease, opacity 0.25s ease" : "none",
-            }} />
-          )}
+          {/* No pull-to-refresh spinner — the lighthouse beam pulse in the
+              coastal scene (triggered on refresh) is the visual feedback. */}
 
         <div
           ref={scrollRef}
@@ -488,11 +474,6 @@ export default function App() {
       <LogTab      open={openTab === "log"}      onClose={() => setOpenTab(null)} />
       <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} />
 
-      <style>{`
-        @keyframes ptr-spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
