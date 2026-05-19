@@ -968,15 +968,10 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <rect x="0" y={WL} width="375" height={200-WL} fill={wt.color} opacity={wt.op} />
           )}
 
-          {/* Shore-fade — softens the bottom of the water into the driftwood
-              frame. Applied for everything EXCEPT night (when the nameplate
-              is already painted dark ocean #132437 to bleed into the water —
-              a driftwood fade there would create a new visible line).
-              Sundown / dawn / morning / afternoon all use the driftwood
-              nameplate, so the fade applies cleanly. */}
-          {!isNight && (
-            <rect x="0" y={182} width="375" height={18} fill="url(#cs-shore)" />
-          )}
+          {/* Shore-fade moved further down in the render order (just before
+              the lighthouse) so it fades the bottom of the rocks into the
+              frame too, not just the bare water. See the matching rect
+              below. */}
 
           {/* Sun/dawn reflection on water */}
           {(isSundown || isDawn) && !sun.moon && (
@@ -1140,6 +1135,15 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
           <path d={`M22,200 L22,${WL} L30,${WL} L38,${WL-1} L46,${WL-1} L52,${WL-1} L58,${WL-1} L64,${WL-1} L70,${WL} L76,${WL} L82,${WL} L86,200Z`} fill={rD} />
           <path d={`M14,${WL} L20,${WL-2} L24,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.5} />
           <path d={`M80,${WL-1} L86,${WL-2} L92,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.45} />
+
+          {/* Shore-fade — softens the bottom of the water AND the rocks into
+              the driftwood frame so there's no harsh boundary line. Renders
+              over both. Skipped at night (the nameplate is painted dark
+              ocean there and a driftwood fade would create a new visible
+              line). */}
+          {!isNight && (
+            <rect x="0" y={182} width="375" height={18} fill="url(#cs-shore)" />
+          )}
 
           {/* Lighthouse — beam intensity = Prime Cost score */}
           <g>
