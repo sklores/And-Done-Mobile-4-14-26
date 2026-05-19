@@ -2,6 +2,8 @@
 // Used by the Log tab to extract handwritten text from a photo into
 // the note text field.
 
+import { enhanceImageForOCR } from "./imagePreprocess";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const OCR_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ocr-handwriting` : "";
@@ -32,13 +34,18 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
  * OCR a handwritten note photo. Returns the extracted text (or empty
  * string if the photo doesn't contain readable writing). Never throws —
  * always returns a result object with `ok` indicating success.
+ *
+ * Runs through enhanceImageForOCR first: applies EXIF rotation,
+ * downsamples to ~1800px, boosts contrast. Markedly improves accuracy
+ * on phone photos vs sending raw bytes.
  */
 export async function ocrHandwriting(file: File): Promise<OcrResult> {
   if (!OCR_URL || !SUPABASE_KEY) {
     return { ok: false, text: "", has_text: false, error: "Supabase env not configured" };
   }
   try {
-    const { base64, mimeType } = await fileToBase64(file);
+    const enhanced = await enhanceImageForOCR(file);
+    const { base64, mimeType } = await fileToBase64(enhanced);
     const res = await fetch(OCR_URL, {
       method: "POST",
       headers: {
