@@ -272,6 +272,16 @@ export default function App() {
   const frameSeamColor = isDusky ? "#101828" : "#A89070";
   const namePlateText  = isDusky ? "#D8E0F0" : "#3A2A10";
 
+  // Sync body background + <meta name="theme-color"> to frameColor so the
+  // Android system nav bar (bottom: three lines / square / <) tints to match
+  // the app's bottom tab strip. Without this, the body's grey shows through
+  // any 1px gap between the app frame and the nav bar.
+  useEffect(() => {
+    document.body.style.background = frameColor;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", frameColor);
+  }, [frameColor]);
+
   return (
     <div
       style={{

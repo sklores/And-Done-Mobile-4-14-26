@@ -5,7 +5,10 @@ html, body, #root { margin: 0; padding: 0; min-height: 100%; }
 body {
   font-family: 'Manrope', sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #8A8E92;
+  /* Default driftwood so the system nav bar (Android) tints to match the
+     app frame before React mounts. App.tsx then updates this dynamically
+     when the theme changes (day → dusk → night). */
+  background: #C4B090;
   overscroll-behavior: none;
 }
 button { font-family: inherit; }
