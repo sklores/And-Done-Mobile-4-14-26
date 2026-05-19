@@ -656,6 +656,14 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <stop offset="0%"   stopColor="white" stopOpacity={isWind ? .14 : .07} />
             <stop offset="100%" stopColor="white" stopOpacity={0} />
           </linearGradient>
+          {/* Daytime shore-fade: blends the bottom of the water into the
+              driftwood frame so there's no harsh blue/tan boundary line.
+              Skipped at night/sundown where the nameplate is already the
+              dark ocean color and no fade is needed. */}
+          <linearGradient id="cs-shore" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#C4B090" stopOpacity={0}    />
+            <stop offset="100%" stopColor="#C4B090" stopOpacity={0.95} />
+          </linearGradient>
           <linearGradient id="cs-beam-grad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%"   stopColor="#FFFDE8" stopOpacity={1} />
             <stop offset="35%"  stopColor="#FFFDE0" stopOpacity={0.55} />
@@ -959,6 +967,14 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
           {/* Weather → water mood tint (always blue-family) */}
           {wt.op > 0.01 && (
             <rect x="0" y={WL} width="375" height={200-WL} fill={wt.color} opacity={wt.op} />
+          )}
+
+          {/* Daytime shore-fade — softens the bottom of the water into the
+              driftwood frame. Night/sundown nameplate is already dark navy
+              matching the water, so the fade would create a NEW visible line
+              there — gated off. */}
+          {!isNight && !isSundown && (
+            <rect x="0" y={190} width="375" height={10} fill="url(#cs-shore)" />
           )}
 
           {/* Sun/dawn reflection on water */}
