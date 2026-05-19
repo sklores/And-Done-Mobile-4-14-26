@@ -272,14 +272,21 @@ export default function App() {
   const frameSeamColor = isDusky ? "#101828" : "#A89070";
   const namePlateText  = isDusky ? "#D8E0F0" : "#3A2A10";
 
-  // Sync body background + <meta name="theme-color"> to frameColor so the
-  // Android system nav bar (bottom: three lines / square / <) tints to match
-  // the app's bottom tab strip. Without this, the body's grey shows through
-  // any 1px gap between the app frame and the nav bar.
+  // Sync body background + <meta name="theme-color"> so the Android system
+  // nav bar (bottom: three lines / square / <) tints sensibly:
+  //   - PWA / installed: match frameColor (driftwood by day, navy at night)
+  //     so the system nav bar feels continuous with the app's bottom tabs.
+  //   - Browser / URL: match Chrome's dark chrome (#000000) so the bottom
+  //     bar matches the URL bar's color, since in browser mode the app
+  //     doesn't visually own the top of the screen anyway.
   useEffect(() => {
-    document.body.style.background = frameColor;
+    const isStandalone =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+    const targetColor = isStandalone ? frameColor : "#000000";
+    document.body.style.background = targetColor;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", frameColor);
+    if (meta) meta.setAttribute("content", targetColor);
   }, [frameColor]);
 
   return (

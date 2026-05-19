@@ -5,11 +5,20 @@ html, body, #root { margin: 0; padding: 0; min-height: 100%; }
 body {
   font-family: 'Manrope', sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* Default driftwood so the system nav bar (Android) tints to match the
-     app frame before React mounts. App.tsx then updates this dynamically
-     when the theme changes (day → dusk → night). */
-  background: #C4B090;
+  /* Default to black for browser/URL mode so the bottom Android system nav
+     bar matches Chrome's dark chrome at the top — visual continuity for
+     people opening the URL in a regular tab. App.tsx overrides this in
+     standalone (PWA) mode to match the app's driftwood/navy frame. */
+  background: #000000;
   overscroll-behavior: none;
+}
+
+/* In PWA / installed mode the app fills the whole viewport, so we want
+   the body to match the app's bottom tab strip (driftwood by day, deep
+   navy at night). App.tsx updates this dynamically — this rule just sets
+   a sane pre-mount default for the PWA case. */
+@media (display-mode: standalone) {
+  body { background: #C4B090; }
 }
 button { font-family: inherit; }
 
