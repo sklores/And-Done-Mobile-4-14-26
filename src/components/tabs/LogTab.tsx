@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { TabPanel } from "./TabPanel";
 import { useLogStore } from "../../stores/useLogStore";
 import { coastal } from "../../theme/skins";
+import { ocrHandwriting } from "../../data/ocrAdapter";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -24,6 +25,7 @@ export function LogTab({ open, onClose }: Props) {
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "reading" | "no-text">("idle");
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleAdd() {
@@ -34,7 +36,29 @@ export function LogTab({ open, onClose }: Props) {
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhoto(null);
     setPhotoPreview(null);
+    setOcrStatus("idle");
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function handleExtractText() {
+    if (!photo || ocrStatus === "reading") return;
+    setOcrStatus("reading");
+    const result = await ocrHandwriting(photo);
+    if (result.ok && result.has_text && result.text.trim()) {
+      // Append on new line if there's existing text, replace if field is empty
+      setDraft((prev) => {
+        const trimmedPrev = prev.trim();
+        return trimmedPrev ? `${trimmedPrev}\n${result.text.trim()}` : result.text.trim();
+      });
+      setOcrStatus("idle");
+    } else if (result.ok && !result.has_text) {
+      setOcrStatus("no-text");
+      // Auto-clear the "no text" message after 2.5s
+      setTimeout(() => setOcrStatus("idle"), 2500);
+    } else {
+      // On error, fail silently — operator can type the note manually
+      setOcrStatus("idle");
+    }
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -53,6 +77,7 @@ export function LogTab({ open, onClose }: Props) {
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhoto(null);
     setPhotoPreview(null);
+    setOcrStatus("idle");
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -154,12 +179,41 @@ export function LogTab({ open, onClose }: Props) {
                 borderRadius: 8,
               }}
             />
-            <div style={{
-              flex: 1, fontSize: 11, color: "#4A5A64",
-              fontFamily: coastal.fonts.manrope,
-            }}>
-              Photo attached
-            </div>
+            <button
+              onClick={() => void handleExtractText()}
+              disabled={ocrStatus === "reading"}
+              style={{
+                flex: 1,
+                background:
+                  ocrStatus === "reading"  ? "rgba(0,0,0,0.06)" :
+                  ocrStatus === "no-text"  ? "rgba(255,200,80,0.16)" :
+                                             "rgba(78,200,154,0.14)",
+                color:
+                  ocrStatus === "reading"  ? "#8A9C9C" :
+                  ocrStatus === "no-text"  ? "#7A5510" :
+                                             "#084020",
+                border:
+                  ocrStatus === "no-text"
+                    ? "1px solid rgba(255,200,80,0.45)"
+                    : "1px solid rgba(78,200,154,0.30)",
+                borderRadius: 8,
+                padding: "8px 10px",
+                fontFamily: coastal.fonts.manrope,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: ocrStatus === "reading" ? "default" : "pointer",
+                textAlign: "left",
+                letterSpacing: ".02em",
+                transition: "background 0.2s",
+                animation: ocrStatus === "reading" ? "kpiSkeleton 1.4s ease-in-out infinite" : undefined,
+              }}
+            >
+              {ocrStatus === "reading"
+                ? "Reading note…"
+                : ocrStatus === "no-text"
+                  ? "No text detected — type the note instead"
+                  : "📝 Extract text from photo"}
+            </button>
             <button
               onClick={clearPhoto}
               aria-label="Remove photo"
@@ -167,6 +221,7 @@ export function LogTab({ open, onClose }: Props) {
                 background: "rgba(0,0,0,0.06)", border: "none",
                 borderRadius: 8, cursor: "pointer",
                 width: 28, height: 28, fontSize: 14, color: "#4A5A64",
+                flexShrink: 0,
               }}
             >
               ×
