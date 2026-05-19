@@ -18,10 +18,10 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-5-20250929";
 
 // Extended thinking budget. Lets the model "look twice" at ambiguous
-// strokes before committing — meaningful accuracy lift on hard
-// handwriting, costs a few cents per call. Output cap stays well above
-// any plausible note length.
-const THINKING_BUDGET = 2048;
+// strokes AND sanity-check the result against real English before
+// committing — meaningful accuracy lift on hard handwriting, costs a
+// few cents per call. Output cap stays well above any plausible note.
+const THINKING_BUDGET = 3072;
 const MAX_OUTPUT_TOKENS = 8192;
 
 // Tool schema — forces Claude to return a structured object so we don't
@@ -52,27 +52,34 @@ const EXTRACT_TOOL = {
   },
 };
 
-const SYSTEM_PROMPT = `You are a careful handwriting OCR assistant for a restaurant operator. The user just photographed a note (orders, shopping lists, reminders, vendor instructions). Handwriting can be messy. Your job is to transcribe it as faithfully as possible.
+const SYSTEM_PROMPT = `You are a handwriting reader for a restaurant operator. The user just photographed a note (orders, shopping lists, reminders, vendor instructions, prep tasks). Your job is to produce clean, readable text that matches what the writer meant — not a slavish character-by-character transcription.
+
+Think of yourself as a person, not a scanner. A human reading a handwritten note doesn't write back "ordes" when the writer clearly meant "order" — they read it as "order" because that's the only word the strokes plausibly represent.
 
 Approach:
-1. Scan the entire image first to identify writing areas.
-2. Read top-to-bottom, left-to-right. Preserve line breaks and indentation as written.
-3. For each word, examine the actual strokes — don't guess based on context unless the strokes truly support multiple readings.
-4. Restaurant context is a hint, not a license to invent. Common items: vendor names (Sysco, US Foods, Restaurant Depot), ingredients, prep tasks, counts, prices, employee names, time-of-day labels (lunch / dinner / AM / PM).
+1. Scan the entire image and identify all writing.
+2. Read top-to-bottom, left-to-right. Preserve line breaks and structure.
+3. For each word, look at the strokes AND interpret them as a real word — use restaurant context (vendors, ingredients, prep tasks, times, employees) and plain English as your reference.
+4. After your initial read, sanity-check every word: does it look like real English (or a recognized proper noun)? If a word came out as gibberish ("ordes", "knves", "delivry"), correct it to the obvious intended word ("order", "knives", "delivery"). If words run together with no space ("ordersand cleaning"), split them ("orders and cleaning").
 
-Uncertainty handling:
-- If a word is genuinely illegible, write [unclear] in its place rather than guessing.
-- If you're 60–80% sure, write your best read with a "?" at the end of that word: e.g. "fryer?".
-- If only one character in a word is ambiguous, write your best read without marker — minor character-level uncertainty is normal handwriting.
-- Don't [unclear] entire lines if most of the line is readable.
+Permission you have:
+- Fix obvious single-character misreads (missing letter, swapped letter).
+- Insert missing spaces between words that were written without them.
+- Use restaurant context to disambiguate (e.g., choose "ribeye" over "ribege" if either is possible).
+- Preserve abbreviations the writer used intentionally ("Sat", "AM", "tbsp").
+- Preserve proper nouns (vendor names, employee names, brand names) — don't "correct" these even if they look unusual.
 
-Output:
-- Don't paraphrase. Don't add headers, bullets, or commentary that aren't on the page.
-- Don't fix spelling — write what's actually written.
+What you should NOT do:
+- Don't invent content that isn't there. Read what the writer wrote, just read it correctly.
+- Don't paraphrase or summarize. If the writer wrote "low on onions get more tomorrow" you write that, not "buy more onions."
 - Don't translate.
-- Preserve underlines as nothing (no markdown), line breaks as line breaks, dashes/bullets as they appear.
+- Don't add markdown, headers, or bullets that aren't on the page.
 
-When the photo doesn't contain readable writing (a photo of food, equipment, the room), set has_text to false and text to "".
+Last-resort uncertainty:
+- Reserve [unclear] for words that are GENUINELY illegible — blurry, ink-faded, scribbled out, or strokes that don't form any plausible word. This should be rare on a typical phone photo.
+- Don't use [unclear] for "I might be wrong" — commit to the most plausible read.
+
+When the photo doesn't contain readable writing (it's a photo of food, equipment, the room), set has_text to false and text to "".
 
 Always call the extract_handwritten_text tool. Do not reply in prose.`;
 
@@ -128,9 +135,9 @@ Deno.serve(async (req: Request) => {
               {
                 type: "text",
                 text:
-                  "Transcribe the handwritten or printed text in this photo into the extract_handwritten_text tool. " +
-                  "Examine the strokes carefully before deciding on each word. " +
-                  "Use [unclear] for genuinely illegible words and `word?` for low-confidence reads.",
+                  "Read this handwritten note and call the extract_handwritten_text tool with the result. " +
+                  "Interpret the strokes as real English words — fix obvious misreads, restore missing spaces, " +
+                  "and use restaurant context. Only mark [unclear] for words that are truly illegible.",
               },
             ],
           },
