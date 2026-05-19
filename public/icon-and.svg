@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" preserveAspectRatio="xMidYMid meet">
+  <!-- Driftwood background — same color as the app frame so the icon and
+       the launched app feel continuous. Fills entire canvas including the
+       safe zone, so Android's adaptive-icon mask (circle / squircle /
+       rounded square) still looks clean: the corners that get clipped are
+       just more driftwood. -->
+  <rect width="512" height="512" fill="#C4B090"/>
+
+  <!-- Italic serif ampersand, centered, dark brown for contrast.
+       font-size 360 keeps the glyph well within the 80% maskable safe
+       zone (410px square). dominant-baseline="central" anchors the
+       glyph's vertical midpoint at y=256. -->
+  <text
+    x="256"
+    y="256"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="Georgia, 'Times New Roman', 'Playfair Display', serif"
+    font-size="360"
+    font-style="italic"
+    font-weight="700"
+    fill="#3A2A10"
+  >&amp;</text>
+</svg>

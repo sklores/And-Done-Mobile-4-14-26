@@ -12,7 +12,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="And Done" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- iOS Add to Home Screen uses this, not the manifest. Points at the
+         ampersand icon so the home-screen tile matches the Android PWA. -->
+    <link rel="apple-touch-icon" href="/icon-and.svg" />
 
     <!-- Android -->
     <meta name="mobile-web-app-capable" content="yes" />
