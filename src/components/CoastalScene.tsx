@@ -945,12 +945,9 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               against the dark sky/water; nothing to see there after dusk). */}
           {!isNight && <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />}
 
-          {/* Reef rock (drawn before water so water covers underwater portion) */}
-          <path d={`M12,200 L12,${WL} L18,${WL-1} L24,${WL-1} L30,${WL-2} L38,${WL-2} L44,${WL-2} L52,${WL-2} L60,${WL-2} L66,${WL-1} L72,${WL-1} L78,${WL-1} L84,${WL} L90,${WL-1} L94,${WL} L94,200Z`} fill={rC} />
-          <path d={`M16,200 L16,${WL} L22,${WL} L28,${WL-1} L36,${WL-1} L44,${WL-1} L52,${WL-2} L60,${WL-1} L66,${WL-1} L72,${WL-1} L78,${WL} L84,${WL} L90,${WL} L92,${WL} L92,200Z`} fill={rM} />
-          <path d={`M22,200 L22,${WL} L30,${WL} L38,${WL-1} L46,${WL-1} L52,${WL-1} L58,${WL-1} L64,${WL-1} L70,${WL} L76,${WL} L82,${WL} L86,200Z`} fill={rD} />
-          <path d={`M14,${WL} L20,${WL-2} L24,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.5} />
-          <path d={`M80,${WL-1} L86,${WL-2} L92,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.45} />
+          {/* Reef rocks moved further down — now render right before the
+              lighthouse so boats drift BEHIND the rocks instead of clipping
+              in front of them. See the matching block below. */}
 
           {/* Water */}
           <rect x="0" y={WL} width="375" height={200-WL} fill="url(#cs-water)" />
@@ -1114,6 +1111,14 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <circle cx="82" cy={WL-9-Math.round(amp*.25)} r={.5+sc01*.8}
               fill="white" opacity={(parseFloat(sprayOp)*.45).toFixed(2)} />
           </g>
+
+          {/* Reef rocks — rendered AFTER boats so boats drift behind the
+              rocks instead of clipping in front of the lighthouse island. */}
+          <path d={`M12,200 L12,${WL} L18,${WL-1} L24,${WL-1} L30,${WL-2} L38,${WL-2} L44,${WL-2} L52,${WL-2} L60,${WL-2} L66,${WL-1} L72,${WL-1} L78,${WL-1} L84,${WL} L90,${WL-1} L94,${WL} L94,200Z`} fill={rC} />
+          <path d={`M16,200 L16,${WL} L22,${WL} L28,${WL-1} L36,${WL-1} L44,${WL-1} L52,${WL-2} L60,${WL-1} L66,${WL-1} L72,${WL-1} L78,${WL} L84,${WL} L90,${WL} L92,${WL} L92,200Z`} fill={rM} />
+          <path d={`M22,200 L22,${WL} L30,${WL} L38,${WL-1} L46,${WL-1} L52,${WL-1} L58,${WL-1} L64,${WL-1} L70,${WL} L76,${WL} L82,${WL} L86,200Z`} fill={rD} />
+          <path d={`M14,${WL} L20,${WL-2} L24,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.5} />
+          <path d={`M80,${WL-1} L86,${WL-2} L92,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.45} />
 
           {/* Lighthouse — beam intensity = Prime Cost score */}
           <g>
