@@ -656,16 +656,6 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <stop offset="0%"   stopColor="white" stopOpacity={isWind ? .14 : .07} />
             <stop offset="100%" stopColor="white" stopOpacity={0} />
           </linearGradient>
-          {/* Shore-fade: blends the bottom of the water into the driftwood
-              frame so there's no harsh blue/tan boundary line. Three stops
-              for a smoother roll-off, and the bottom is fully opaque
-              driftwood so the very last pixel row IS the nameplate color. */}
-          <linearGradient id="cs-shore" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#C4B090" stopOpacity={0}    />
-            <stop offset="35%"  stopColor="#C4B090" stopOpacity={0.35} />
-            <stop offset="70%"  stopColor="#C4B090" stopOpacity={0.80} />
-            <stop offset="100%" stopColor="#C4B090" stopOpacity={1}    />
-          </linearGradient>
           <linearGradient id="cs-beam-grad" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%"   stopColor="#FFFDE8" stopOpacity={1} />
             <stop offset="35%"  stopColor="#FFFDE0" stopOpacity={0.55} />
@@ -955,9 +945,12 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               against the dark sky/water; nothing to see there after dusk). */}
           {!isNight && <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />}
 
-          {/* Reef rocks moved further down in the render order (just before
-              the lighthouse) so boats drift BEHIND the rocks instead of
-              clipping in front of them — see lighthouse block below. */}
+          {/* Reef rock (drawn before water so water covers underwater portion) */}
+          <path d={`M12,200 L12,${WL} L18,${WL-1} L24,${WL-1} L30,${WL-2} L38,${WL-2} L44,${WL-2} L52,${WL-2} L60,${WL-2} L66,${WL-1} L72,${WL-1} L78,${WL-1} L84,${WL} L90,${WL-1} L94,${WL} L94,200Z`} fill={rC} />
+          <path d={`M16,200 L16,${WL} L22,${WL} L28,${WL-1} L36,${WL-1} L44,${WL-1} L52,${WL-2} L60,${WL-1} L66,${WL-1} L72,${WL-1} L78,${WL} L84,${WL} L90,${WL} L92,${WL} L92,200Z`} fill={rM} />
+          <path d={`M22,200 L22,${WL} L30,${WL} L38,${WL-1} L46,${WL-1} L52,${WL-1} L58,${WL-1} L64,${WL-1} L70,${WL} L76,${WL} L82,${WL} L86,200Z`} fill={rD} />
+          <path d={`M14,${WL} L20,${WL-2} L24,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.5} />
+          <path d={`M80,${WL-1} L86,${WL-2} L92,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.45} />
 
           {/* Water */}
           <rect x="0" y={WL} width="375" height={200-WL} fill="url(#cs-water)" />
@@ -967,11 +960,6 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
           {wt.op > 0.01 && (
             <rect x="0" y={WL} width="375" height={200-WL} fill={wt.color} opacity={wt.op} />
           )}
-
-          {/* Shore-fade moved further down in the render order (just before
-              the lighthouse) so it fades the bottom of the rocks into the
-              frame too, not just the bare water. See the matching rect
-              below. */}
 
           {/* Sun/dawn reflection on water */}
           {(isSundown || isDawn) && !sun.moon && (
@@ -1127,24 +1115,6 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               fill="white" opacity={(parseFloat(sprayOp)*.45).toFixed(2)} />
           </g>
 
-          {/* Reef rocks — under the lighthouse. Drawn AFTER the boats so boats
-              passing through the harbor visibly drift BEHIND the rocks
-              instead of clipping in front of the lighthouse island. */}
-          <path d={`M12,200 L12,${WL} L18,${WL-1} L24,${WL-1} L30,${WL-2} L38,${WL-2} L44,${WL-2} L52,${WL-2} L60,${WL-2} L66,${WL-1} L72,${WL-1} L78,${WL-1} L84,${WL} L90,${WL-1} L94,${WL} L94,200Z`} fill={rC} />
-          <path d={`M16,200 L16,${WL} L22,${WL} L28,${WL-1} L36,${WL-1} L44,${WL-1} L52,${WL-2} L60,${WL-1} L66,${WL-1} L72,${WL-1} L78,${WL} L84,${WL} L90,${WL} L92,${WL} L92,200Z`} fill={rM} />
-          <path d={`M22,200 L22,${WL} L30,${WL} L38,${WL-1} L46,${WL-1} L52,${WL-1} L58,${WL-1} L64,${WL-1} L70,${WL} L76,${WL} L82,${WL} L86,200Z`} fill={rD} />
-          <path d={`M14,${WL} L20,${WL-2} L24,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.5} />
-          <path d={`M80,${WL-1} L86,${WL-2} L92,${WL-1}`} stroke={rC} strokeWidth=".7" fill="none" opacity={.45} />
-
-          {/* Shore-fade — softens the bottom of the water AND the rocks into
-              the driftwood frame so there's no harsh boundary line. Renders
-              over both. Skipped at night (the nameplate is painted dark
-              ocean there and a driftwood fade would create a new visible
-              line). */}
-          {!isNight && (
-            <rect x="0" y={182} width="375" height={18} fill="url(#cs-shore)" />
-          )}
-
           {/* Lighthouse — beam intensity = Prime Cost score */}
           <g>
             {beamSweeping && (
@@ -1194,9 +1164,11 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <rect x={lx-9} y={lBase} width="18" height="3" rx="1" fill="#A8A090" />
           </g>
 
-          {/* (Old "bottom water depth" rect removed — it painted w3 back over
-              the shore-fade and was the actual source of the blue line above
-              the nameplate. The shore-fade handles the bottom transition.) */}
+          {/* Bottom water depth — skipped at night. Its w3 fill at .5 opacity
+              over already-dark water produced a visibly darker band at the
+              bottom 8px of the scene, reading as a seam right above the
+              nameplate. Day palette keeps the depth cue. */}
+          {!isNight && <rect x="0" y="192" width="375" height="8" fill={w3} opacity={.5} />}
 
           {/* & — bold italic serif, fades in then fades out, never returns */}
           <text
