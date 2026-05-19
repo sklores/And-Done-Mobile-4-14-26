@@ -525,6 +525,16 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   }, [beamPulseKey])
 
   const [tod, setTod] = useState<TimeOfDay>(getTimeOfDay())
+
+  // Each boat randomly lands in either the "back" layer (behind the
+  // lighthouse + rocks) or the "front" layer (in front of them) when the
+  // component mounts. Decision is sticky for the session so animations
+  // don't re-mount mid-cycle. Reload the page to re-roll.
+  const [boatLayers] = useState<{ ambient: 'back' | 'front'; hero: 'back' | 'front'; secondary: 'back' | 'front' }>(() => ({
+    ambient:   Math.random() < 0.5 ? 'back' : 'front',
+    hero:      Math.random() < 0.5 ? 'back' : 'front',
+    secondary: Math.random() < 0.5 ? 'back' : 'front',
+  }))
   const salesRaw = useKpiStore(s => s.sales)
   const tiles    = useKpiStore(s => s.tiles)
   const netSt    = useKpiStore(s => s.net)
@@ -631,6 +641,37 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const dolphinActive = socScore >= 3
   const dolphinOp     = dolphinActive ? (.45 + socNorm * .5) : 0
   const dolphinSpd    = dolphinActive ? (socScore >= 6 ? 4.5 : socScore >= 4 ? 7.5 : 12) : 99
+
+  // Boat JSX precomputed so each boat can be rendered in either the back or
+  // front layer slot (based on boatLayers) without duplicating markup.
+  const ambientBoatJSX = (
+    <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
+      <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
+        <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite -1.3s' }}>
+          {renderBoat(ambientBoat, isNight)}
+          {isNight && renderRunningLights(ambientBoat)}
+        </g>
+      </g>
+    </g>
+  )
+  const heroBoatJSX = !isNight ? (
+    <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
+      <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
+        <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite -3.7s' }}>
+          {renderBoat(heroBoat, isNight)}
+        </g>
+      </g>
+    </g>
+  ) : null
+  const secondaryBoatJSX = !isNight ? (
+    <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
+      <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
+        <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite -2.1s' }}>
+          {renderBoat(secondaryBoat, isNight)}
+        </g>
+      </g>
+    </g>
+  ) : null
 
   return (
     <div className="coastal-scene" style={{ width: '100%', aspectRatio: '375 / 200', overflow: 'hidden', display: 'block' }}>
@@ -1032,38 +1073,12 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           ))}
 
-          {/* Drifting boats — hero (profit), secondary (worst cost KPI), ambient (rotation) */}
-          {/* Ambient — furthest back, rides highest on waterline. Seeded at ~75% across. */}
-          <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
-            <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite -1.3s' }}>
-                {renderBoat(ambientBoat, isNight)}
-                {isNight && renderRunningLights(ambientBoat)}
-              </g>
-            </g>
-          </g>
-
-          {/* Hero — profit-driven, middle band, L→R. Seeded at ~40% across.
-              Hidden at night (the harbor is quiet — just the ambient boat). */}
-          {!isNight && <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
-            <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite -3.7s' }}>
-                {renderBoat(heroBoat, isNight)}
-                {isNight && renderRunningLights(heroBoat)}
-              </g>
-            </g>
-          </g>}
-
-          {/* Secondary — worst non-profit KPI, front band, R→L. Seeded at ~40% from right.
-              Hidden at night. */}
-          {!isNight && <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
-            <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
-              <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite -2.1s' }}>
-                {renderBoat(secondaryBoat, isNight)}
-                {isNight && renderRunningLights(secondaryBoat)}
-              </g>
-            </g>
-          </g>}
+          {/* Drifting boats — back layer (behind rocks + lighthouse).
+              Each boat lives here OR in the front-layer block below the
+              lighthouse, depending on its random `boatLayers` assignment. */}
+          {boatLayers.ambient   === 'back' && ambientBoatJSX}
+          {boatLayers.hero      === 'back' && heroBoatJSX}
+          {boatLayers.secondary === 'back' && secondaryBoatJSX}
 
           {/* Dolphins — Social score (active + frequency when good) */}
           {dolphinActive && (
@@ -1168,6 +1183,13 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <circle cx={lx} cy={lBase-30} r="7.5" fill="#FFFDE0" opacity={.24} />
             <rect x={lx-9} y={lBase} width="18" height="3" rx="1" fill="#A8A090" />
           </g>
+
+          {/* Drifting boats — front layer (in front of rocks + lighthouse).
+              Companion to the back-layer block earlier; each boat appears
+              in exactly one of the two based on its boatLayers assignment. */}
+          {boatLayers.ambient   === 'front' && ambientBoatJSX}
+          {boatLayers.hero      === 'front' && heroBoatJSX}
+          {boatLayers.secondary === 'front' && secondaryBoatJSX}
 
           {/* (Old bottom-water-depth rect deleted — it added a w3 light-blue
               tint over the bottom 8px of water that was already at gradient
