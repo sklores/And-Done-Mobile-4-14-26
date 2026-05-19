@@ -1164,14 +1164,12 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <rect x={lx-9} y={lBase} width="18" height="3" rx="1" fill="#A8A090" />
           </g>
 
-          {/* Bottom seam tint — keeps the rocks anchored at the shoreline,
-              softens the water-to-nameplate transition. Flipped from w3
-              (light blue) to driftwood (#C4B090, the nameplate color) so
-              the bottom 8px blends into the frame instead of creating the
-              visible blue line that w3 used to produce. Same rect, same
-              position, just a friendlier color. Skipped at night where the
-              nameplate is already dark ocean and no blend is needed. */}
-          {!isNight && <rect x="0" y="192" width="375" height="8" fill="#C4B090" opacity={.45} />}
+          {/* (Old bottom-water-depth rect deleted — it added a w3 light-blue
+              tint over the bottom 8px of water that was already at gradient
+              w3, lightening it further and creating the visible "lighter
+              stripe" against the water above. Without the overlay, the
+              bottom 8px just continues the water gradient naturally, same
+              color as the water just above it.) */}
 
           {/* & — bold italic serif, fades in then fades out, never returns */}
           <text
