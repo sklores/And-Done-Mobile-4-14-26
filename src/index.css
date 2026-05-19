@@ -44,3 +44,19 @@ button { font-family: inherit; }
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 0.95; }
 }
+
+/* ── PWA-only extra breathing room ───────────────────────────────────────
+   When the app is launched from a Home Screen icon (no URL bar), there's
+   ~80px more vertical viewport than in a browser tab. We use that space
+   for slightly larger gaps between the Sales bar → KPI grid → Net bar →
+   marquee, so the layout doesn't leave a cream gap above the bottom tabs.
+
+   The (display-mode: standalone) media query is ONLY true in PWA /
+   home-screen / fullscreen contexts. Browser tabs never match it, so the
+   URL version is unaffected by this block. */
+@media (display-mode: standalone) {
+  .pwa-stack {
+    gap: 14px;
+    padding-bottom: 6px;
+  }
+}

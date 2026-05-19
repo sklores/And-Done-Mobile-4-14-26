@@ -416,8 +416,11 @@ export default function App() {
             </div>
           </div>
           {/* Nocturnal dimming — applied only to the UI chrome below the
-              scene card. The scene renders its own day/night sky internally. */}
+              scene card. The scene renders its own day/night sky internally.
+              The `pwa-stack` class triggers PWA-only extra spacing between
+              tiles (see index.css @media (display-mode: standalone)). */}
           <div
+            className="pwa-stack"
             style={{
               filter: chromeFilter,
               transition: "filter 1.2s ease",
