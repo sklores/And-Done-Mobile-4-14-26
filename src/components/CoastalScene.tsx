@@ -526,16 +526,18 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
 
   const [tod, setTod] = useState<TimeOfDay>(getTimeOfDay())
 
-  // Only the ambient boat (which rides at WL-4, ABOVE the waterline) flips
-  // a coin between front + back layers. Hero (WL+2) and secondary (WL+12)
-  // ride at or below the waterline — they look weird in front of the rocky
-  // island because their hulls sit where the rocks should be obscuring
-  // them. Locked to back so they always pass behind the lighthouse.
+  // Every boat flips a coin between front + back layers at mount. The Y
+  // position is then derived from the layer (see ambient/hero/secondary
+  // JSX below) so the visual depth matches the render order:
+  //   back  → boat sits on the higher wave (above waterline, background)
+  //   front → boat sits on the lower wave (below waterline, foreground)
+  // No more "low-rider in front looks wrong" problem because front always
+  // implies a foreground Y, and back always implies a background Y.
   // Decision is sticky for the session; reload to re-roll.
   const [boatLayers] = useState<{ ambient: 'back' | 'front'; hero: 'back' | 'front'; secondary: 'back' | 'front' }>(() => ({
     ambient:   Math.random() < 0.5 ? 'back' : 'front',
-    hero:      'back',
-    secondary: 'back',
+    hero:      Math.random() < 0.5 ? 'back' : 'front',
+    secondary: Math.random() < 0.5 ? 'back' : 'front',
   }))
   const salesRaw = useKpiStore(s => s.sales)
   const tiles    = useKpiStore(s => s.tiles)
@@ -646,9 +648,16 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
 
   // Boat JSX precomputed so each boat can be rendered in either the back or
   // front layer slot (based on boatLayers) without duplicating markup.
+  // Y offset is derived from layer: back → higher wave (above waterline),
+  // front → lower wave (below waterline). Small per-boat variation keeps
+  // them from stacking at the same Y when multiple share a layer.
+  const ambientY   = boatLayers.ambient   === 'back' ? -4 : 10
+  const heroY      = boatLayers.hero      === 'back' ? -2 : 12
+  const secondaryY = boatLayers.secondary === 'back' ?  0 : 14
+
   const ambientBoatJSX = (
     <g style={{ animation: 'cs-drift-r 24s linear infinite -18s' }}>
-      <g transform={`translate(0, ${WL - 4 + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
+      <g transform={`translate(0, ${WL + ambientY + (BOAT_Y_OFFSET[ambientBoat] ?? 0)})`}>
         <g style={{ animation: 'cs-bob 4.8s ease-in-out infinite -1.3s' }}>
           {renderBoat(ambientBoat, isNight)}
           {isNight && renderRunningLights(ambientBoat)}
@@ -658,7 +667,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   )
   const heroBoatJSX = !isNight ? (
     <g style={{ animation: 'cs-drift-r 30s linear infinite -12s' }}>
-      <g transform={`translate(0, ${WL + 2 + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
+      <g transform={`translate(0, ${WL + heroY + (BOAT_Y_OFFSET[heroBoat] ?? 0)})`}>
         <g style={{ animation: 'cs-bob 5.5s ease-in-out infinite -3.7s' }}>
           {renderBoat(heroBoat, isNight)}
         </g>
@@ -667,7 +676,7 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   ) : null
   const secondaryBoatJSX = !isNight ? (
     <g style={{ animation: 'cs-drift-l 36s linear infinite -14s' }}>
-      <g transform={`translate(0, ${WL + 12 + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
+      <g transform={`translate(0, ${WL + secondaryY + (BOAT_Y_OFFSET[secondaryBoat] ?? 0)})`}>
         <g style={{ animation: 'cs-bob 6.4s ease-in-out infinite -2.1s' }}>
           {renderBoat(secondaryBoat, isNight)}
         </g>
