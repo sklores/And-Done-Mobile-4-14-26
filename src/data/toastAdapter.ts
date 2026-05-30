@@ -59,8 +59,9 @@ export type HourlySales = {
 };
 
 export type SalesDetailResult = {
-  pmixTop: PmixItem[];
-  pmixBottom: PmixItem[];
+  pmixAll: PmixItem[];      // every item sold today, sorted by revenue desc
+  pmixTop: PmixItem[];      // first 5 of pmixAll (legacy convenience)
+  pmixBottom: PmixItem[];   // last 3 of pmixAll, reversed (legacy convenience)
   channels: SalesChannels;
   byHour: HourlySales[]; // inclusive first→last hour with sales (gaps filled with zero)
   fetchedAt: string;

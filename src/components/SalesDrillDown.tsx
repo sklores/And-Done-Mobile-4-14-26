@@ -203,12 +203,14 @@ export function SalesDrillDown({ open, onClose }: Props) {
     return () => { cancelled = true; };
   }, [open]);
 
-  // Build a case-insensitive lookup from today's pmix (top + bottom) so
-  // tracked names can be matched against actual sold items.
+  // Build a case-insensitive lookup from today's FULL pmix (every item,
+  // not just top 5 + bottom 3) so middle-revenue tracked items can match.
   const pmixByName = new Map<string, PmixItem>();
   if (detail) {
-    for (const item of detail.pmixTop) pmixByName.set(item.name.toLowerCase(), item);
-    for (const item of detail.pmixBottom) pmixByName.set(item.name.toLowerCase(), item);
+    for (const item of detail.pmixAll ?? []) pmixByName.set(item.name.toLowerCase(), item);
+    // Fallback for cases where pmixAll isn't present (older API responses)
+    for (const item of detail.pmixTop ?? []) pmixByName.set(item.name.toLowerCase(), item);
+    for (const item of detail.pmixBottom ?? []) pmixByName.set(item.name.toLowerCase(), item);
   }
   const trackedMatches = tracked.map((name) => ({
     name,

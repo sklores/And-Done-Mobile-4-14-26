@@ -495,20 +495,20 @@ export async function getTodaySalesDetail(creds) {
     }
   }
 
-  // Sort by revenue desc, take top 5 and bottom 5 (min 2 items to show bottom)
+  // Sort by revenue desc. Build three views off the same sorted list:
+  //   pmixAll    — every item sold today (used by tracked-items lookup +
+  //                any future feature that needs the full mix)
+  //   pmixTop    — top 5 (legacy field powering "Top Sellers" section)
+  //   pmixBottom — bottom 3 (legacy field powering "Bottom Sellers" section)
   const allItems = Array.from(itemMap.values()).sort((a, b) => b.revenue - a.revenue);
-  const top = allItems.slice(0, 5).map((i) => ({
+  const round = (i) => ({
     name: i.name,
     revenue: Math.round(i.revenue * 100) / 100,
     qty: i.qty,
-  }));
-  const bottom = allItems.length >= 4
-    ? allItems.slice(-3).reverse().map((i) => ({
-        name: i.name,
-        revenue: Math.round(i.revenue * 100) / 100,
-        qty: i.qty,
-      }))
-    : [];
+  });
+  const all = allItems.map(round);
+  const top = all.slice(0, 5);
+  const bottom = all.length >= 4 ? all.slice(-3).slice().reverse() : [];
 
   // Round channel values
   for (const k of Object.keys(channels)) {
@@ -516,6 +516,7 @@ export async function getTodaySalesDetail(creds) {
   }
 
   return {
+    pmixAll: all,
     pmixTop: top,
     pmixBottom: bottom,
     channels,
