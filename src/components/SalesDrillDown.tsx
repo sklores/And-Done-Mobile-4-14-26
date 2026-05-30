@@ -193,6 +193,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
   // for each name by joining against today's pmix; WoW comparison would
   // need a new Toast analytics call (follow-up).
   const [tracked, setTracked] = useState<string[]>([]);
+  const [trackedExpanded, setTrackedExpanded] = useState(false);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -283,20 +284,56 @@ export function SalesDrillDown({ open, onClose }: Props) {
         );
       })()}
 
-      {/* ── Tracked Items watchlist (curated on desktop) ─ */}
+      {/* ── Tracked Items watchlist (curated on desktop, collapsible) ─ */}
       {tracked.length > 0 && (
         <>
-          <SectionHeader title={`Tracked Items (${soldCount}/${tracked.length} sold today)`} />
-          {trackedMatches.map(({ name, match }) => (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setTrackedExpanded((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setTrackedExpanded((v) => !v);
+              }
+            }}
+            style={{
+              padding: "10px 18px 4px",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: ".1em",
+              textTransform: "uppercase",
+              color: "#8A9C9C",
+              fontFamily: coastal.fonts.manrope,
+              background: "#F2F7F6",
+              borderTop: "1px solid rgba(0,0,0,0.05)",
+              borderBottom: "1px solid rgba(0,0,0,0.05)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <span>Tracked Items · {soldCount}/{tracked.length} sold today</span>
+            <span
+              aria-hidden
+              style={{
+                display: "inline-block",
+                fontSize: 10,
+                transform: trackedExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                transition: "transform 0.18s ease",
+              }}
+            >
+              ▸
+            </span>
+          </div>
+          {trackedExpanded && trackedMatches.map(({ name, match }) => (
             <DrillRow
               key={name}
               label={name}
               value={match ? fmt$(match.revenue) : "—"}
-              sub={
-                match
-                  ? `${match.qty} sold today`
-                  : "not sold today"
-              }
+              sub={match ? `${match.qty} sold today` : "not sold today"}
               dimmed={!match}
             />
           ))}
