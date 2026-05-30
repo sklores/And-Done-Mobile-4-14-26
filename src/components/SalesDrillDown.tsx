@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { coastal } from "../theme/skins";
 import { computeSalesState, getDailyTarget } from "../config/salesTargetConfig";
+import { fetchTrackedItems } from "../data/trackedItemsAdapter";
 import type { PmixItem, HourlySales } from "../data/toastAdapter";
 
 type Props = { open: boolean; onClose: () => void };
@@ -186,6 +188,33 @@ export function SalesDrillDown({ open, onClose }: Props) {
   // Sales score: projection-based, anchored to BUSINESS_HOURS (not shifts).
   const salesScore = computeSalesState(sales.value, getDailyTarget()).score;
 
+  // Tracked items watchlist — read from org_settings.tracked_items_json
+  // (the same column desktop reads/writes from). v1 shows today's qty/rev
+  // for each name by joining against today's pmix; WoW comparison would
+  // need a new Toast analytics call (follow-up).
+  const [tracked, setTracked] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetchTrackedItems().then((names) => {
+      if (!cancelled) setTracked(names);
+    });
+    return () => { cancelled = true; };
+  }, [open]);
+
+  // Build a case-insensitive lookup from today's pmix (top + bottom) so
+  // tracked names can be matched against actual sold items.
+  const pmixByName = new Map<string, PmixItem>();
+  if (detail) {
+    for (const item of detail.pmixTop) pmixByName.set(item.name.toLowerCase(), item);
+    for (const item of detail.pmixBottom) pmixByName.set(item.name.toLowerCase(), item);
+  }
+  const trackedMatches = tracked.map((name) => ({
+    name,
+    match: pmixByName.get(name.toLowerCase()) ?? null,
+  }));
+  const soldCount = trackedMatches.filter((t) => t.match !== null).length;
+
   // Derive total 3rd party
   const ch = detail?.channels;
   const thirdParty  = ch ? (ch.doordash + ch.ubereats + ch.grubhub + ch.other3p) : null;
@@ -253,6 +282,26 @@ export function SalesDrillDown({ open, onClose }: Props) {
           </>
         );
       })()}
+
+      {/* ── Tracked Items watchlist (curated on desktop) ─ */}
+      {tracked.length > 0 && (
+        <>
+          <SectionHeader title={`Tracked Items (${soldCount}/${tracked.length} sold today)`} />
+          {trackedMatches.map(({ name, match }) => (
+            <DrillRow
+              key={name}
+              label={name}
+              value={match ? fmt$(match.revenue) : "—"}
+              sub={
+                match
+                  ? `${match.qty} sold today`
+                  : "not sold today"
+              }
+              dimmed={!match}
+            />
+          ))}
+        </>
+      )}
 
       {/* ── Top Sellers ────────────────────────────────── */}
       {detail && detail.pmixTop.length > 0 && (
