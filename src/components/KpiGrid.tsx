@@ -20,7 +20,11 @@ export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
       style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: 4,
+        // Vertical breathing room between the COGS/Labor row and the
+        // Prime/Fixed row; columns stay tight (4px) so the side-by-side
+        // tiles don't drift apart. Universal — not PWA-gated.
+        rowGap: 10,
+        columnGap: 4,
         padding: "4px 10px 0",
         background: bg,
         transition: "background 1.2s ease",
