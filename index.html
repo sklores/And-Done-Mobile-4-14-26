@@ -10,7 +10,12 @@
 
     <!-- iOS full-screen app -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- "default" lets iOS manage the status-bar text color so the clock/
+         battery stay legible over BOTH the light (driftwood) day theme and
+         the dark (navy) night theme. "black-translucent" forced white text,
+         which vanished over the light theme. Pairs with the safe-area-inset
+         padding in App.tsx / BottomTabs.tsx. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="And Done" />
     <!-- iOS Add to Home Screen uses this, not the manifest. Points at the
          ampersand icon so the home-screen tile matches the Android PWA. -->
