@@ -312,6 +312,14 @@ export default function App() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          // iOS notched-device safe area: push the framed scene below the
+          // status bar / Dynamic Island so the clock no longer overlaps it.
+          // No-op on Android (inset reports 0). The global box-sizing:border-box
+          // keeps this padding *inside* the 100dvh, so it doesn't add scroll.
+          // NOTE (staged): pairs with the status-bar-style decision in
+          // index.html — verify legibility of the status text over the notch
+          // band on a real iPhone before merging.
+          paddingTop: "env(safe-area-inset-top)",
           transition: "background 1.2s ease",
         }}
       >

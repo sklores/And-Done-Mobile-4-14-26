@@ -15,8 +15,10 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export function BottomTabs({ onOpen, bg, textColor }: Props) {
+  // paddingBottom: iOS home-indicator safe area — extends the tab-bar color
+  // into the gesture-bar zone so the labels clear it. No-op on Android (inset 0).
   return (
-    <div style={{ background: bg ?? coastal.tabs.bg, flexShrink: 0, transition: "background 1.2s ease" }}>
+    <div style={{ background: bg ?? coastal.tabs.bg, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", transition: "background 1.2s ease" }}>
       <div
         style={{
           display: "flex",
