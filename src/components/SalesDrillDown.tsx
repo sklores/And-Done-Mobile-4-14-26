@@ -217,6 +217,11 @@ export function SalesDrillDown({ open, onClose }: Props) {
     match: pmixByName.get(name.toLowerCase()) ?? null,
   }));
   const soldCount = trackedMatches.filter((t) => t.match !== null).length;
+  // Summary footer: combined revenue of the matched tracked items, and that
+  // total as a share of headline sales (same denominator the operator sees as
+  // "Sales" at the top of this sheet). Unmatched items contribute $0.
+  const trackedTotal = trackedMatches.reduce((sum, t) => sum + (t.match?.revenue ?? 0), 0);
+  const trackedPctOfSales = sales.value > 0 ? (trackedTotal / sales.value) * 100 : 0;
 
   // Derive total 3rd party
   const ch = detail?.channels;
@@ -339,6 +344,56 @@ export function SalesDrillDown({ open, onClose }: Props) {
               dimmed={!match}
             />
           ))}
+          {/* Summary footer — combined tracked revenue + % of total sales,
+              both on one line. Styled as a total (subtle bg + top rule). */}
+          {trackedExpanded && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 18px",
+                background: "#F2F7F6",
+                borderTop: "1px solid rgba(0,0,0,0.10)",
+                borderBottom: "1px solid rgba(0,0,0,0.06)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: coastal.fonts.manrope,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  color: "#4A5A54",
+                }}
+              >
+                Tracked Total
+              </span>
+              <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span
+                  style={{
+                    fontFamily: coastal.fonts.condensed,
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "#1A2E28",
+                  }}
+                >
+                  {fmt$(trackedTotal)}
+                </span>
+                <span
+                  style={{
+                    fontFamily: coastal.fonts.manrope,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#2F6B58",
+                  }}
+                >
+                  {trackedPctOfSales.toFixed(1)}% of sales
+                </span>
+              </span>
+            </div>
+          )}
         </>
       )}
 
