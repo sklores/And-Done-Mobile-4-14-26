@@ -373,16 +373,6 @@ export function SalesDrillDown({ open, onClose }: Props) {
               <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span
                   style={{
-                    fontFamily: coastal.fonts.condensed,
-                    fontSize: 18,
-                    fontWeight: 800,
-                    color: "#1A2E28",
-                  }}
-                >
-                  {fmt$(trackedTotal)}
-                </span>
-                <span
-                  style={{
                     fontFamily: coastal.fonts.manrope,
                     fontSize: 11,
                     fontWeight: 700,
@@ -390,6 +380,16 @@ export function SalesDrillDown({ open, onClose }: Props) {
                   }}
                 >
                   {trackedPctOfSales.toFixed(1)}% of sales
+                </span>
+                <span
+                  style={{
+                    fontFamily: coastal.fonts.condensed,
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: "#1A2E28",
+                  }}
+                >
+                  {fmt$(trackedTotal)}
                 </span>
               </span>
             </div>
