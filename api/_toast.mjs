@@ -65,16 +65,20 @@ async function getToken(creds) {
   return token;
 }
 
-export async function getTodaySales(creds) {
+// Fetch ALL of today's orders, following Toast's pagination. ordersBulk
+// defaults to pageSize=100, page=1 — busy days spill onto page 2+, so we loop
+// until we get a short page. Single source of truth for every order-derived
+// metric (sales, pmix, channels, COGS). Centralizing it is what keeps the
+// "page-1-only" undercount from creeping back into one call site but not the
+// others — exactly how the detail/COGS endpoints regressed: getTodaySales got
+// the pagination fix, getTodaySalesDetail/getTodayCOGSDetail did not.
+async function fetchTodayOrders(creds) {
   const token = await getToken(creds);
   const businessDate = todayBusinessDate();
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     "Toast-Restaurant-External-ID": creds.guid,
   };
-
-  // Toast's ordersBulk endpoint defaults to pageSize=100, page=1. Busy days
-  // spill onto page 2+, so we paginate until we get a short page.
   const PAGE_SIZE = 100;
   const MAX_PAGES = 20; // safety cap → 2,000 orders/day ceiling
   const orders = [];
@@ -87,6 +91,11 @@ export async function getTodaySales(creds) {
     orders.push(...batch);
     if (batch.length < PAGE_SIZE) break;
   }
+  return { orders, businessDate };
+}
+
+export async function getTodaySales(creds) {
+  const { orders, businessDate } = await fetchTodayOrders(creds);
 
   // Sum `check.amount` — net sales, pre-tax, pre-tip. Matches POS "Sales".
   let total = 0;
@@ -393,17 +402,9 @@ function classifyDiningOption(guid) {
 }
 
 export async function getTodaySalesDetail(creds) {
-  const token = await getToken(creds);
-  const businessDate = todayBusinessDate();
-  const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Toast-Restaurant-External-ID": creds.guid,
-    },
-  });
-  if (!res.ok) throw new Error(`toast orders ${res.status}`);
-  const orders = await res.json();
+  // Paginated fetch — pmix, channels and hourly all build off this, so a
+  // page-1-only fetch silently dropped every item/sale past order #100.
+  const { orders } = await fetchTodayOrders(creds);
 
   // Product mix: aggregate top-level menu items (salesCategory != null) by revenue
   const itemMap = new Map(); // displayName → { revenue, qty }
@@ -591,17 +592,9 @@ const PAPER_TAKEOUT_PCT     = 0.04;  // 4% (takeout + delivery)
 const THIRD_PARTY_COMM_PCT  = 0.18;  // 18%
 
 export async function getTodayCOGSDetail(creds) {
-  const token = await getToken(creds);
-  const businessDate = todayBusinessDate();
-  const url = `${BASE}/orders/v2/ordersBulk?businessDate=${businessDate}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Toast-Restaurant-External-ID': creds.guid,
-    },
-  });
-  if (!res.ok) throw new Error(`toast orders ${res.status}`);
-  const orders = await res.json();
+  // Paginated fetch — COGS aggregates category revenue off these orders, so a
+  // page-1-only fetch undercounted COGS on any day past order #100.
+  const { orders } = await fetchTodayOrders(creds);
 
   const categoryMap = new Map(); // catName → revenue
   let totalRevenue = 0;
