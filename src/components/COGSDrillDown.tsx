@@ -1,6 +1,6 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 import { buildGroups, GROUP_COGS_PCT, type CogsGroup } from "../config/cogsGroups";
 
 type Props = { open: boolean; onClose: () => void };
@@ -13,11 +13,12 @@ function fmtDec$(n: number) {
 }
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div style={{
       padding: "10px 18px 4px",
       fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase",
-      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      color: "#8A9C9C", fontFamily: skin.fonts.body,
       background: "#F2F7F6",
       borderTop: "1px solid rgba(0,0,0,0.05)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -40,6 +41,7 @@ function GroupBar({ groups, total }: {
   groups: Record<CogsGroup, { revenue: number; cost: number }>;
   total: number;
 }) {
+  const skin = useSkin();
   if (!total) return null;
   const order: CogsGroup[] = ["Food", "Beverage", "Alcohol"];
   return (
@@ -55,7 +57,7 @@ function GroupBar({ groups, total }: {
         {order.map((g) => (
           <div key={g} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: GROUP_COLORS[g] }} />
-            <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, color: "#8A9C9C", fontWeight: 700 }}>
+            <span style={{ fontFamily: skin.fonts.body, fontSize: 9, color: "#8A9C9C", fontWeight: 700 }}>
               {g} {total > 0 ? ((groups[g].revenue / total) * 100).toFixed(0) : 0}%
             </span>
           </div>
@@ -67,6 +69,7 @@ function GroupBar({ groups, total }: {
 
 
 export function COGSDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const cogsTile = useKpiStore((s) => s.tiles.find((t) => t.key === "cogs"));
   const detail   = useKpiStore((s) => s.cogsDetail);
   const salesVal = useKpiStore((s) => s.sales.value);
@@ -180,7 +183,7 @@ export function COGSDrillDown({ open, onClose }: Props) {
 
       {!detail && (
         <div style={{ padding: "20px 18px", textAlign: "center",
-          fontFamily: coastal.fonts.manrope, fontSize: 12, color: "#8A9C9C" }}>
+          fontFamily: skin.fonts.body, fontSize: 12, color: "#8A9C9C" }}>
           Waiting for order data…
         </div>
       )}

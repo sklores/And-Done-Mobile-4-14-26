@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TabPanel } from "./TabPanel";
-import { coastal } from "../../theme/skins";
+import { useSkin } from "../../theme/skins";
 import { supabase, supabaseReady } from "../../lib/supabase";
 
 type Props = { open: boolean; onClose: () => void };
@@ -70,12 +70,12 @@ function fmtDate(iso: string | null) {
 
 const ACCENT = "#2A3C48";
 
-const selectStyle: React.CSSProperties = {
+const selectStyle = (bodyFont: string): React.CSSProperties => ({
   width: "100%",
   padding: "10px 12px",
   borderRadius: 10,
   border: "1.5px solid #D0D8DC",
-  fontFamily: coastal.fonts.manrope,
+  fontFamily: bodyFont,
   fontSize: 13,
   fontWeight: 600,
   color: "#1A2E28",
@@ -87,7 +87,7 @@ const selectStyle: React.CSSProperties = {
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 12px center",
   paddingRight: 32,
-};
+});
 
 // Downscale to max 2000px on longest side + JPEG 0.85 so the base64
 // payload stays well under Anthropic's ~5MB image cap. Phone photos can
@@ -131,6 +131,7 @@ async function fileToBase64(file: File): Promise<{ base64: string; mime: string 
 }
 
 export function InvoicesTab({ open, onClose }: Props) {
+  const skin = useSkin();
   const inputRef = useRef<HTMLInputElement>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
@@ -300,7 +301,7 @@ export function InvoicesTab({ open, onClose }: Props) {
             border: "none",
             borderRadius: 12,
             padding: "16px 0",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontWeight: 800,
             fontSize: 13,
             cursor: scanning ? "default" : "pointer",
@@ -324,7 +325,7 @@ export function InvoicesTab({ open, onClose }: Props) {
             border: "none",
             borderRadius: 12,
             padding: "16px 0",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontWeight: 800,
             fontSize: 13,
             cursor: "pointer",
@@ -362,14 +363,14 @@ export function InvoicesTab({ open, onClose }: Props) {
               letterSpacing: ".1em",
               textTransform: "uppercase",
               color: "#8A9C9C",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
             }}
           >
             New Invoice · {todayLabel()}
           </div>
 
           <div style={{ position: "relative" }}>
-            <select value={vendor} onChange={(e) => setVendor(e.target.value)} style={selectStyle}>
+            <select value={vendor} onChange={(e) => setVendor(e.target.value)} style={selectStyle(skin.fonts.body)}>
               {VENDORS.map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -379,7 +380,7 @@ export function InvoicesTab({ open, onClose }: Props) {
           </div>
 
           <div style={{ position: "relative" }}>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} style={selectStyle}>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} style={selectStyle(skin.fonts.body)}>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -393,7 +394,7 @@ export function InvoicesTab({ open, onClose }: Props) {
               style={{
                 position: "absolute",
                 left: 12,
-                fontFamily: coastal.fonts.condensed,
+                fontFamily: skin.fonts.display,
                 fontSize: 16,
                 fontWeight: 700,
                 color: "#8A9C9C",
@@ -412,7 +413,7 @@ export function InvoicesTab({ open, onClose }: Props) {
                 padding: "10px 12px 10px 26px",
                 borderRadius: 10,
                 border: "1.5px solid #D0D8DC",
-                fontFamily: coastal.fonts.condensed,
+                fontFamily: skin.fonts.display,
                 fontSize: 18,
                 fontWeight: 700,
                 color: "#1A2E28",
@@ -432,7 +433,7 @@ export function InvoicesTab({ open, onClose }: Props) {
               border: "none",
               borderRadius: 10,
               padding: "13px 0",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontWeight: 800,
               fontSize: 13,
               letterSpacing: ".06em",
@@ -455,7 +456,7 @@ export function InvoicesTab({ open, onClose }: Props) {
             style={{
               fontSize: 10,
               color: scanError ? "#B94A4A" : "#7EB8D8",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontWeight: 700,
               textAlign: "center",
               marginTop: 6,
@@ -484,10 +485,10 @@ export function InvoicesTab({ open, onClose }: Props) {
             alignItems: "center",
           }}
         >
-          <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 700, color: "#6A4800" }}>
+          <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 700, color: "#6A4800" }}>
             Pending Payment
           </div>
-          <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 18, fontWeight: 800, color: "#7A5200" }}>
+          <div style={{ fontFamily: skin.fonts.display, fontSize: 18, fontWeight: 800, color: "#7A5200" }}>
             ${totalPending.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
@@ -502,7 +503,7 @@ export function InvoicesTab({ open, onClose }: Props) {
             letterSpacing: ".1em",
             textTransform: "uppercase",
             color: "#8A9C9C",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             marginBottom: 2,
           }}
         >
@@ -514,7 +515,7 @@ export function InvoicesTab({ open, onClose }: Props) {
               textAlign: "center",
               padding: "24px 0",
               color: "#8A9C9C",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontSize: 12,
             }}
           >
@@ -538,17 +539,17 @@ export function InvoicesTab({ open, onClose }: Props) {
               }}
             >
               <div>
-                <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 13, fontWeight: 700, color: "#1A2E28" }}>
+                <div style={{ fontFamily: skin.fonts.body, fontSize: 13, fontWeight: 700, color: "#1A2E28" }}>
                   {inv.vendor_name}
                 </div>
-                <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 2, fontFamily: coastal.fonts.manrope }}>
+                <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 2, fontFamily: skin.fonts.body }}>
                   {inv.category || "Uncategorized"} · {fmtDate(inv.invoice_date)}
                   {inv.line_items?.length ? ` · ${inv.line_items.length} items` : ""}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
                 {amt > 0 && (
-                  <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
+                  <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
                     ${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                 )}
@@ -564,7 +565,7 @@ export function InvoicesTab({ open, onClose }: Props) {
                     color: STATUS_TEXT[status] || "#2A3C48",
                     letterSpacing: ".06em",
                     textTransform: "uppercase",
-                    fontFamily: coastal.fonts.manrope,
+                    fontFamily: skin.fonts.body,
                   }}
                 >
                   {status}

@@ -3,7 +3,7 @@ import { useKpiStore } from "../stores/useKpiStore";
 import { useMaintenanceStore } from "../stores/useMaintenanceStore";
 import { useFixedCostStore } from "../stores/useFixedCostStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 import {
   RENT_PCT,
   dailyFixed,
@@ -22,6 +22,7 @@ function fmtDec$(n: number) {
 }
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -31,7 +32,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
         letterSpacing: ".1em",
         textTransform: "uppercase",
         color: "#8A9C9C",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -47,6 +48,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
 }
 
 function AddMRForm({ onAdd }: { onAdd: () => void }) {
+  const skin = useSkin();
   const addEntry = useMaintenanceStore((s) => s.addEntry);
   const [amount, setAmount]   = useState("");
   const [desc, setDesc]       = useState("");
@@ -62,7 +64,7 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
   }
 
   const inputStyle: React.CSSProperties = {
-    fontFamily: coastal.fonts.manrope,
+    fontFamily: skin.fonts.body,
     fontSize: 13,
     padding: "8px 10px",
     borderRadius: 8,
@@ -77,7 +79,7 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
   return (
     <div style={{ padding: "12px 18px 4px", display: "flex", flexDirection: "column", gap: 8 }}>
       {error && (
-        <div style={{ fontSize: 11, color: "#B94A4A", fontFamily: coastal.fonts.manrope }}>{error}</div>
+        <div style={{ fontSize: 11, color: "#B94A4A", fontFamily: skin.fonts.body }}>{error}</div>
       )}
       <input
         type="number"
@@ -102,7 +104,7 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
           border: "none",
           borderRadius: 8,
           padding: "9px 0",
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
           fontWeight: 700,
           fontSize: 13,
           cursor: "pointer",
@@ -115,6 +117,7 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
 }
 
 export function FixedCostDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const fixedTile    = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
   const salesVal     = useKpiStore((s) => s.sales.value);
   const allEntries   = useMaintenanceStore((s) => s.entries);
@@ -207,7 +210,7 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
           padding: "10px 18px",
           fontSize: 12,
           color: "#8A9C9C",
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
         }}>
           No M&R logged today.
         </div>
@@ -225,7 +228,7 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
           }}
         >
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
+            <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
               {entry.description}
             </div>
             <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
@@ -233,7 +236,7 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#B94A4A" }}>
+            <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#B94A4A" }}>
               {fmt$(entry.amount)}
             </div>
             <div
@@ -264,7 +267,7 @@ export function FixedCostDrillDown({ open, onClose }: Props) {
             borderRadius: 8,
             border: "1.5px dashed #C8D8D4",
             textAlign: "center",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 12,
             fontWeight: 700,
             color: "#4A7C6F",

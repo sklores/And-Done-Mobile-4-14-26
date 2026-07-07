@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 import { computeSalesState, getDailyTarget } from "../config/salesTargetConfig";
 import { fetchTrackedItems } from "../data/trackedItemsAdapter";
 import type { PmixItem, HourlySales } from "../data/toastAdapter";
@@ -16,6 +16,7 @@ function fmtDec$(n: number) {
 }
 
 function SectionHeader({ title }: { title: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -25,7 +26,7 @@ function SectionHeader({ title }: { title: string }) {
         letterSpacing: ".1em",
         textTransform: "uppercase",
         color: "#8A9C9C",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -52,6 +53,7 @@ function HourBarRow({
   peakSales: number;
   highlight: boolean;
 }) {
+  const skin = useSkin();
   // Bar width as a % of the peak hour; clamp to >=2% so zero-sales hours still
   // render a visible stub on the track.
   const pctOfPeak = peakSales > 0 ? (entry.sales / peakSales) * 100 : 0;
@@ -70,7 +72,7 @@ function HourBarRow({
       <div
         style={{
           width: 36,
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
           fontSize: 11,
           fontWeight: 700,
           color: "#8A9C9C",
@@ -104,7 +106,7 @@ function HourBarRow({
         style={{
           width: 64,
           textAlign: "right",
-          fontFamily: coastal.fonts.condensed,
+          fontFamily: skin.fonts.display,
           fontSize: 13,
           fontWeight: 700,
           color: "#1A2E28",
@@ -118,6 +120,7 @@ function HourBarRow({
 }
 
 function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -140,7 +143,7 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
           fontSize: 10,
           fontWeight: 800,
           color: accent ? "#fff" : "#4A7C6F",
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
           flexShrink: 0,
         }}
       >
@@ -149,7 +152,7 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 12,
             fontWeight: 600,
             color: "#1A2E28",
@@ -166,7 +169,7 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
       </div>
       <div
         style={{
-          fontFamily: coastal.fonts.condensed,
+          fontFamily: skin.fonts.display,
           fontSize: 16,
           fontWeight: 700,
           color: "#1A2E28",
@@ -180,6 +183,7 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
 }
 
 export function SalesDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const sales           = useKpiStore((s) => s.sales);
   const detail          = useKpiStore((s) => s.salesDetail);
 
@@ -311,7 +315,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
               letterSpacing: ".1em",
               textTransform: "uppercase",
               color: "#8A9C9C",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               background: "#F2F7F6",
               borderTop: "1px solid rgba(0,0,0,0.05)",
               borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -360,7 +364,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
             >
               <span
                 style={{
-                  fontFamily: coastal.fonts.manrope,
+                  fontFamily: skin.fonts.body,
                   fontSize: 11,
                   fontWeight: 700,
                   letterSpacing: ".04em",
@@ -373,7 +377,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
               <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span
                   style={{
-                    fontFamily: coastal.fonts.manrope,
+                    fontFamily: skin.fonts.body,
                     fontSize: 11,
                     fontWeight: 700,
                     color: "#2F6B58",
@@ -383,7 +387,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
                 </span>
                 <span
                   style={{
-                    fontFamily: coastal.fonts.condensed,
+                    fontFamily: skin.fonts.display,
                     fontSize: 18,
                     fontWeight: 800,
                     color: "#1A2E28",
@@ -422,7 +426,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
           style={{
             padding: "24px 18px",
             color: "#8A9C9C",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 12,
             textAlign: "center",
           }}

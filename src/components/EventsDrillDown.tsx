@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DrillDownModal } from "./DrillDownModal";
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 import {
   fetchNearbyEvents,
   rollUpEventsScore,
@@ -24,6 +24,7 @@ const CATEGORY_META: Record<EventCategory, { label: string; dot: string }> = {
 };
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -33,7 +34,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
         letterSpacing: ".1em",
         textTransform: "uppercase",
         color: "#8A9C9C",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -97,6 +98,7 @@ function formatDistance(m: number | null): string | null {
 
 // ── Single event row ───────────────────────────────────────────────────────
 function EventRow({ event }: { event: NearbyEvent }) {
+  const skin = useSkin();
   const palette = tileForScore(event.severity);
   const meta = CATEGORY_META[event.category] ?? { label: event.category, dot: "#8A9C9C" };
   const when = formatEventWhen(event);
@@ -150,7 +152,7 @@ function EventRow({ event }: { event: NearbyEvent }) {
               letterSpacing: ".08em",
               textTransform: "uppercase",
               color: "#8A9C9C",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
             }}
           >
             {meta.label}
@@ -160,7 +162,7 @@ function EventRow({ event }: { event: NearbyEvent }) {
               style={{
                 fontSize: 9,
                 color: "#A8B4B4",
-                fontFamily: coastal.fonts.manrope,
+                fontFamily: skin.fonts.body,
               }}
             >
               · {dist}
@@ -170,7 +172,7 @@ function EventRow({ event }: { event: NearbyEvent }) {
         {/* Title */}
         <div
           style={{
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 13,
             fontWeight: 700,
             color: "#1A2E28",
@@ -185,7 +187,7 @@ function EventRow({ event }: { event: NearbyEvent }) {
           style={{
             fontSize: 10,
             color: "#8A9C9C",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             marginBottom: event.description ? 3 : 0,
           }}
         >
@@ -198,7 +200,7 @@ function EventRow({ event }: { event: NearbyEvent }) {
             style={{
               fontSize: 11,
               color: event.severity <= 3 ? palette.value : "#4A5A54",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontWeight: event.severity <= 3 ? 700 : 400,
               lineHeight: 1.35,
             }}
@@ -245,6 +247,7 @@ function groupByDay(events: NearbyEvent[]): {
 }
 
 export function EventsDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const [events, setEvents] = useState<NearbyEvent[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -305,7 +308,7 @@ export function EventsDrillDown({ open, onClose }: Props) {
           style={{
             padding: "24px 18px",
             color: "#8A9C9C",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 12,
             textAlign: "center",
           }}
@@ -319,7 +322,7 @@ export function EventsDrillDown({ open, onClose }: Props) {
           style={{
             padding: "28px 18px",
             color: "#8A9C9C",
-            fontFamily: coastal.fonts.manrope,
+            fontFamily: skin.fonts.body,
             fontSize: 12,
             textAlign: "center",
             lineHeight: 1.5,

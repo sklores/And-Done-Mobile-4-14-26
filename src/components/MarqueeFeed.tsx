@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 import { FEED_SCORES } from "../data/feedScores";
 import { useIsDusky } from "../hooks/useTimeOfDay";
 
@@ -46,14 +46,15 @@ type Props = {
 };
 
 export function MarqueeFeed({ onLongPress, scoreOverrides }: Props) {
+  const skin = useSkin();
   // At night the tan driftwood border + pale bg reads as a bright "blue
   // bar" above the tab bar (the saturation filter applied to this chrome
   // section turns the tan into a grey-blue stripe). Swap to the deep
   // ocean colors so the marquee blends into the nocturnal palette.
   const isDusky = useIsDusky();
-  const marqueeBorder = isDusky ? "#10243A" : "#C4B090";
-  const marqueeBg     = isDusky ? "#081828" : coastal.marquee.bg;
-  const marqueeText   = isDusky ? "#D8E0F0" : coastal.marquee.text;
+  const marqueeBorder = isDusky ? skin.chrome.namePlateBgDusk : skin.chrome.frame;
+  const marqueeBg     = isDusky ? skin.chrome.frameSeamDusk : skin.marquee.bg;
+  const marqueeText   = isDusky ? skin.chrome.namePlateTextDusk : skin.marquee.text;
   const [active, setActive] = useState<Record<FeedKey, boolean>>({
     reviews: true,
     bank:    true,
@@ -175,7 +176,7 @@ export function MarqueeFeed({ onLongPress, scoreOverrides }: Props) {
   };
 
   return (
-    <div style={{ fontFamily: coastal.fonts.manrope }}>
+    <div style={{ fontFamily: skin.fonts.body }}>
       {/* Scrolling text — framed in driftwood, same width as KpiBar */}
       <div style={{
         margin: "8px 10px 0",
@@ -266,7 +267,7 @@ export function MarqueeFeed({ onLongPress, scoreOverrides }: Props) {
                 fontWeight: 800,
                 letterSpacing: ".08em",
                 textTransform: "uppercase",
-                fontFamily: coastal.fonts.manrope,
+                fontFamily: skin.fonts.body,
               }}>
                 {FEED_LABELS[k]}
               </span>

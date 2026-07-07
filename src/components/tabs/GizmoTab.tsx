@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { TabPanel } from "./TabPanel";
 import { useKpiStore } from "../../stores/useKpiStore";
 import { useLogStore } from "../../stores/useLogStore";
-import { coastal } from "../../theme/skins";
+import { useSkin } from "../../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -167,6 +167,7 @@ function TypingDots() {
 
 // ── Component ────────────────────────────────────────────────────────────────
 export function GizmoTab({ open, onClose }: Props) {
+  const skin = useSkin();
   const salesVal   = useKpiStore((s) => s.sales.value);
   const netVal     = useKpiStore((s) => s.net.value);
   const tiles      = useKpiStore((s) => s.tiles);
@@ -255,12 +256,12 @@ export function GizmoTab({ open, onClose }: Props) {
       }}>
         <GizmoCharacter size={110} blink={blink} />
         <div style={{
-          fontFamily: coastal.fonts.condensed, fontSize: 20, fontWeight: 800,
+          fontFamily: skin.fonts.display, fontSize: 20, fontWeight: 800,
           color: GIZMO_DARK, letterSpacing: ".04em", marginTop: 4,
         }}>
           GIZMO
         </div>
-        <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 11, color: "#8A9C9C", marginTop: 1 }}>
+        <div style={{ fontFamily: skin.fonts.body, fontSize: 11, color: "#8A9C9C", marginTop: 1 }}>
           your pocket restaurant analyst
         </div>
       </div>
@@ -282,10 +283,10 @@ export function GizmoTab({ open, onClose }: Props) {
             boxShadow: "0 1px 5px rgba(0,0,0,0.07)",
             border: "1px solid rgba(0,0,0,0.05)",
           }}>
-            <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, fontWeight: 700, color: "#8A9C9C", textTransform: "uppercase", letterSpacing: ".06em" }}>
+            <div style={{ fontFamily: skin.fonts.body, fontSize: 9, fontWeight: 700, color: "#8A9C9C", textTransform: "uppercase", letterSpacing: ".06em" }}>
               {chip.label}
             </div>
-            <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 800, color: GIZMO_DARK, marginTop: 1 }}>
+            <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 800, color: GIZMO_DARK, marginTop: 1 }}>
               {chip.val}
             </div>
           </div>
@@ -320,7 +321,7 @@ export function GizmoTab({ open, onClose }: Props) {
               color: msg.role === "gizmo" ? "#1A2E28" : "#fff",
               borderRadius: msg.role === "gizmo" ? "4px 14px 14px 14px" : "14px 4px 14px 14px",
               padding: "10px 13px",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontSize: 13,
               lineHeight: 1.5,
               boxShadow: "0 1px 5px rgba(0,0,0,0.08)",
@@ -376,7 +377,7 @@ export function GizmoTab({ open, onClose }: Props) {
             style={{
               flex: 1, border: "none", outline: "none",
               background: "transparent",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontSize: 13, color: "#1A2E28",
             }}
           />
@@ -388,7 +389,7 @@ export function GizmoTab({ open, onClose }: Props) {
               color: input.trim() && !sending ? "#fff" : "#aaa",
               border: "none", borderRadius: 10,
               padding: "7px 14px",
-              fontFamily: coastal.fonts.manrope, fontWeight: 800, fontSize: 11,
+              fontFamily: skin.fonts.body, fontWeight: 800, fontSize: 11,
               cursor: input.trim() && !sending ? "pointer" : "default",
               letterSpacing: ".04em", transition: "background 0.2s",
             }}
@@ -410,7 +411,7 @@ export function GizmoTab({ open, onClose }: Props) {
                 color: GIZMO_DARK,
                 border: `1px solid rgba(26,158,138,0.22)`,
                 borderRadius: 20, padding: "5px 11px",
-                fontFamily: coastal.fonts.manrope, fontSize: 10, fontWeight: 700,
+                fontFamily: skin.fonts.body, fontSize: 10, fontWeight: 700,
                 cursor: sending ? "default" : "pointer",
                 whiteSpace: "nowrap",
                 opacity: sending ? 0.5 : 1,

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 import type { Kpi } from "../stores/useKpiStore";
 
 type Props = { kpi: Kpi; onClick?: () => void; alerting?: boolean; loading?: boolean };
 
 export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
+  const skin = useSkin();
   const palette = tileForScore(kpi.score);
   const [flash, setFlash] = useState(false);
 
@@ -22,13 +23,14 @@ export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
       onClick={onClick}
       style={{
         background: palette.bg,
+        border: palette.border ? `1px solid ${palette.border}` : undefined,
         borderRadius: 10,
         padding: "10px 8px 8px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         minHeight: 78,
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         animation: alerting
           ? "kpiPulse 2s ease-in-out infinite"
           : flash ? "kpiFlash 0.9s ease-out" : undefined,
@@ -64,7 +66,7 @@ export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
             color: palette.value,
             fontSize: 22,
             fontWeight: 800,
-            fontFamily: coastal.fonts.condensed,
+            fontFamily: skin.fonts.display, fontStyle: skin.fonts.displayItalic ? "italic" : undefined,
             lineHeight: 1,
             margin: "4px 0",
           }}

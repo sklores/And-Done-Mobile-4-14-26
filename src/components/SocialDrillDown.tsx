@@ -1,6 +1,6 @@
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { FEED_SCORES } from "../data/feedScores";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -60,11 +60,12 @@ const TOTAL_ENGAGEMENT = PLATFORMS.reduce((s, p) => s + p.engagements, 0);
 const MAX_TREND = Math.max(...WEEKLY_TREND.map((d) => d.val ?? 0));
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div style={{
       padding: "10px 18px 4px", fontSize: 9, fontWeight: 700,
       letterSpacing: ".1em", textTransform: "uppercase",
-      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      color: "#8A9C9C", fontFamily: skin.fonts.body,
       background: "#F2F7F6",
       borderTop: "1px solid rgba(0,0,0,0.05)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -77,6 +78,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
 }
 
 function TrendBar() {
+  const skin = useSkin();
   return (
     <div style={{ padding: "12px 18px 8px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 36 }}>
@@ -88,13 +90,13 @@ function TrendBar() {
               background: val ? (val >= THIS_WEEK.target ? "#4EC89A" : val >= 160 ? "#FFE070" : "#FFBC72") : "rgba(0,0,0,0.08)",
               borderRadius: 3,
             }} />
-            <div style={{ fontSize: 8, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontWeight: 700 }}>
+            <div style={{ fontSize: 8, color: "#8A9C9C", fontFamily: skin.fonts.body, fontWeight: 700 }}>
               {day}
             </div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, marginTop: 6, textAlign: "center" }}>
+      <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: skin.fonts.body, marginTop: 6, textAlign: "center" }}>
         New followers per day this week · target {THIS_WEEK.target}/day
       </div>
     </div>
@@ -102,6 +104,7 @@ function TrendBar() {
 }
 
 export function SocialDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const pct = Math.round((THIS_WEEK.newFollowers / THIS_WEEK.target) * 100);
 
   return (
@@ -145,40 +148,40 @@ export function SocialDrillDown({ open, onClose }: Props) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color }} />
-              <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 700, color: "#1A2E28" }}>
+              <span style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 700, color: "#1A2E28" }}>
                 {p.name}
               </span>
             </div>
-            <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C" }}>
+            <span style={{ fontFamily: skin.fonts.body, fontSize: 10, color: "#8A9C9C" }}>
               {p.handle}
             </span>
           </div>
           <div style={{ display: "flex", gap: 16 }}>
             <div>
-              <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
+              <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
                 {p.followers.toLocaleString()}
               </div>
-              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>followers</div>
+              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: skin.fonts.body }}>followers</div>
             </div>
             <div>
-              <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700,
+              <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700,
                 color: p.newFollowers > 0 ? "#0E5A30" : "#8A9C9C" }}>
                 {p.newFollowers > 0 ? `+${p.newFollowers}` : "—"}
               </div>
-              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>this week</div>
+              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: skin.fonts.body }}>this week</div>
             </div>
             <div>
-              <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
+              <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
                 {p.engagements.toLocaleString()}
               </div>
-              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>engagements</div>
+              <div style={{ fontSize: 9, color: "#8A9C9C", fontFamily: skin.fonts.body }}>engagements</div>
             </div>
           </div>
           {p.topPost && (
             <div style={{
               marginTop: 8, padding: "7px 10px",
               background: "rgba(0,0,0,0.04)", borderRadius: 8,
-              fontFamily: coastal.fonts.manrope, fontSize: 11, color: "#4A5A54",
+              fontFamily: skin.fonts.body, fontSize: 11, color: "#4A5A54",
             }}>
               <span style={{ fontWeight: 700 }}>Top post:</span> "{p.topPost.caption}" —{" "}
               <span style={{ color: "#E1306C" }}>♥ {p.topPost.likes}</span>{" "}

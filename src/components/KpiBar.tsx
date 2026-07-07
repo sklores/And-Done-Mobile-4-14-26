@@ -1,4 +1,4 @@
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 
 type Props = {
   kind: "sales" | "net";
@@ -17,7 +17,8 @@ type Props = {
 };
 
 export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loading, onClick }: Props) {
-  const defaults = kind === "sales" ? coastal.salesBar : coastal.netBar;
+  const skin = useSkin();
+  const defaults = kind === "sales" ? skin.salesBar : skin.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
 
   const bg           = palette?.bg         ?? defaults.bg;
@@ -37,7 +38,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         cursor: onClick ? "pointer" : undefined,
         animation: alerting ? "kpiPulse 2s ease-in-out infinite" : undefined,
       }}
@@ -74,7 +75,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
                   color: valueSubCol,
                   fontSize: 16,
                   fontWeight: 700,
-                  fontFamily: coastal.fonts.condensed,
+                  fontFamily: skin.fonts.display, fontStyle: skin.fonts.displayItalic ? "italic" : undefined,
                 }}
               >
                 {valueSub}
@@ -85,7 +86,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
                 color: valueColor,
                 fontSize: 24,
                 fontWeight: 800,
-                fontFamily: coastal.fonts.condensed,
+                fontFamily: skin.fonts.display, fontStyle: skin.fonts.displayItalic ? "italic" : undefined,
                 lineHeight: 1,
               }}
             >

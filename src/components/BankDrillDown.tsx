@@ -1,5 +1,5 @@
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 import { FEED_SCORES } from "../data/feedScores";
 
 type Props = { open: boolean; onClose: () => void };
@@ -27,11 +27,12 @@ const TRANSACTIONS: Transaction[] = [
 const BALANCE = 14_280;
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div style={{
       padding: "10px 18px 4px", fontSize: 9, fontWeight: 700,
       letterSpacing: ".1em", textTransform: "uppercase",
-      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      color: "#8A9C9C", fontFamily: skin.fonts.body,
       background: "#F2F7F6",
       borderTop: "1px solid rgba(0,0,0,0.05)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -44,6 +45,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
 }
 
 export function BankDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   return (
     <DrillDownModal
       open={open}
@@ -72,7 +74,7 @@ export function BankDrillDown({ open, onClose }: Props) {
               }} />
               <div>
                 <div style={{
-                  fontFamily: coastal.fonts.manrope, fontSize: 12,
+                  fontFamily: skin.fonts.body, fontSize: 12,
                   fontWeight: 600, color: "#1A2E28",
                 }}>
                   {t.merchant}
@@ -88,14 +90,14 @@ export function BankDrillDown({ open, onClose }: Props) {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1, fontFamily: coastal.fonts.manrope }}>
+                <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1, fontFamily: skin.fonts.body }}>
                   {t.category} · {t.time}
                 </div>
               </div>
             </div>
             {/* Amount */}
             <div style={{
-              fontFamily: coastal.fonts.condensed, fontSize: 17, fontWeight: 700,
+              fontFamily: skin.fonts.display, fontSize: 17, fontWeight: 700,
               color: isCredit ? tileForScore(8).value : "#1A2E28",
               whiteSpace: "nowrap",
             }}>

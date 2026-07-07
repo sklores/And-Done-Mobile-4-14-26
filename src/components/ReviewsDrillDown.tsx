@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 import { FEED_SCORES } from "../data/feedScores";
 import {
   fetchReviewsBundle,
@@ -14,11 +14,12 @@ import {
 type Props = { open: boolean; onClose: () => void };
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div style={{
       padding: "10px 18px 4px", fontSize: 9, fontWeight: 700,
       letterSpacing: ".1em", textTransform: "uppercase",
-      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      color: "#8A9C9C", fontFamily: skin.fonts.body,
       background: "#F2F7F6",
       borderTop: "1px solid rgba(0,0,0,0.05)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -31,6 +32,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
 }
 
 function StarRow({ stars, pct, count }: { stars: number; pct: number; count: number }) {
+  const skin = useSkin();
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 8,
@@ -38,7 +40,7 @@ function StarRow({ stars, pct, count }: { stars: number; pct: number; count: num
       borderBottom: "1px solid rgba(0,0,0,0.05)",
     }}>
       <div style={{
-        fontFamily: coastal.fonts.manrope, fontSize: 11,
+        fontFamily: skin.fonts.body, fontSize: 11,
         fontWeight: 700, color: "#4A5A54", width: 14, textAlign: "right",
       }}>{stars}</div>
       <span style={{ color: "#F4C430", fontSize: 10 }}>★</span>
@@ -50,7 +52,7 @@ function StarRow({ stars, pct, count }: { stars: number; pct: number; count: num
         }} />
       </div>
       <div style={{
-        fontFamily: coastal.fonts.condensed, fontSize: 13,
+        fontFamily: skin.fonts.display, fontSize: 13,
         fontWeight: 700, color: "#1A2E28", width: 56, textAlign: "right",
       }}>{pct}%<span style={{ fontSize: 10, color: "#8A9C9C", marginLeft: 4 }}>({count})</span></div>
     </div>
@@ -67,6 +69,7 @@ function PlatformRow({
   avgRating: number | null;
   status: "live" | "no-data";
 }) {
+  const skin = useSkin();
   const isNoData = status === "no-data";
   const hasRating = avgRating != null;
   return (
@@ -79,18 +82,18 @@ function PlatformRow({
         <div style={{
           width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0,
         }} />
-        <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
+        <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
           {label}
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
         {isNoData ? (
-          <div style={{ fontSize: 11, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontStyle: "italic" }}>
+          <div style={{ fontSize: 11, color: "#8A9C9C", fontFamily: skin.fonts.body, fontStyle: "italic" }}>
             no data yet
           </div>
         ) : (
           <>
-            <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
+            <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
               {hasRating ? `${avgRating} ★` : "no rating"}
             </div>
             <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
@@ -104,6 +107,7 @@ function PlatformRow({
 }
 
 function RecentReviewRow({ review }: { review: ReviewRow }) {
+  const skin = useSkin();
   const stars = review.rating != null ? Math.round(Number(review.rating)) : null;
   const platformLabel = PLATFORM_LABEL[review.platform] ?? review.platform;
   const ago = timeAgo(review.review_date);
@@ -121,23 +125,23 @@ function RecentReviewRow({ review }: { review: ReviewRow }) {
             {"★".repeat(stars)}{"☆".repeat(5 - stars)}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontStyle: "italic" }}>
+          <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: skin.fonts.body, fontStyle: "italic" }}>
             no rating
           </div>
         )}
-        <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: coastal.fonts.manrope }}>
+        <div style={{ fontSize: 10, color: "#8A9C9C", fontFamily: skin.fonts.body }}>
           {platformLabel}{ago ? ` · ${ago}` : ""}
         </div>
       </div>
       {text && (
         <div style={{
-          fontFamily: coastal.fonts.manrope, fontSize: 12, color: "#1A2E28",
+          fontFamily: skin.fonts.body, fontSize: 12, color: "#1A2E28",
           fontStyle: "italic", marginBottom: 2, lineHeight: 1.4,
         }}>
           “{truncate(text, 220)}”
         </div>
       )}
-      <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C", fontWeight: 600 }}>
+      <div style={{ fontFamily: skin.fonts.body, fontSize: 10, color: "#8A9C9C", fontWeight: 600 }}>
         — {author}
       </div>
     </div>
@@ -149,6 +153,7 @@ function truncate(s: string, n: number): string {
 }
 
 export function ReviewsDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const [bundle, setBundle] = useState<ReviewsBundle | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -199,7 +204,7 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
       {loading && (
         <div style={{
           padding: "24px 18px", color: "#8A9C9C",
-          fontFamily: coastal.fonts.manrope, fontSize: 12, textAlign: "center",
+          fontFamily: skin.fonts.body, fontSize: 12, textAlign: "center",
         }}>
           Loading reviews…
         </div>
@@ -208,7 +213,7 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
       {!loading && bundle && bundle.totalReviews === 0 && (
         <div style={{
           padding: "28px 18px", color: "#8A9C9C",
-          fontFamily: coastal.fonts.manrope, fontSize: 12, textAlign: "center", lineHeight: 1.5,
+          fontFamily: skin.fonts.body, fontSize: 12, textAlign: "center", lineHeight: 1.5,
         }}>
           No reviews on file yet.
           <br />

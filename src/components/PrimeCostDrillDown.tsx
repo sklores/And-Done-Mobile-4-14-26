@@ -1,6 +1,6 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 import { PRIME_TARGET_PCT } from "../config/cogsConfig";
 import { buildGroups, GROUP_COGS_PCT, type CogsGroup } from "../config/cogsGroups";
 
@@ -11,6 +11,7 @@ function fmt$(n: number) {
 }
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -20,7 +21,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
         letterSpacing: ".1em",
         textTransform: "uppercase",
         color: "#8A9C9C",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -37,6 +38,7 @@ function SectionHeader({ title, right }: { title: string; right?: string }) {
 
 /** Horizontal split bar: labor vs cogs within prime cost */
 function SplitBar({ laborPct, cogsPct }: { laborPct: number; cogsPct: number }) {
+  const skin = useSkin();
   const total = laborPct + cogsPct;
   if (total === 0) return null;
   const lW = (laborPct / total) * 100;
@@ -44,10 +46,10 @@ function SplitBar({ laborPct, cogsPct }: { laborPct: number; cogsPct: number }) 
   return (
     <div style={{ padding: "14px 18px 10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-        <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, fontWeight: 700, color: "#4A7C6F" }}>
+        <span style={{ fontFamily: skin.fonts.body, fontSize: 10, fontWeight: 700, color: "#4A7C6F" }}>
           Labor {laborPct.toFixed(1)}%
         </span>
-        <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, fontWeight: 700, color: "#6B8FBF" }}>
+        <span style={{ fontFamily: skin.fonts.body, fontSize: 10, fontWeight: 700, color: "#6B8FBF" }}>
           COGS {cogsPct.toFixed(1)}%
         </span>
       </div>
@@ -56,10 +58,10 @@ function SplitBar({ laborPct, cogsPct }: { laborPct: number; cogsPct: number }) 
         <div style={{ width: `${cW}%`, background: "#6B8FBF" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-        <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, color: "#8A9C9C" }}>
+        <span style={{ fontFamily: skin.fonts.body, fontSize: 9, color: "#8A9C9C" }}>
           {lW.toFixed(0)}% of prime
         </span>
-        <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, color: "#8A9C9C" }}>
+        <span style={{ fontFamily: skin.fonts.body, fontSize: 9, color: "#8A9C9C" }}>
           {cW.toFixed(0)}% of prime
         </span>
       </div>
@@ -69,6 +71,7 @@ function SplitBar({ laborPct, cogsPct }: { laborPct: number; cogsPct: number }) 
 
 /** vs. target gauge row */
 function TargetRow({ actual, target }: { actual: number; target: number }) {
+  const skin = useSkin();
   const diff = actual - target;
   const over = diff > 0;
   return (
@@ -82,19 +85,19 @@ function TargetRow({ actual, target }: { actual: number; target: number }) {
         background: over ? "rgba(185,74,74,0.06)" : "rgba(74,155,142,0.06)",
       }}
     >
-      <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
+      <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
         vs. Target ({target.toFixed(1)}%)
       </div>
       <div style={{ textAlign: "right" }}>
         <div style={{
-          fontFamily: coastal.fonts.condensed,
+          fontFamily: skin.fonts.display,
           fontSize: 18,
           fontWeight: 700,
           color: over ? "#B94A4A" : "#2F6B58",
         }}>
           {over ? "+" : ""}{diff.toFixed(1)}%
         </div>
-        <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
+        <div style={{ fontFamily: skin.fonts.body, fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
           {over ? "above target" : "below target"}
         </div>
       </div>
@@ -103,6 +106,7 @@ function TargetRow({ actual, target }: { actual: number; target: number }) {
 }
 
 export function PrimeCostDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const primeTile       = useKpiStore((s) => s.tiles.find((t) => t.key === "prime"));
   const laborDetail     = useKpiStore((s) => s.laborDetail);
   const laborDetailRich = useKpiStore((s) => s.laborDetailRich);
@@ -175,7 +179,7 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
           padding: "8px 12px",
           background: "rgba(185,74,74,0.1)",
           borderRadius: 8,
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
           fontSize: 11,
           fontWeight: 700,
           color: "#B94A4A",

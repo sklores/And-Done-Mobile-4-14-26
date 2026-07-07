@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { coastal, tileForScore } from "../theme/skins";
+import { useSkin, tileForScore } from "../theme/skins";
 
 type Props = {
   open: boolean;
@@ -12,6 +12,7 @@ type Props = {
 };
 
 export function DrillDownModal({ open, onClose, score, label, value, status, children }: Props) {
+  const skin = useSkin();
   const palette = tileForScore(score);
 
   // Lock body scroll when open
@@ -45,7 +46,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
           width: 375,
           maxWidth: "100vw",
-          background: coastal.sheetBg,
+          background: skin.sheetBg,
           borderRadius: "18px 18px 0 0",
           overflow: "hidden",
           zIndex: 101,
@@ -82,7 +83,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           <div style={{ color: palette.label, fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>
             {label}
           </div>
-          <div style={{ color: palette.value, fontSize: 36, fontWeight: 800, fontFamily: coastal.fonts.condensed, lineHeight: 1 }}>
+          <div style={{ color: palette.value, fontSize: 36, fontWeight: 800, fontFamily: skin.fonts.display, fontStyle: skin.fonts.displayItalic ? "italic" : undefined, lineHeight: 1 }}>
             {value}
           </div>
           <div style={{ color: palette.statusText, fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginTop: 4 }}>
@@ -91,7 +92,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
         </div>
 
         {/* Content rows — scrollable */}
-        <div style={{ padding: "8px 0 32px", background: coastal.sheetBg, overflowY: "auto", maxHeight: "55vh" }}>
+        <div style={{ padding: "8px 0 32px", background: skin.sheetBg, overflowY: "auto", maxHeight: "55vh" }}>
           {children}
         </div>
       </div>
@@ -102,6 +103,7 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
 type RowProps = { label: string; value: string; sub?: string; dimmed?: boolean };
 
 export function DrillRow({ label, value, sub, dimmed }: RowProps) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -111,15 +113,15 @@ export function DrillRow({ label, value, sub, dimmed }: RowProps) {
         opacity: dimmed ? 0.45 : 1,
       }}
     >
-      <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
+      <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
         {label}
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontFamily: coastal.fonts.condensed, fontSize: 18, fontWeight: 700, color: "#1A2E28" }}>
+        <div style={{ fontFamily: skin.fonts.display, fontStyle: skin.fonts.displayItalic ? "italic" : undefined, fontSize: 18, fontWeight: 700, color: "#1A2E28" }}>
           {value}
         </div>
         {sub && (
-          <div style={{ fontFamily: coastal.fonts.manrope, fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
+          <div style={{ fontFamily: skin.fonts.body, fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
             {sub}
           </div>
         )}

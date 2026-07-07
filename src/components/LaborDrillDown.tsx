@@ -1,6 +1,6 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -17,11 +17,12 @@ function fmtTime(hms: string): string {
 }
 
 function SectionHeader({ title }: { title: string }) {
+  const skin = useSkin();
   return (
     <div style={{
       padding: "10px 18px 4px", fontSize: 9, fontWeight: 700,
       letterSpacing: ".1em", textTransform: "uppercase",
-      color: "#8A9C9C", fontFamily: coastal.fonts.manrope,
+      color: "#8A9C9C", fontFamily: skin.fonts.body,
       background: "#F2F7F6",
       borderTop: "1px solid rgba(0,0,0,0.05)",
       borderBottom: "1px solid rgba(0,0,0,0.05)",

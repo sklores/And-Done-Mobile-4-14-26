@@ -1,6 +1,6 @@
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -9,6 +9,7 @@ function fmt$(n: number) {
 }
 
 function SectionHeader({ title }: { title: string }) {
+  const skin = useSkin();
   return (
     <div
       style={{
@@ -18,7 +19,7 @@ function SectionHeader({ title }: { title: string }) {
         letterSpacing: ".1em",
         textTransform: "uppercase",
         color: "#8A9C9C",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -33,6 +34,7 @@ function SectionHeader({ title }: { title: string }) {
 function WaterfallBar({ sales, prime, fixed, net }: {
   sales: number; prime: number; fixed: number; net: number;
 }) {
+  const skin = useSkin();
   if (sales <= 0) return null;
   const primeW  = (prime  / sales) * 100;
   const fixedW  = (fixed  / sales) * 100;
@@ -52,7 +54,7 @@ function WaterfallBar({ sales, prime, fixed, net }: {
         ].map((seg) => (
           <div key={seg.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: seg.color }} />
-            <span style={{ fontFamily: coastal.fonts.manrope, fontSize: 9, color: "#8A9C9C", fontWeight: 700 }}>
+            <span style={{ fontFamily: skin.fonts.body, fontSize: 9, color: "#8A9C9C", fontWeight: 700 }}>
               {seg.label} {seg.pct.toFixed(0)}%
             </span>
           </div>
@@ -63,6 +65,7 @@ function WaterfallBar({ sales, prime, fixed, net }: {
 }
 
 export function NetDrillDown({ open, onClose }: Props) {
+  const skin = useSkin();
   const net    = useKpiStore((s) => s.net);
   const detail = useKpiStore((s) => s.netDetail);
 
@@ -162,7 +165,7 @@ export function NetDrillDown({ open, onClose }: Props) {
         <div style={{
           padding: "24px 18px",
           textAlign: "center",
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
           fontSize: 12,
           color: "#8A9C9C",
         }}>

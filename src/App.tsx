@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { coastal } from "./theme/skins";
+import { useSkin } from "./theme/skins";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
 import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
@@ -11,7 +11,8 @@ import { useFixedCostStore } from "./stores/useFixedCostStore";
 import type { KpiKey } from "./stores/useKpiStore";
 import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
-import { CoastalScene, type WeatherCondition } from "./components/CoastalScene";
+import { Scene } from "./components/Scene";
+import type { WeatherCondition } from "./components/CoastalScene";
 import { MarqueeFeed, type FeedKey } from "./components/MarqueeFeed";
 import { BottomTabs } from "./components/BottomTabs";
 import type { TabKey } from "./components/BottomTabs";
@@ -28,6 +29,7 @@ import { EventsDrillDown } from "./components/EventsDrillDown";
 import { InvoicesTab } from "./components/tabs/InvoicesTab";
 import { LogTab } from "./components/tabs/LogTab";
 import { GizmoTab } from "./components/tabs/GizmoTab";
+import { SkinPicker } from "./components/SkinPicker";
 import { useIsDusky, useIsNight } from "./hooks/useTimeOfDay";
 
 type WeatherData = { condition: WeatherCondition; tempF: number | null };
@@ -49,6 +51,7 @@ async function fetchWeather(): Promise<WeatherData> {
 const PULL_THRESHOLD = 70; // px needed to trigger refresh
 
 export default function App() {
+  const skin                  = useSkin();
   const businessName          = useAppStore((s) => s.businessName);
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
@@ -75,8 +78,38 @@ export default function App() {
   // Bump to retrigger the lighthouse sweep (mount, KPI refresh, pull-to-refresh)
   const [beamPulseKey, setBeamPulseKey] = useState(0);
 
+  // ── Skin picker: long-press the vista (or right-click on desktop) ────────
+  const [skinPickerOpen, setSkinPickerOpen] = useState(false);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const frameTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    longPressStart.current = { x: t.clientX, y: t.clientY };
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      haptic(20);
+      setSkinPickerOpen(true);
+    }, 550);
+  };
+  const frameTouchMove = (e: React.TouchEvent) => {
+    if (!longPressStart.current || longPressTimer.current == null) return;
+    const t = e.touches[0];
+    // A drag (scroll / pull-to-refresh) cancels the long-press
+    if (Math.abs(t.clientX - longPressStart.current.x) > 10 ||
+        Math.abs(t.clientY - longPressStart.current.y) > 10) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  const frameTouchEnd = () => {
+    if (longPressTimer.current != null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   // ── Back-button: push history entry when any modal opens ─────────────────
-  const anyOpen = drillKey !== null || openTab !== null || openFeed !== null;
+  const anyOpen = drillKey !== null || openTab !== null || openFeed !== null || skinPickerOpen;
   const prevAnyOpen = useRef(false);
 
   useEffect(() => {
@@ -89,6 +122,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       // Close whichever modal is open — back stays on page
+      if (skinPickerOpen)    { setSkinPickerOpen(false); return; }
       if (drillKey !== null) { setDrillKey(null); return; }
       if (openTab  !== null) { setOpenTab(null);  return; }
       if (openFeed !== null) { setOpenFeed(null); return; }
@@ -97,7 +131,7 @@ export default function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [drillKey, openTab, openFeed]);
+  }, [drillKey, openTab, openFeed, skinPickerOpen]);
 
   // ── Supabase real-time subscription (primary data source) ────────────────
   useEffect(() => {
@@ -253,26 +287,30 @@ export default function App() {
   // pastel KPI tiles stop yelling when the scene has gone dark.
   const isNight = useIsNight();
   const isDusky = useIsDusky();
-  const pageBg  = isDusky ? "#1E1A17" : coastal.pageBg;
-  const phoneBg = isNight ? "#1E1A17" : isDusky ? "#2A2320" : coastal.phoneBg;
+  const pageBg  = isDusky ? skin.chrome.pageBgDusk : skin.pageBg;
+  const phoneBg = isNight ? skin.chrome.phoneBgNight : isDusky ? skin.chrome.phoneBgDusk : skin.phoneBg;
   // Filter strength — sundown gets a modest dim, full night goes hard so the
   // pastel tiles stop yelling against the dark scene.
-  const chromeFilter = isNight
-    ? "brightness(0.48) saturate(0.55)"
-    : isDusky
-      ? "brightness(0.72) saturate(0.78)"
-      : undefined;
+  // Always-dark skins (Nostromo, New York) are night-tuned already —
+  // dimming them would crush the neon/phosphor tiles.
+  const chromeFilter = !skin.chrome.dimAtNight
+    ? undefined
+    : isNight
+      ? "brightness(0.48) saturate(0.55)"
+      : isDusky
+        ? "brightness(0.72) saturate(0.78)"
+        : undefined;
   // Nameplate row (under the scene image) bleeds into the water at night
   // so there's no visible "footer strip" between the scene and the KPI
   // chrome. Matches WATER[night][1] (#10243A) from CoastalScene — the
   // mid-band water color — so the seam disappears into the ocean.
-  const namePlateBg = isDusky ? "#10243A" : "#C4B090";
+  const namePlateBg = isDusky ? skin.chrome.namePlateBgDusk : skin.chrome.namePlateBg;
   // Scene frame + bottom-tab bar share one dark color at night so the
   // chrome reads as a single frame; the nameplate no longer matches.
   // the day and swap to a dark walnut after sundown so they stop glowing.
-  const frameColor     = isDusky ? "#1A2438" : "#C4B090";
-  const frameSeamColor = isDusky ? "#101828" : "#A89070";
-  const namePlateText  = isDusky ? "#D8E0F0" : "#3A2A10";
+  const frameColor     = isDusky ? skin.chrome.frameDusk : skin.chrome.frame;
+  const frameSeamColor = isDusky ? skin.chrome.frameSeamDusk : skin.chrome.frameSeam;
+  const namePlateText  = isDusky ? skin.chrome.namePlateTextDusk : skin.chrome.namePlateText;
 
   // Sync body background + <meta name="theme-color"> so the Android system
   // nav bar (bottom: three lines / square / <) tints sensibly:
@@ -299,7 +337,7 @@ export default function App() {
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-start",
-        fontFamily: coastal.fonts.manrope,
+        fontFamily: skin.fonts.body,
         transition: "background 1.2s ease",
       }}
     >
@@ -349,7 +387,14 @@ export default function App() {
               shadow so the nameplate row is the only thing that can draw
               a dark strip below the scene. */}
           <div
+            onTouchStart={frameTouchStart}
+            onTouchMove={frameTouchMove}
+            onTouchEnd={frameTouchEnd}
+            onContextMenu={(e) => { e.preventDefault(); setSkinPickerOpen(true); }}
             style={{
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              WebkitTouchCallout: "none",
               margin: "8px 12px 0",
               borderTop: `6px solid ${frameColor}`,
               borderLeft: `6px solid ${frameColor}`,
@@ -362,15 +407,15 @@ export default function App() {
               flexShrink: 0,
             }}
           >
-            <CoastalScene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
+            <Scene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
             <div
               style={isDusky ? {
                 // Hot-pink diagnostic confirmed this is the nameplate row.
                 // Now painted ocean blue (sampled from the live scene) and
                 // all layering props hard-forced so no wrapper / overlay /
                 // pseudo can leak a different dark over it.
-                background: "#132437",
-                backgroundColor: "#132437",
+                background: skin.chrome.namePlateBgDusk,
+                backgroundColor: skin.chrome.namePlateBgDusk,
                 backgroundImage: "none",
                 color: namePlateText,
                 fontSize: 12,
@@ -476,6 +521,9 @@ export default function App() {
       <SocialDrillDown  open={openFeed === "social"}  onClose={() => setOpenFeed(null)} />
       <BankDrillDown    open={openFeed === "bank"}    onClose={() => setOpenFeed(null)} />
       <EventsDrillDown  open={openFeed === "events"}  onClose={() => setOpenFeed(null)} />
+
+      {/* ── Skin picker (long-press the vista) ──────── */}
+      <SkinPicker open={skinPickerOpen} onClose={() => setSkinPickerOpen(false)} />
 
       {/* ── Bottom tab panels ───────────────────────── */}
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />

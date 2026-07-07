@@ -1,4 +1,4 @@
-import { coastal } from "../theme/skins";
+import { useSkin } from "../theme/skins";
 
 export type TabKey = "invoices" | "log" | "gizmo";
 
@@ -15,15 +15,16 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export function BottomTabs({ onOpen, bg, textColor }: Props) {
+  const skin = useSkin();
   // paddingBottom: iOS home-indicator safe area — extends the tab-bar color
   // into the gesture-bar zone so the labels clear it. No-op on Android (inset 0).
   return (
-    <div style={{ background: bg ?? coastal.tabs.bg, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", transition: "background 1.2s ease" }}>
+    <div style={{ background: bg ?? skin.tabs.bg, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", transition: "background 1.2s ease" }}>
       <div
         style={{
           display: "flex",
           borderTop: "1px solid rgba(0,0,0,.07)",
-          fontFamily: coastal.fonts.manrope,
+          fontFamily: skin.fonts.body,
         }}
       >
         {TABS.map((t) => (

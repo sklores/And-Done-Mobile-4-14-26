@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { coastal } from "../../theme/skins";
+import { useSkin } from "../../theme/skins";
 
 type Props = {
   open: boolean;
@@ -10,6 +10,7 @@ type Props = {
 };
 
 export function TabPanel({ open, onClose, title, accent = "#1A2E28", children }: Props) {
+  const skin = useSkin();
   useEffect(() => {
     if (open) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
@@ -55,7 +56,7 @@ export function TabPanel({ open, onClose, title, accent = "#1A2E28", children }:
         }}>
           <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 14px" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: coastal.fonts.condensed, letterSpacing: ".04em" }}>
+            <div style={{ color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: skin.fonts.display, letterSpacing: ".04em" }}>
               {title}
             </div>
             <div

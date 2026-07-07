@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { TabPanel } from "./TabPanel";
 import { useLogStore } from "../../stores/useLogStore";
-import { coastal } from "../../theme/skins";
+import { useSkin } from "../../theme/skins";
 import { ocrHandwriting } from "../../data/ocrAdapter";
 
 type Props = { open: boolean; onClose: () => void };
@@ -17,6 +17,7 @@ function relativeTime(iso: string): string {
 }
 
 export function LogTab({ open, onClose }: Props) {
+  const skin = useSkin();
   const entries   = useLogStore((s) => s.entries);
   const addEntry  = useLogStore((s) => s.addEntry);
   const removeEntry = useLogStore((s) => s.removeEntry);
@@ -133,7 +134,7 @@ export function LogTab({ open, onClose }: Props) {
               border: "none",
               outline: "none",
               background: "transparent",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontSize: 13,
               color: "#1A2E28",
             }}
@@ -147,7 +148,7 @@ export function LogTab({ open, onClose }: Props) {
               border: "none",
               borderRadius: 10,
               padding: "7px 14px",
-              fontFamily: coastal.fonts.manrope,
+              fontFamily: skin.fonts.body,
               fontWeight: 800,
               fontSize: 11,
               cursor: canSubmit ? "pointer" : "default",
@@ -198,7 +199,7 @@ export function LogTab({ open, onClose }: Props) {
                     : "1px solid rgba(78,200,154,0.30)",
                 borderRadius: 8,
                 padding: "8px 10px",
-                fontFamily: coastal.fonts.manrope,
+                fontFamily: skin.fonts.body,
                 fontSize: 12,
                 fontWeight: 700,
                 cursor: ocrStatus === "reading" ? "default" : "pointer",
@@ -235,7 +236,7 @@ export function LogTab({ open, onClose }: Props) {
         <div style={{
           fontSize: 9, fontWeight: 700, letterSpacing: ".1em",
           textTransform: "uppercase", color: "#8A9C9C",
-          fontFamily: coastal.fonts.manrope, marginBottom: 4,
+          fontFamily: skin.fonts.body, marginBottom: 4,
         }}>
           {entries.length} entries today
         </div>
@@ -273,7 +274,7 @@ export function LogTab({ open, onClose }: Props) {
             <div style={{ flex: 1, minWidth: 0 }}>
               {entry.text && (
                 <div style={{
-                  fontFamily: coastal.fonts.manrope, fontSize: 13, fontWeight: 600,
+                  fontFamily: skin.fonts.body, fontSize: 13, fontWeight: 600,
                   color: "#1A2E28", lineHeight: 1.4,
                 }}>
                   {entry.text}
@@ -298,7 +299,7 @@ export function LogTab({ open, onClose }: Props) {
               )}
               <div style={{
                 fontSize: 10, color: "#8A9C9C", marginTop: 2,
-                fontFamily: coastal.fonts.manrope,
+                fontFamily: skin.fonts.body,
                 display: "flex", alignItems: "center", gap: 5,
               }}>
                 <span style={{
@@ -339,7 +340,7 @@ export function LogTab({ open, onClose }: Props) {
         {entries.length === 0 && (
           <div style={{
             textAlign: "center", padding: "40px 0",
-            color: "#8A9C9C", fontFamily: coastal.fonts.manrope, fontSize: 13,
+            color: "#8A9C9C", fontFamily: skin.fonts.body, fontSize: 13,
           }}>
             No entries yet — add your first note above.
           </div>
