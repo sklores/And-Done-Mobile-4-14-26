@@ -134,6 +134,13 @@ const ROCK_COLORS: Record<TimeOfDay, [string, string, string]> = {
   night:     ['#2E3E54', '#243148', '#182238'],
 }
 
+/** Mix two hex colors: t=0 → a, t=1 → b. */
+function mixHex(a: string, b: string, t: number): string {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16))
+  const pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16))
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('')
+}
+
 function wAmp(sales: number): number {
   return Math.round(Math.pow(sales / 20000, 0.55) * 30)
 }
@@ -600,9 +607,12 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const spraySpd = (isWind ? 1.0 : Math.max(.7, 2.2 - sc01 * 1.4)).toFixed(1)
   const sprayOp  = Math.min(.92, sc01 * .8 + .1).toFixed(2)
 
-  const skyTop = weather === 'cloudy' ? '#5A7888' : s1
-  const skyMid = weather === 'cloudy' ? '#7A9AAA' : s2
-  const skyBot = weather === 'cloudy' ? '#98B4BE' : s3
+  // Cloudy mutes the time-of-day sky toward overcast grey but keeps the
+  // gradient underneath (a grey-washed sundown still glows) — matches how
+  // the Le Mans / Nostromo / New York scenes treat cloud cover.
+  const skyTop = weather === 'cloudy' ? mixHex(s1, '#5A7888', 0.52) : s1
+  const skyMid = weather === 'cloudy' ? mixHex(s2, '#7A9AAA', 0.52) : s2
+  const skyBot = weather === 'cloudy' ? mixHex(s3, '#98B4BE', 0.52) : s3
 
   const lx    = 52
   const lBase = WL
@@ -714,6 +724,11 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <stop offset="75%"  stopColor="#FFFDE0" stopOpacity={0.15} />
             <stop offset="100%" stopColor="#FFFDE0" stopOpacity={0} />
           </linearGradient>
+          <radialGradient id="cs-moonglint" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#F8E8A8" stopOpacity={.28} />
+            <stop offset="60%"  stopColor="#F8E8A8" stopOpacity={.10} />
+            <stop offset="100%" stopColor="#F8E8A8" stopOpacity={0} />
+          </radialGradient>
           <radialGradient id="cs-beam-glow" cx="50%" cy="50%" r="50%">
             <stop offset="0%"   stopColor="#FFFDE0" stopOpacity={0.9} />
             <stop offset="60%"  stopColor="#FFFDE0" stopOpacity={0.2} />
@@ -993,6 +1008,22 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             </g>
           ))}
 
+          {/* Distant regatta — tiny sails on the horizon line, day only.
+              Drawn before the haze so it mutes them into the distance. */}
+          {!isNight && [
+            { x0: 0,   dur: 150, dl: -35, s: 1.0 },
+            { x0: 0,   dur: 190, dl: -120, s: 0.8 },
+            { x0: 0,   dur: 170, dl: -70, s: 0.9 },
+          ].map((b, i) => (
+            <g key={`rg-${i}`} style={{ animation: `cs-drift-r ${b.dur}s linear infinite ${b.dl}s` }} opacity={.5}>
+              <g transform={`translate(${b.x0}, ${WL - 1}) scale(${b.s})`}>
+                <path d="M0,0 L0,-6 L4,-1 Z" fill={isSundown || isDawn ? '#6A5A58' : '#E8EEF0'} />
+                <path d="M-.8,0 L-3.5,-4 L-.8,-4 Z" fill={isSundown || isDawn ? '#5A4C4A' : '#D4DEE2'} opacity={.85} />
+                <path d="M-4,0 L4.5,0 L3.5,1.8 L-3,1.8 Z" fill="#3A4A50" />
+              </g>
+            </g>
+          ))}
+
           {/* Horizon haze — skipped at night (it read as a random blue bar
               against the dark sky/water; nothing to see there after dusk). */}
           {!isNight && <rect x="0" y={WL-28} width="375" height="30" fill="url(#cs-haze)" />}
@@ -1031,6 +1062,32 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             stroke="white" strokeWidth={.6+sc01*.7} fill="none" opacity={foamOp} />
           <path d={`M100,${WL+14-Math.round(amp*.1)} C145,${WL+14-Math.round(amp*.2)} 195,${WL+14+Math.round(amp*.12)} 245,${WL+14-Math.round(amp*.1)} C295,${WL+14-Math.round(amp*.2)} 340,${WL+14+Math.round(amp*.12)} 375,${WL+14}`}
             stroke="white" strokeWidth={.6} fill="none" opacity={(parseFloat(foamOp)*.55).toFixed(2)} />
+
+          {/* Moonlight glint on the water — soft radial pool under the moon
+              plus two shimmering path dashes. Ends well above the bottom
+              edge (no hard-edged overlays near y=192 — see blue-line saga). */}
+          {isNight && (
+            <g style={{ mixBlendMode: 'screen' }}>
+              <ellipse cx={sun.x} cy={WL + 13} rx={36} ry={9} fill="url(#cs-moonglint)" />
+              <path d={`M${sun.x - 22},${WL + 9} q11,-2 22,0 q11,2 22,0`}
+                stroke="#F4E4A8" strokeWidth={1} fill="none" strokeLinecap="round"
+                opacity={.3} style={{ animation: 'cs-twink 3.4s ease-in-out infinite' }} />
+              <path d={`M${sun.x - 15},${WL + 19} q8,-1.6 16,0 q8,1.6 16,0`}
+                stroke="#F4E4A8" strokeWidth={.8} fill="none" strokeLinecap="round"
+                opacity={.2} style={{ animation: 'cs-twink 4.6s ease-in-out infinite 1.2s' }} />
+            </g>
+          )}
+
+          {/* Sun sparkles on the water — clear days only. Tiny animated
+              glints scattered across the swell band. */}
+          {!isNight && weather === 'clear' && [
+            [58, 12], [122, 22], [168, 8], [214, 18], [258, 10], [304, 24], [342, 14], [86, 28],
+          ].map(([gx, gy], i) => (
+            <path key={`gl-${i}`} d={`M${gx - 3},${WL + gy} h6`}
+              stroke="#FFF8DC" strokeWidth={i % 3 === 0 ? 1.1 : .7} strokeLinecap="round"
+              opacity={.5}
+              style={{ animation: `cs-twink ${2 + (i % 4) * .6}s ease-in-out infinite ${i * .35}s` }} />
+          ))}
 
           {/* Sharks — Expenses: 0 = good (no sharks), 5 = critical (5 sharks) */}
           {SHARK_DEFS.slice(0, sharkCount).map((sk, i) => (
@@ -1184,7 +1241,13 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
               opacity={Math.min(1, 0.35 + beamOp * 2)}
               style={{ animation: `cs-beam-pulse 2.4s ease-in-out infinite`, mixBlendMode: 'screen' }}
             />
+            {/* Red dome cap + finial above the lamp room */}
+            <path d={`M${lx-7},${lBase-36} Q${lx},${lBase-43} ${lx+7},${lBase-36} Z`} fill="#B04838" />
+            <line x1={lx} y1={lBase-43} x2={lx} y2={lBase-46} stroke="#8A3828" strokeWidth="1.2" strokeLinecap="round" />
+            <circle cx={lx} cy={lBase-46.5} r=".9" fill="#8A3828" />
             <path d={`M${lx-8},${lBase} L${lx-6},${lBase-36} L${lx+6},${lBase-36} L${lx+8},${lBase}Z`} fill="#D0C8B0" />
+            {/* Classic red band across the tower */}
+            <path d={`M${lx-6.8},${lBase-24} L${lx-6.5},${lBase-19} L${lx+6.5},${lBase-19} L${lx+6.8},${lBase-24}Z`} fill="#B04838" opacity=".85" />
             <rect x={lx-7}  y={lBase-7}  width="14" height="8"  fill="#C0B8A8" />
             <rect x={lx-6}  y={lBase-14} width="12" height="8"  fill="#C8C0B0" />
             <rect x={lx-7}  y={lBase-8}  width="2"  height="6"  fill="#AEA898" opacity={.6} />
@@ -1192,8 +1255,21 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
             <rect x={lx-5}  y={lBase-22} width="10" height="9" rx="1" fill="#A8A898" />
             <rect x={lx-6}  y={lBase-27} width="12" height="6" rx="1" fill="#C8C0A8" />
             <rect x={lx-7}  y={lBase-31} width="14" height="5" rx="1" fill="#B8B0A0" />
+            {/* Gallery railing around the lamp room */}
+            <line x1={lx-7.5} y1={lBase-31.5} x2={lx+7.5} y2={lBase-31.5} stroke="#88806E" strokeWidth=".8" />
+            {[-6, -3, 0, 3, 6].map((dx) => (
+              <line key={dx} x1={lx+dx} y1={lBase-31.5} x2={lx+dx} y2={lBase-28.5} stroke="#88806E" strokeWidth=".6" opacity=".8" />
+            ))}
             <circle cx={lx} cy={lBase-30} r="4.5" fill="#F5E07A" />
             <circle cx={lx} cy={lBase-30} r="7.5" fill="#FFFDE0" opacity={.24} />
+            {/* Keeper's windows — warm glow after dark, dark panes by day */}
+            <rect x={lx-1.1} y={lBase-13} width="2.2" height="3" rx=".6"
+              fill={isNight || isSundown ? '#FFD980' : '#6A6458'}
+              opacity={isNight || isSundown ? .95 : .7}
+              style={isNight ? { animation: 'cs-flicker 7s ease-in-out infinite' } : undefined} />
+            <rect x={lx-1.1} y={lBase-21} width="2.2" height="2.6" rx=".6"
+              fill={isNight || isSundown ? '#FFD980' : '#6A6458'}
+              opacity={isNight || isSundown ? .85 : .7} />
             <rect x={lx-9} y={lBase} width="18" height="3" rx="1" fill="#A8A090" />
           </g>
 
