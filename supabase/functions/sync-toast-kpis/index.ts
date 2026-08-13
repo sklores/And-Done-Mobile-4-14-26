@@ -553,7 +553,7 @@ Deno.serve(async (_req) => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
 
     // ── Insert snapshot ───────────────────────────────────────────────────
-    const { error: insertErr } = await supabase.from("kpi_snapshots").insert({
+    const snapshotRow = {
       org_id:          orgId,
       captured_at:     new Date().toISOString(),
       sales_total:     r2(salesTotal),
@@ -589,9 +589,17 @@ Deno.serve(async (_req) => {
       net_profit:      r2(netProfit),
       net_profit_pct:  r2(netProfitPct),
       data_source:     "toast",
-    });
+    };
+    const { error: insertErr } = await supabase.from("kpi_snapshots").insert(snapshotRow);
 
     if (insertErr) throw insertErr;
+
+    // Mirror to the DashVue core (Gate 6) — single poller keeps both cores
+    // fresh until the legacy app retires. Best effort, never fails the sync.
+    if (shiftDb !== supabase) {
+      const { error: mirrorErr } = await shiftDb.from("kpi_snapshots").insert(snapshotRow);
+      if (mirrorErr) console.error("kpi mirror (DashVue core) failed:", mirrorErr.message);
+    }
 
     console.log(`[sync-toast-kpis] Snapshot written — sales: $${r2(salesTotal)}, labor: ${r2(laborPct)}%, COGS: ${r2(cogsPct)}%, fixed: ${r2(fixedPct)}%, net: ${r2(netProfitPct)}%`);
 
