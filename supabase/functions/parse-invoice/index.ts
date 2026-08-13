@@ -104,6 +104,17 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // DashVue core (Gate 0b, 2026-08-13): invoices live on the new project.
+    // With the NEWDB_* secrets set, the file + the canonical row go THERE
+    // (org-stamped — org_id is enforced by RLS on the new core) and a mirror
+    // row is written locally so the installed owner app's list stays fresh.
+    // Without the secrets: exact old single-project behavior.
+    const NEWDB_URL = Deno.env.get("NEWDB_URL") ?? "";
+    const NEWDB_KEY = Deno.env.get("NEWDB_SERVICE_ROLE_KEY") ?? "";
+    const NEWDB_ORG_ID = Deno.env.get("NEWDB_ORG_ID") ?? "";
+    const primary = NEWDB_URL && NEWDB_KEY ? createClient(NEWDB_URL, NEWDB_KEY) : supabase;
+    const isSplit = primary !== supabase;
+
     const body = await req.json();
     const { image_base64, mime_type = "image/jpeg", org_id } = body as {
       image_base64?: string;
@@ -123,12 +134,12 @@ Deno.serve(async (req: Request) => {
     const ext = mime_type.split("/")[1]?.split("+")[0] || "jpg";
     const path = `${org_id ?? "unassigned"}/${ts}.${ext}`;
     const bytes = Uint8Array.from(atob(image_base64), (c) => c.charCodeAt(0));
-    const { error: uploadErr } = await supabase.storage
+    const { error: uploadErr } = await primary.storage
       .from("invoices")
       .upload(path, bytes, { contentType: mime_type, upsert: false });
     if (uploadErr) throw new Error(`storage upload: ${uploadErr.message}`);
 
-    const { data: urlData } = supabase.storage.from("invoices").getPublicUrl(path);
+    const { data: urlData } = primary.storage.from("invoices").getPublicUrl(path);
     const imageUrl = urlData.publicUrl;
 
     // ── 2. Claude Vision + tool-use ─────────────────────────────────────────
@@ -187,7 +198,7 @@ Deno.serve(async (req: Request) => {
     // ── 3. Insert into invoices table ───────────────────────────────────────
     const today = new Date().toISOString().slice(0, 10);
     const insertRow = {
-      org_id: org_id ?? null,
+      org_id: NEWDB_ORG_ID || org_id || null,
       vendor_name: parsed.vendor_name || "Unknown Vendor",
       invoice_number: parsed.invoice_number || null,
       invoice_date: parsed.invoice_date || today,
@@ -202,15 +213,28 @@ Deno.serve(async (req: Request) => {
       line_items: parsed.line_items ?? [],
     };
 
-    const { data: inserted, error: insertErr } = await supabase
+    const { data: inserted, error: insertErr } = await primary
       .from("invoices")
       .insert(insertRow)
       .select()
       .single();
     if (insertErr) throw new Error(`insert: ${insertErr.message}`);
 
+    // Best-effort mirror to the local (old) project so the installed owner
+    // app keeps seeing new scans until the owner face ships. Mirror rows keep
+    // the old core's legacy org_id NULL convention; failure never fails the
+    // request.
+    let mirrored = false;
+    if (isSplit) {
+      const { error: mirrorErr } = await supabase
+        .from("invoices")
+        .insert({ ...insertRow, org_id: null });
+      if (mirrorErr) console.error("mirror insert (old core) failed:", mirrorErr.message);
+      else mirrored = true;
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, invoice: inserted, parsed }),
+      JSON.stringify({ ok: true, invoice: inserted, parsed, mirrored }),
       { headers: { ...CORS, "Content-Type": "application/json" } },
     );
   } catch (err) {
