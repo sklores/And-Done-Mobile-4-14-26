@@ -333,6 +333,13 @@ Deno.serve(async (_req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // DashVue core (Gate 0a, 2026-08-13): shift_* tables moved to the new
+    // project — salary math must read the LIVE schedule there. Falls back to
+    // this project when the NEWDB_* secrets are absent.
+    const newdbUrl = Deno.env.get("NEWDB_URL");
+    const newdbKey = Deno.env.get("NEWDB_SERVICE_ROLE_KEY");
+    const shiftDb = newdbUrl && newdbKey ? createClient(newdbUrl, newdbKey) : supabase;
+
     // Resolve org_id from slug
     const { data: org, error: orgErr } = await supabase
       .from("organizations")
@@ -521,7 +528,7 @@ Deno.serve(async (_req) => {
     // Reads weekly_salary from shift_settings + the week's shift windows
     // and prorates by today's elapsed window. Mobile applies the same
     // formula via fetchTodayScheduled(). When weekly_salary=0 → returns 0.
-    const salaryCost = await computeScheduleSalary(supabase, now);
+    const salaryCost = await computeScheduleSalary(shiftDb, now);
     void firstClockInMs; void lastClockOutMs; // formerly used for $200/day proration
 
     const payrollTax  = (hourlyCost + salaryCost) * PAYROLL_TAX_RATE;
