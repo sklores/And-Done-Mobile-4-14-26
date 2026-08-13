@@ -1,8 +1,11 @@
 // Reads scheduled-labor data from the shift scheduling tables
-// (shift_shifts + shift_employees + shift_settings), which live on the
-// same Supabase project as And Done. Read-only — never writes back.
+// (shift_shifts + shift_employees + shift_settings). Those tables moved to
+// the DashVue core on 2026-08-13 — reads go through supabaseShift (a
+// read-only client for that project, falling back to the main client when
+// unconfigured). Read-only — never writes back.
 
-import { supabase, supabaseReady } from "../lib/supabase";
+import { supabaseReady } from "../lib/supabase";
+import { supabaseShift } from "../lib/supabaseShift";
 
 export type ScheduledLaborResult = {
   // Today's schedule
@@ -73,7 +76,7 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
   // Pull the whole current week's shifts (need it for weekly window sum)
   // plus the joined employee for hourly-cost / active filter.
   const [{ data: shiftRows, error: shiftErr }, { data: settingRows, error: settingErr }] = await Promise.all([
-    supabase
+    supabaseShift
       .from("shift_shifts")
       .select(`
         shift_date,
@@ -84,7 +87,7 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
       `)
       .gte("shift_date", monday)
       .lte("shift_date", sunday),
-    supabase
+    supabaseShift
       .from("shift_settings")
       .select("value")
       .eq("key", "weekly_salary")
