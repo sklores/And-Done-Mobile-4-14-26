@@ -12,6 +12,23 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { KNOWLEDGE } from "./knowledge.ts";
 
+// ── DashVue core (Gate 0a, 2026-08-13) ──────────────────────────────────────
+// Schedule data (shift_*) lives on the DashVue Supabase project now. When the
+// NEWDB_* secrets are set, every shift read/write goes there and inserts stamp
+// NEWDB_ORG_ID (org_id is NOT NULL on the new core). Without the secrets,
+// behavior is exactly the old single-project behavior.
+const NEWDB_URL = Deno.env.get("NEWDB_URL") ?? "";
+const NEWDB_SERVICE_ROLE_KEY = Deno.env.get("NEWDB_SERVICE_ROLE_KEY") ?? "";
+const NEWDB_ORG_ID = Deno.env.get("NEWDB_ORG_ID") ?? "";
+let _shiftDb: SupabaseClient | null = null;
+function shiftDb(fallback: SupabaseClient): SupabaseClient {
+  if (!NEWDB_URL || !NEWDB_SERVICE_ROLE_KEY) return fallback;
+  _shiftDb ??= createClient(NEWDB_URL, NEWDB_SERVICE_ROLE_KEY);
+  return _shiftDb;
+}
+const orgStamp = (): Record<string, string> =>
+  NEWDB_ORG_ID ? { org_id: NEWDB_ORG_ID } : {};
+
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOOL_ITERATIONS = 6;
@@ -393,7 +410,7 @@ async function resolveEmployee(
 
   // Pull the full active roster — it's tiny (tens of rows) so a client-side
   // fuzzy pass is cheaper than fighting pg_trgm.
-  const { data, error } = await supabase
+  const { data, error } = await shiftDb(supabase)
     .from("shift_employees")
     .select("id, name")
     .eq("is_active", true);
@@ -453,7 +470,7 @@ async function findSingleShift(
   employeeId: string,
   shiftDate: string,
 ): Promise<ShiftResolved> {
-  const { data, error } = await supabase
+  const { data, error } = await shiftDb(supabase)
     .from("shift_shifts")
     .select("id, start_time, end_time")
     .eq("employee_id", employeeId)
@@ -584,7 +601,7 @@ async function runTool(
       if ("error" in emp) return emp;
 
       // Find any existing shifts inside the range (warn, don't block)
-      const { data: conflicts } = await supabase
+      const { data: conflicts } = await shiftDb(supabase)
         .from("shift_shifts")
         .select("id, shift_date, start_time, end_time")
         .eq("employee_id", emp.id)
@@ -606,9 +623,9 @@ async function runTool(
         };
       }
 
-      const { data: block, error } = await supabase
+      const { data: block, error } = await shiftDb(supabase)
         .from("shift_availability_blocks")
-        .insert({ employee_id: emp.id, starts_on: startsOn, ends_on: endsOn, reason })
+        .insert({ employee_id: emp.id, starts_on: startsOn, ends_on: endsOn, reason, ...orgStamp() })
         .select()
         .single();
       if (error) return { error: error.message };
@@ -653,7 +670,7 @@ async function runTool(
       const patch: Record<string, string> = {};
       if (newStart) patch.start_time = newStart;
       if (newEnd)   patch.end_time   = newEnd;
-      const { error } = await supabase.from("shift_shifts").update(patch).eq("id", shift.id);
+      const { error } = await shiftDb(supabase).from("shift_shifts").update(patch).eq("id", shift.id);
       if (error) return { error: error.message };
 
       await logScheduleChange(
@@ -681,14 +698,14 @@ async function runTool(
       if ("error" in emp) return emp;
 
       // Warn if there's already a shift that day
-      const { data: existing } = await supabase
+      const { data: existing } = await shiftDb(supabase)
         .from("shift_shifts")
         .select("id, start_time, end_time")
         .eq("employee_id", emp.id)
         .eq("shift_date", shiftDate);
 
       // Warn if date falls inside an availability block
-      const { data: blocks } = await supabase
+      const { data: blocks } = await shiftDb(supabase)
         .from("shift_availability_blocks")
         .select("id, starts_on, ends_on, reason")
         .eq("employee_id", emp.id)
@@ -720,7 +737,8 @@ async function runTool(
         end_time: endT,
       };
       if (note) row.note = note;
-      const { data: inserted, error } = await supabase
+      Object.assign(row, orgStamp());
+      const { data: inserted, error } = await shiftDb(supabase)
         .from("shift_shifts")
         .insert(row)
         .select()
@@ -755,7 +773,7 @@ async function runTool(
         };
       }
 
-      const { error } = await supabase.from("shift_shifts").delete().eq("id", shift.id);
+      const { error } = await shiftDb(supabase).from("shift_shifts").delete().eq("id", shift.id);
       if (error) return { error: error.message };
 
       await logScheduleChange(
