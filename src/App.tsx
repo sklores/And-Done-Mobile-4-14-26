@@ -555,6 +555,7 @@ export default function App() {
               // instead of pooling it all at the bottom.
               flex: 1,
               gap: 8,
+              paddingTop: 8,
               paddingBottom: 8,
             }}
           >
