@@ -20,6 +20,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   weather?: WeatherCondition;
+  /** Live Reviews score 1-8 — kept in sync with the dashboard scene. */
+  reviewsScore?: number
   beamPulseKey?: number;
 }
 
@@ -35,7 +37,7 @@ const CSS = `
 .fs-scene > div { width: 100% !important; height: 100% !important; aspect-ratio: auto !important; }
 `;
 
-export function FullscreenScene({ open, onClose, weather, beamPulseKey }: Props) {
+export function FullscreenScene({ open, onClose, weather, beamPulseKey, reviewsScore }: Props) {
   // Rotate only when the handset is portrait; if it's already landscape the
   // scene fills directly (no double-rotation).
   const [portrait, setPortrait] = useState(true);
@@ -99,7 +101,7 @@ export function FullscreenScene({ open, onClose, weather, beamPulseKey }: Props)
         }}
       >
         <div className="fs-scene">
-          <Scene weather={weather} beamPulseKey={beamPulseKey} />
+          <Scene weather={weather} beamPulseKey={beamPulseKey} reviewsScore={reviewsScore} />
         </div>
 
         {/* Close affordance — lives inside the rotated stage so it reads

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useKpiStore } from '../stores/useKpiStore'
 import { tileForScore } from '../theme/skins'
-import { FEED_SCORES } from '../data/feedScores'
 
 type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'sundown' | 'night'
 export type WeatherCondition = 'clear' | 'cloudy' | 'rain' | 'snow' | 'wind'
 
 interface CoastalSceneProps {
   weather?: WeatherCondition
+  /** Live Reviews score 1-8 — drives balloon color (was a hardcoded mock). */
+  reviewsScore?: number
   /** Bump this number to retrigger the big lighthouse sweep (mount, KPI refresh, pull-to-refresh). */
   beamPulseKey?: number
 }
@@ -521,7 +522,7 @@ const SNOW_FLAKES: [number, number][] = [
   [50,50],[115,55],[175,48],[235,52],
 ]
 
-export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSceneProps) {
+export function CoastalScene({ weather = 'clear', beamPulseKey = 0, reviewsScore = 5 }: CoastalSceneProps) {
   // Lighthouse sweep plays on mount + whenever beamPulseKey changes, then fades
   // back to just the gentle lamp bloom so it isn't distracting in the background.
   const [beamSweeping, setBeamSweeping] = useState(true)
@@ -639,8 +640,8 @@ export function CoastalScene({ weather = 'clear', beamPulseKey = 0 }: CoastalSce
   const bx      = 195
   const by      = Math.round(14 + (1 - revNorm) * 44)  // 14 (excellent) → 58 (critical)
 
-  // Reviews → balloon color (tracks Reviews chip color in MarqueeFeed)
-  const reviewsPalette = tileForScore(FEED_SCORES.reviews)
+  // Reviews → balloon color (tracks the live Reviews box)
+  const reviewsPalette = tileForScore(reviewsScore)
   const balloonBody    = reviewsPalette.bg     // main fabric color
   const balloonShade   = reviewsPalette.label  // darker underside / shadow
 

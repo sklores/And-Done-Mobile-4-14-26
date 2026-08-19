@@ -3,6 +3,7 @@ import { useSkin } from "./theme/skins";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
 import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
+import { fetchAging, agingToDebtScore, type AgingSnapshot } from "./data/agingAdapter";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
@@ -13,7 +14,7 @@ import { KpiBar } from "./components/KpiBar";
 import { KpiGrid } from "./components/KpiGrid";
 import { Scene } from "./components/Scene";
 import type { WeatherCondition } from "./components/CoastalScene";
-import { MarqueeFeed, type FeedKey } from "./components/MarqueeFeed";
+import { StatRow } from "./components/StatRow";
 import { BottomTabs } from "./components/BottomTabs";
 import type { TabKey } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
@@ -23,9 +24,7 @@ import { FixedCostDrillDown } from "./components/FixedCostDrillDown";
 import { NetDrillDown } from "./components/NetDrillDown";
 import { COGSDrillDown } from "./components/COGSDrillDown";
 import { ReviewsDrillDown } from "./components/ReviewsDrillDown";
-import { SocialDrillDown } from "./components/SocialDrillDown";
-import { BankDrillDown } from "./components/BankDrillDown";
-import { EventsDrillDown } from "./components/EventsDrillDown";
+import { DebtDrillDown } from "./components/DebtDrillDown";
 import { InvoicesTab } from "./components/tabs/InvoicesTab";
 import { LogTab } from "./components/tabs/LogTab";
 import { GizmoTab } from "./components/tabs/GizmoTab";
@@ -68,7 +67,7 @@ export default function App() {
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
   const [drillKey, setDrillKey]     = useState<KpiKey | null>(null);
-  const [openFeed, setOpenFeed]     = useState<FeedKey | null>(null);
+  const [openFeed, setOpenFeed]     = useState<"reviews" | "debt" | null>(null);
 
   // ── Pull-to-refresh state ─────────────────────────────────────────────────
   const scrollRef      = useRef<HTMLDivElement>(null);
@@ -214,15 +213,29 @@ export default function App() {
 
   // ── Reviews chip: live score from Supabase reviews aggregate ─────────────
   const [reviewsScore, setReviewsScore] = useState<number | null>(null);
+  const [reviewsRating, setReviewsRating] = useState<number | null>(null);
+  const [reviewsCount, setReviewsCount] = useState(0);
+  const [aging, setAging] = useState<AgingSnapshot | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetchReviewsBundle().then((b) => {
       if (cancelled) return;
       if (b && b.overallRating != null) {
         setReviewsScore(ratingToReviewScore(b.overallRating));
+        setReviewsRating(b.overallRating);
+        setReviewsCount(b.totalRatedReviews);
       }
     });
     return () => { cancelled = true; };
+  }, []);
+
+  // ── A/P aging (Debt box) — refreshed with the KPI cadence ────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => fetchAging().then((a) => { if (!cancelled) setAging(a); });
+    load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
@@ -470,7 +483,7 @@ export default function App() {
               flexShrink: 0,
             }}
           >
-            <Scene weather={weatherData.condition} beamPulseKey={beamPulseKey} />
+            <Scene weather={weatherData.condition} beamPulseKey={beamPulseKey} reviewsScore={reviewsScore ?? 5} />
             <div
               style={isDusky ? {
                 // Hot-pink diagnostic confirmed this is the nameplate row.
@@ -548,6 +561,17 @@ export default function App() {
               onClick={() => setDrillKey("sales" as KpiKey)}
             />
             <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} />
+            <StatRow
+              reviewsRating={reviewsRating}
+              reviewsCount={reviewsCount}
+              reviewsScore={reviewsScore ?? 5}
+              debtTotal={aging?.totalOpen ?? null}
+              debtOver90={aging?.over90 ?? 0}
+              debtScore={agingToDebtScore(aging?.over90 ?? 0)}
+              loading={isLoadingKpis}
+              onOpenReviews={() => setOpenFeed("reviews")}
+              onOpenDebt={() => setOpenFeed("debt")}
+            />
             <KpiBar
               kind="net"
               label={net.label}
@@ -560,10 +584,7 @@ export default function App() {
               alerting={alertingKeys.has("net")}
               onClick={() => setDrillKey("net" as KpiKey)}
             />
-            <MarqueeFeed
-              onLongPress={setOpenFeed}
-              scoreOverrides={reviewsScore != null ? { reviews: reviewsScore } : undefined}
-            />
+
           </div>
         </div>{/* end scroll container */}
         </div>{/* end relative wrapper */}
@@ -581,9 +602,7 @@ export default function App() {
 
       {/* ── Feed chip drill-downs (long-press) ──────── */}
       <ReviewsDrillDown open={openFeed === "reviews"} onClose={() => setOpenFeed(null)} />
-      <SocialDrillDown  open={openFeed === "social"}  onClose={() => setOpenFeed(null)} />
-      <BankDrillDown    open={openFeed === "bank"}    onClose={() => setOpenFeed(null)} />
-      <EventsDrillDown  open={openFeed === "events"}  onClose={() => setOpenFeed(null)} />
+      <DebtDrillDown    open={openFeed === "debt"}    onClose={() => setOpenFeed(null)} />
 
       {/* ── Skin picker (long-press the vista) ──────── */}
       <SkinPicker open={skinPickerOpen} onClose={() => setSkinPickerOpen(false)} />
@@ -592,6 +611,7 @@ export default function App() {
         onClose={() => setFullscreenOpen(false)}
         weather={weatherData.condition}
         beamPulseKey={beamPulseKey}
+        reviewsScore={reviewsScore ?? 5}
       />
 
       {/* ── Bottom tab panels ───────────────────────── */}

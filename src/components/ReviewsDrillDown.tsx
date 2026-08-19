@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
-import { FEED_SCORES } from "../data/feedScores";
 import {
   fetchReviewsBundle,
   timeAgo,
@@ -9,6 +8,7 @@ import {
   PLATFORM_COLOR,
   type ReviewsBundle,
   type ReviewRow,
+  ratingToReviewScore,
 } from "../data/reviewsAdapter";
 
 type Props = { open: boolean; onClose: () => void };
@@ -196,7 +196,7 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
     <DrillDownModal
       open={open}
       onClose={onClose}
-      score={FEED_SCORES.reviews}
+      score={ratingToReviewScore(bundle?.overallRating ?? null)}
       label="Reviews"
       value={headerValue}
       status={headerStatus}
