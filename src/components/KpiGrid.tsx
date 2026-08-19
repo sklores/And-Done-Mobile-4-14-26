@@ -28,7 +28,7 @@ export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
         // Prime/Fixed row; columns stay tight (4px) so the side-by-side
         // tiles don't drift apart. Universal — not PWA-gated.
         rowGap: 10,
-        columnGap: 4,
+        columnGap: 10,
         padding: "0 10px",
         flex: 2, // two rows of tiles — see StatRow's flex: 1
         alignContent: "stretch",

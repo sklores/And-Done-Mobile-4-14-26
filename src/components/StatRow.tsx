@@ -107,7 +107,7 @@ export function StatRow({
   loading, onOpenReviews, onOpenDebt,
 }: Props) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 10, columnGap: 4, padding: "0 10px", flex: 1, alignContent: "stretch" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 10, columnGap: 10, padding: "0 10px", flex: 1, alignContent: "stretch" }}>
       <StatBox
         label="Reviews"
         value={reviewsRating != null ? reviewsRating.toFixed(1) : "--"}

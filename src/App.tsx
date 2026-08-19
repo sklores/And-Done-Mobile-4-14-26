@@ -588,7 +588,6 @@ export default function App() {
               sub="today"
               score={netScore}
               loading={isLoadingKpis}
-              isLast
               alerting={alertingKeys.has("net")}
               onClick={() => setDrillKey("net" as KpiKey)}
             />
