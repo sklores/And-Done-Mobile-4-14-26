@@ -30,6 +30,7 @@ import { InvoicesTab } from "./components/tabs/InvoicesTab";
 import { LogTab } from "./components/tabs/LogTab";
 import { GizmoTab } from "./components/tabs/GizmoTab";
 import { SkinPicker } from "./components/SkinPicker";
+import { FullscreenScene } from "./components/FullscreenScene";
 import { useIsDusky, useIsNight } from "./hooks/useTimeOfDay";
 
 type WeatherData = { condition: WeatherCondition; tempF: number | null };
@@ -78,27 +79,58 @@ export default function App() {
   // Bump to retrigger the lighthouse sweep (mount, KPI refresh, pull-to-refresh)
   const [beamPulseKey, setBeamPulseKey] = useState(0);
 
-  // ── Skin picker: long-press the vista (or right-click on desktop) ────────
+  // ── Vista gestures ───────────────────────────────────────────────────────
+  //   long-press (550ms, hold still)  → skin picker
+  //   triple-tap (3 taps in ~450ms)   → fullscreen landscape vista
+  // The two can't collide: a tap ends long before the 550ms press fires, and
+  // a press that fires cancels any tap sequence in flight.
   const [skinPickerOpen, setSkinPickerOpen] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const longPressFired = useRef(false);
+  const dragCancelled  = useRef(false);
+  const tapCount       = useRef(0);
+  const tapResetTimer  = useRef<number | null>(null);
+
+  const clearTapRun = () => {
+    tapCount.current = 0;
+    if (tapResetTimer.current != null) {
+      clearTimeout(tapResetTimer.current);
+      tapResetTimer.current = null;
+    }
+  };
+  // Drop any pending timers if the component unmounts mid-gesture
+  useEffect(() => () => {
+    if (longPressTimer.current != null) clearTimeout(longPressTimer.current);
+    if (tapResetTimer.current  != null) clearTimeout(tapResetTimer.current);
+  }, []);
+
   const frameTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     longPressStart.current = { x: t.clientX, y: t.clientY };
+    longPressFired.current = false;
+    dragCancelled.current  = false;
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null;
+      longPressFired.current = true;
+      clearTapRun();              // a hold is not the start of a tap run
       haptic(20);
       setSkinPickerOpen(true);
     }, 550);
   };
   const frameTouchMove = (e: React.TouchEvent) => {
-    if (!longPressStart.current || longPressTimer.current == null) return;
+    if (!longPressStart.current) return;
     const t = e.touches[0];
-    // A drag (scroll / pull-to-refresh) cancels the long-press
+    // A drag (scroll / pull-to-refresh) cancels BOTH gestures
     if (Math.abs(t.clientX - longPressStart.current.x) > 10 ||
         Math.abs(t.clientY - longPressStart.current.y) > 10) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+      if (longPressTimer.current != null) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+      dragCancelled.current = true;
+      clearTapRun();
     }
   };
   const frameTouchEnd = () => {
@@ -106,10 +138,25 @@ export default function App() {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+    // A fired long-press or a drag isn't a tap
+    if (longPressFired.current || dragCancelled.current) return;
+
+    tapCount.current += 1;
+    if (tapCount.current >= 3) {
+      clearTapRun();
+      haptic([12, 40, 12]);
+      setFullscreenOpen(true);
+      return;
+    }
+    if (tapResetTimer.current != null) clearTimeout(tapResetTimer.current);
+    tapResetTimer.current = window.setTimeout(() => {
+      tapCount.current = 0;
+      tapResetTimer.current = null;
+    }, 450);
   };
 
   // ── Back-button: push history entry when any modal opens ─────────────────
-  const anyOpen = drillKey !== null || openTab !== null || openFeed !== null || skinPickerOpen;
+  const anyOpen = drillKey !== null || openTab !== null || openFeed !== null || skinPickerOpen || fullscreenOpen;
   const prevAnyOpen = useRef(false);
 
   useEffect(() => {
@@ -122,6 +169,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       // Close whichever modal is open — back stays on page
+      if (fullscreenOpen)    { setFullscreenOpen(false); return; }
       if (skinPickerOpen)    { setSkinPickerOpen(false); return; }
       if (drillKey !== null) { setDrillKey(null); return; }
       if (openTab  !== null) { setOpenTab(null);  return; }
@@ -131,7 +179,7 @@ export default function App() {
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [drillKey, openTab, openFeed, skinPickerOpen]);
+  }, [drillKey, openTab, openFeed, skinPickerOpen, fullscreenOpen]);
 
   // ── Supabase real-time subscription (primary data source) ────────────────
   useEffect(() => {
@@ -391,6 +439,7 @@ export default function App() {
             onTouchMove={frameTouchMove}
             onTouchEnd={frameTouchEnd}
             onContextMenu={(e) => { e.preventDefault(); setSkinPickerOpen(true); }}
+            onClick={(e) => { if (e.detail === 3) setFullscreenOpen(true); }}
             style={{
               userSelect: "none",
               WebkitUserSelect: "none",
@@ -524,6 +573,12 @@ export default function App() {
 
       {/* ── Skin picker (long-press the vista) ──────── */}
       <SkinPicker open={skinPickerOpen} onClose={() => setSkinPickerOpen(false)} />
+      <FullscreenScene
+        open={fullscreenOpen}
+        onClose={() => setFullscreenOpen(false)}
+        weather={weatherData.condition}
+        beamPulseKey={beamPulseKey}
+      />
 
       {/* ── Bottom tab panels ───────────────────────── */}
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />
