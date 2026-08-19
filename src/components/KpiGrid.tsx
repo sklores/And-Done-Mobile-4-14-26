@@ -29,7 +29,9 @@ export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
         // tiles don't drift apart. Universal — not PWA-gated.
         rowGap: 10,
         columnGap: 4,
-        padding: "4px 10px 0",
+        padding: "0 10px",
+        flex: 2, // two rows of tiles — see StatRow's flex: 1
+        alignContent: "stretch",
         background: bg,
         transition: "background 1.2s ease",
       }}

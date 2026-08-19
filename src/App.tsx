@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSkin } from "./theme/skins";
+import { money } from "./lib/money";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
 import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
 import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
@@ -433,7 +434,7 @@ export default function App() {
         }}
       >
         {/* Scrollable content */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
 
           {/* No pull-to-refresh spinner — the lighthouse beam pulse in the
               coastal scene (triggered on refresh) is the visual feedback. */}
@@ -444,11 +445,12 @@ export default function App() {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           style={{
-            height: "100%",
+            flex: 1,
             overflowY: "auto",
             overscrollBehavior: "none",
             display: "flex",
             flexDirection: "column",
+            minHeight: 0,
             background: phoneBg,
             transition: "background 1.2s ease",
           }}
@@ -548,6 +550,12 @@ export default function App() {
               transition: "filter 1.2s ease",
               display: "flex",
               flexDirection: "column",
+              // Removing the marquee left ~200px of dead space above the tab
+              // bar. Grow into it and spread the slack evenly between rows
+              // instead of pooling it all at the bottom.
+              flex: 1,
+              gap: 8,
+              paddingBottom: 8,
             }}
           >
             <KpiBar
@@ -576,7 +584,7 @@ export default function App() {
               kind="net"
               label={net.label}
               value={net.value}
-              valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
+              valueSub={net.dollars !== 0 ? money(net.dollars) : undefined}
               sub="today"
               score={netScore}
               loading={isLoadingKpis}

@@ -1,4 +1,5 @@
 import { useSkin, tileForScore } from "../theme/skins";
+import { money } from "../lib/money";
 
 // The 2-up row that sits between the KPI grid and the Net Profit bar:
 // Reviews (star rating) + Debt (A/P open balance). Replaced the scrolling
@@ -43,11 +44,11 @@ function StatBox({ label, value, sub, score, stars, loading, onClick }: BoxProps
         background: palette.bg,
         border: palette.border ? `1px solid ${palette.border}` : undefined,
         borderRadius: 10,
-        padding: "10px 10px 8px",
+        padding: "10px 8px 8px",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 64,
+        minHeight: 78,
         fontFamily: skin.fonts.body,
         cursor: onClick && !loading ? "pointer" : undefined,
         animation: loading ? "kpiSkeleton 1.4s ease-in-out infinite" : undefined,
@@ -106,7 +107,7 @@ export function StatRow({
   loading, onOpenReviews, onOpenDebt,
 }: Props) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 10, columnGap: 4, padding: "4px 10px 0" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 10, columnGap: 4, padding: "0 10px", flex: 1, alignContent: "stretch" }}>
       <StatBox
         label="Reviews"
         value={reviewsRating != null ? reviewsRating.toFixed(1) : "--"}
@@ -118,8 +119,8 @@ export function StatRow({
       />
       <StatBox
         label="Debt"
-        value={debtTotal != null ? `$${Math.round(debtTotal).toLocaleString()}` : "--"}
-        sub={debtOver90 > 0 ? `$${Math.round(debtOver90).toLocaleString()} past 90d` : "nothing past 90d"}
+        value={debtTotal != null ? money(debtTotal) : "--"}
+        sub={debtOver90 > 0 ? `${money(debtOver90)} past 90d` : "nothing past 90d"}
         score={debtScore}
         loading={loading || debtTotal == null}
         onClick={onOpenDebt}
