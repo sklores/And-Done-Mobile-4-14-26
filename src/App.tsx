@@ -89,7 +89,6 @@ export default function App() {
   const longPressTimer = useRef<number | null>(null);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressFired = useRef(false);
-  const dragCancelled  = useRef(false);
   const tapCount       = useRef(0);
   const tapResetTimer  = useRef<number | null>(null);
 
@@ -110,7 +109,6 @@ export default function App() {
     const t = e.touches[0];
     longPressStart.current = { x: t.clientX, y: t.clientY };
     longPressFired.current = false;
-    dragCancelled.current  = false;
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null;
       longPressFired.current = true;
@@ -129,8 +127,6 @@ export default function App() {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
       }
-      dragCancelled.current = true;
-      clearTapRun();
     }
   };
   const frameTouchEnd = () => {
@@ -138,8 +134,22 @@ export default function App() {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
-    // A fired long-press or a drag isn't a tap
-    if (longPressFired.current || dragCancelled.current) return;
+  };
+
+  // Tap counting rides on CLICK, not touchend.
+  //
+  // Hand-rolling tap detection off touchstart/touchend failed on real
+  // hardware for two reasons that synthetic events can't reproduce:
+  //   1. a real finger rolls 10-20px on a "stationary" tap, which tripped
+  //      the drag-cancel and zeroed the run;
+  //   2. with double-tap-zoom enabled the browser swallows the 2nd/3rd
+  //      click of a fast triple-tap (fixed by touch-action: manipulation
+  //      on the frame, below).
+  // The browser already does tap-vs-scroll discrimination for us and only
+  // emits `click` for a genuine tap — so let it, and just count.
+  const frameClick = () => {
+    // The click that follows a long-press isn't a tap
+    if (longPressFired.current) { longPressFired.current = false; return; }
 
     tapCount.current += 1;
     if (tapCount.current >= 3) {
@@ -152,7 +162,7 @@ export default function App() {
     tapResetTimer.current = window.setTimeout(() => {
       tapCount.current = 0;
       tapResetTimer.current = null;
-    }, 450);
+    }, 650); // generous — a deliberate 3-press is slower than a nervous one
   };
 
   // ── Back-button: push history entry when any modal opens ─────────────────
@@ -439,11 +449,15 @@ export default function App() {
             onTouchMove={frameTouchMove}
             onTouchEnd={frameTouchEnd}
             onContextMenu={(e) => { e.preventDefault(); setSkinPickerOpen(true); }}
-            onClick={(e) => { if (e.detail === 3) setFullscreenOpen(true); }}
+            onClick={frameClick}
             style={{
               userSelect: "none",
               WebkitUserSelect: "none",
               WebkitTouchCallout: "none",
+              // Disables double-tap-to-zoom on the vista. Without this the
+              // browser eats the 2nd/3rd click of a fast triple-tap (and
+              // adds tap delay) — the reason triple-tap failed on device.
+              touchAction: "manipulation",
               margin: "8px 12px 0",
               borderTop: `6px solid ${frameColor}`,
               borderLeft: `6px solid ${frameColor}`,
