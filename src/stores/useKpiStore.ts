@@ -5,7 +5,6 @@ import { fetchTodayScheduled } from "../data/scheduleAdapter";
 import type { ScheduledLaborResult } from "../data/scheduleAdapter";
 import { RENT_PCT, hourlyAmortized, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
-import { supabase, supabaseReady } from "../lib/supabase";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -248,38 +247,24 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     });
   },
 
-  // ── Real-time subscription to kpi_snapshots ─────────────────────────────
+  // ── Latest snapshot from the seed (D15) ─────────────────────────────────
+  // The heartbeat writes every 5 minutes; polling at 60s keeps the tiles as
+  // fresh as the data is. No database access from the browser, no anon key.
   subscribeToSnapshots: () => {
-    if (!supabaseReady) {
-      console.warn("[supabase] Skipping subscription — env vars not set");
-      return () => {};
-    }
-    // Load the latest snapshot immediately on subscribe
-    supabase
-      .from("kpi_snapshots")
-      .select("*")
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) get().applySnapshot(data as KpiSnapshot);
-      });
-
-    // Subscribe to real-time inserts
-    const channel = supabase
-      .channel("kpi-snapshots-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "kpi_snapshots" },
-        (payload) => {
-          console.log("[supabase] new snapshot received");
-          get().applySnapshot(payload.new as KpiSnapshot);
-        },
-      )
-      .subscribe();
-
-    // Return unsubscribe function
-    return () => { supabase.removeChannel(channel); };
+    let stopped = false;
+    const pull = async () => {
+      try {
+        const r = await fetch("/api/snapshot", { cache: "no-store" });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data && !stopped) get().applySnapshot(data as KpiSnapshot);
+      } catch (e) {
+        console.warn("[seed] snapshot fetch failed", e);
+      }
+    };
+    pull();
+    const timer = setInterval(pull, 60_000);
+    return () => { stopped = true; clearInterval(timer); };
   },
 
   refresh: async () => {

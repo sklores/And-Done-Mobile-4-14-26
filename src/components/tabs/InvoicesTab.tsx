@@ -149,11 +149,8 @@ export function InvoicesTab({ open, onClose }: Props) {
     if (!open || !supabaseReady) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const r = await fetch("/api/seed?view=invoices", { cache: "no-store" });
+        const { data, error } = r.ok ? { data: await r.json(), error: null } : { data: null, error: new Error(`invoices ${r.status}`) };
       if (!cancelled && !error && data) setInvoices(data as InvoiceRow[]);
     })();
     // Live updates

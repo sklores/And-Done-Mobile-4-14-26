@@ -2,11 +2,9 @@
 // daily sync-reviews Edge Function (Yelp, TripAdvisor, UberEats via Apify).
 // Read-only — never writes back. Tenant-scoped to GCDC.
 
-import { supabase, supabaseReady } from "../lib/supabase";
 
 // ── Tenant ───────────────────────────────────────────────────────────────
 // Single-org beta. When tenancy lands, lift this into a store / config table.
-const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
 
 // ── Types ────────────────────────────────────────────────────────────────
 export type ReviewPlatform =
@@ -67,15 +65,10 @@ const RECENT_LIMIT = 5;
 
 /** Fetches all reviews for GCDC and rolls them into the shape the UI needs. */
 export async function fetchReviewsBundle(): Promise<ReviewsBundle | null> {
-  if (!supabaseReady) return null;
+  if (false) return null;
   try {
-    const { data, error } = await supabase
-      .from("reviews")
-      .select("id, platform, reviewer_name, rating, review_text, review_date, fetched_at")
-      .eq("org_id", GCDC_ORG_ID)
-      .order("review_date", { ascending: false, nullsFirst: false })
-      .order("fetched_at", { ascending: false })
-      .limit(500);
+    const r = await fetch("/api/seed?view=reviews", { cache: "no-store" });
+    const { data, error } = r.ok ? { data: (await r.json()) as unknown[], error: null } : { data: null, error: new Error(`reviews ${r.status}`) };
     if (error || !data) return null;
     return rollUp(data as ReviewRow[]);
   } catch {

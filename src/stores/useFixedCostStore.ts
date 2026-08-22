@@ -13,9 +13,7 @@
 // so the drill-down can surface them with their own live values.
 
 import { create } from "zustand";
-import { supabase, supabaseReady } from "../lib/supabase";
 
-const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
 
 const LIVE_COMPUTED_LABELS = new Set([
   "rent",
@@ -74,23 +72,15 @@ export const useFixedCostStore = create<State>((set) => ({
   monthlyTotal: sumNonLive(FALLBACK_LINE_ITEMS),
   hydrated: false,
   hydrate: async () => {
-    if (!supabaseReady) {
-      set({ hydrated: true });
-      return;
-    }
     try {
-      const { data, error } = await supabase
-        .from("org_settings")
-        .select("pro_forma_json")
-        .eq("org_id", GCDC_ORG_ID)
-        .single();
+      const r = await fetch("/api/seed?view=fixed-costs", { cache: "no-store" });
+      const { data, error } = r.ok ? { data: await r.json(), error: null } : { data: null, error: new Error(`fixed-costs ${r.status}`) };
       if (error || !data) {
         console.warn("[fixed-cost] hydrate error:", error?.message);
         set({ hydrated: true });
         return;
       }
-      const raw = (data as { pro_forma_json?: { fixed?: { projected?: Array<{ label: string; amount: number }> } } })
-        .pro_forma_json?.fixed?.projected;
+      const raw = (data as { projected?: Array<{ label: string; amount: number }> }).projected;
       if (!Array.isArray(raw)) {
         set({ hydrated: true });
         return;

@@ -19,68 +19,29 @@ export default defineConfig(({ mode }) => {
       {
         name: "toast-api-dev",
         configureServer(server) {
-          server.middlewares.use("/api/toast-sales", async (_req, res) => {
+          // The tiles are served by the And Done seed (D15). In dev, proxy the same
+          // way production does -- api/_seed.mjs -- so local == prod.
+          const VIEWS: Record<string, string> = { "toast-sales": "sales", "toast-labor": "labor", "toast-labor-detail": "labor-detail", "toast-sales-detail": "sales-detail", "toast-cogs-detail": "cogs-detail", "snapshot": "snapshot" };
+          for (const [path, view] of Object.entries(VIEWS)) {
+            server.middlewares.use(`/api/${path}`, async (_req, res) => {
+              try {
+                const { fromSeed } = await import("./api/_seed.mjs");
+                respond(res, 200, await fromSeed(view, env));
+              } catch (e) {
+                respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
+              }
+            });
+          }
+          server.middlewares.use("/api/seed", async (req, res) => {
             try {
-              const { credsFromEnv, getTodaySales } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodaySales(credsFromEnv(env)));
+              const url = new URL(req.url ?? "", "http://x");
+              const base = env.SEED_API_BASE, key = env.SEED_API_KEY, org = env.SEED_ORG_SLUG ?? "gcdc";
+              const qs = new URLSearchParams({ org, view: url.searchParams.get("view") ?? "" });
+              for (const k of ["from", "to"]) { const v = url.searchParams.get(k); if (v) qs.set(k, v); }
+              const r = await fetch(`${base}/api/owner?${qs}`, { headers: { Authorization: `Bearer ${key}` } });
+              respond(res, r.status, await r.json());
             } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-labor", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayLabor } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayLabor(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-labor-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayLaborDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayLaborDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-sales-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodaySalesDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodaySalesDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-cogs-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayCOGSDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayCOGSDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
+              respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
             }
           });
 

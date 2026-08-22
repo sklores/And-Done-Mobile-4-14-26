@@ -4,8 +4,6 @@
 // read-only client for that project, falling back to the main client when
 // unconfigured). Read-only — never writes back.
 
-import { supabaseReady } from "../lib/supabase";
-import { supabaseShift } from "../lib/supabaseShift";
 
 export type ScheduledLaborResult = {
   // Today's schedule
@@ -67,40 +65,23 @@ function mondayOf(iso: string): string {
 }
 
 export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null> {
-  if (!supabaseReady) return null;
-
   const today = todayET();
   const monday = mondayOf(today);
   const sunday = addDays(monday, 6);
 
   // Pull the whole current week's shifts (need it for weekly window sum)
   // plus the joined employee for hourly-cost / active filter.
-  const [{ data: shiftRows, error: shiftErr }, { data: settingRows, error: settingErr }] = await Promise.all([
-    supabaseShift
-      .from("shift_shifts")
-      .select(`
-        shift_date,
-        start_time,
-        end_time,
-        employee_id,
-        shift_employees!inner ( id, is_active, hourly_rate )
-      `)
-      .gte("shift_date", monday)
-      .lte("shift_date", sunday),
-    supabaseShift
-      .from("shift_settings")
-      .select("value")
-      .eq("key", "weekly_salary")
-      .maybeSingle(),
-  ]);
+  // From the seed (D15): the week's shifts with their employee, plus weekly_salary.
+  const r = await fetch(`/api/seed?view=schedule&from=${monday}&to=${sunday}`, { cache: "no-store" });
+  type ShiftRow = { shift_date: string; start_time: string; end_time: string; employee_id?: string; shift_employees: { id: string; is_active?: boolean; hourly_rate: number | null } | null };
+  const payload = r.ok ? ((await r.json()) as { shifts: ShiftRow[]; weeklySalary: string | null }) : null;
+  const shiftRows = payload?.shifts ?? null;
+  const shiftErr: Error | null = r.ok ? null : new Error(`schedule ${r.status}`);
+  const settingRows = payload ? { value: payload.weeklySalary } : null;
 
   if (shiftErr) {
     console.warn("[scheduleAdapter] shifts query error:", shiftErr.message);
     return null;
-  }
-  if (settingErr) {
-    // Not fatal — fall through with weeklySalary=0
-    console.warn("[scheduleAdapter] settings query error:", settingErr.message);
   }
 
   const weeklySalary = Number(settingRows?.value ?? 0) || 0;
