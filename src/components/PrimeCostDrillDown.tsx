@@ -119,8 +119,8 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
   const laborPct = laborDetail && salesVal > 0
     ? (laborDetail.laborCost / salesVal) * 100
     : 0;
-  // Use live effective COGS % — falls back to 26% (food default) if no data yet
-  const cogsPct = cogsDetail?.effectiveCOGSPct ?? 26;
+  // The period's effective COGS % from the seed; no split bar until it is here.
+  const cogsPct = cogsDetail?.effectiveCOGSPct ?? null;
 
   // Food/Bev/Alcohol breakdown from live category data
   const groups = cogsDetail ? buildGroups(cogsDetail.categorySales) : null;
@@ -135,7 +135,7 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
       status={primeTile.status}
     >
       {/* ── Split bar ─────────────────────────────────── */}
-      {primePct > 0 && <SplitBar laborPct={laborPct} cogsPct={cogsPct} />}
+      {primePct > 0 && cogsPct != null && laborDetail && <SplitBar laborPct={laborPct} cogsPct={cogsPct} />}
 
       {/* ── vs. Target ────────────────────────────────── */}
       {primePct > 0 && <TargetRow actual={primePct} target={PRIME_TARGET_PCT} />}
@@ -184,7 +184,7 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
           fontWeight: 700,
           color: "#B94A4A",
         }}>
-          ⚠️ Overtime detected today
+          ⚠️ Overtime detected
         </div>
       )}
 

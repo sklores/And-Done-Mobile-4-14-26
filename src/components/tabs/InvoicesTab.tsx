@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TabPanel } from "./TabPanel";
 import { useSkin } from "../../theme/skins";
-import { supabase, supabaseReady } from "../../lib/supabase";
+import { ownerFetch } from "../../data/ownerFetch";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -144,43 +144,14 @@ export function InvoicesTab({ open, onClose }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [amount, setAmount] = useState("");
 
-  // ── Load invoices from Supabase ────────────────────────────────────────────
+  // ── Load invoices from the seed (on open, and after every write) ─────────
+  async function load() {
+    const r = await ownerFetch("/api/seed?view=invoices");
+    if (r.ok) setInvoices((await r.json()) as InvoiceRow[]);
+  }
   useEffect(() => {
-    if (!open || !supabaseReady) return;
-    let cancelled = false;
-    (async () => {
-      const r = await fetch("/api/seed?view=invoices", { cache: "no-store" });
-        const { data, error } = r.ok ? { data: await r.json(), error: null } : { data: null, error: new Error(`invoices ${r.status}`) };
-      if (!cancelled && !error && data) setInvoices(data as InvoiceRow[]);
-    })();
-    // Live updates
-    const channel = supabase
-      .channel("invoices-tab")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "invoices" },
-        (payload) => {
-          setInvoices((cur) => {
-            if (payload.eventType === "INSERT") {
-              return [payload.new as InvoiceRow, ...cur];
-            }
-            if (payload.eventType === "UPDATE") {
-              return cur.map((r) =>
-                r.id === (payload.new as InvoiceRow).id ? (payload.new as InvoiceRow) : r,
-              );
-            }
-            if (payload.eventType === "DELETE") {
-              return cur.filter((r) => r.id !== (payload.old as InvoiceRow).id);
-            }
-            return cur;
-          });
-        },
-      )
-      .subscribe();
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
+    if (!open) return;
+    void load();
   }, [open]);
 
   // ── Scan flow ──────────────────────────────────────────────────────────────
@@ -195,37 +166,11 @@ export function InvoicesTab({ open, onClose }: Props) {
 
     try {
       const { base64, mime } = await fileToBase64(file);
-      // Direct fetch instead of supabase.functions.invoke so we can read
-      // the actual error body on non-2xx (invoke masks it as "non-2xx status code").
-      const url = import.meta.env.VITE_SUPABASE_URL as string;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-      const res = await fetch(`${url}/functions/v1/parse-invoice`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-          apikey: key,
-        },
-        body: JSON.stringify({ image_base64: base64, mime_type: mime }),
-      });
-      const text = await res.text();
-      let data: { ok?: boolean; error?: string; invoice?: InvoiceRow } = {};
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(`bad response (${res.status}): ${text.slice(0, 200)}`);
-      }
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-      // Row will stream in via realtime, but also prepend optimistically
-      const newRow = data.invoice;
-      if (newRow) {
-        setInvoices((cur) => {
-          if (cur.some((r) => r.id === newRow.id)) return cur;
-          return [newRow, ...cur];
-        });
-      }
+      // The seed's own classifier + persist (the same pipeline a bill takes by email).
+      const res = await ownerFetch("/api/seed?view=invoice-scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image_base64: base64, mime_type: mime }) });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; summary?: string };
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      await load();
     } catch (err) {
       setScanError((err as Error).message || "scan failed");
     } finally {
@@ -233,39 +178,13 @@ export function InvoicesTab({ open, onClose }: Props) {
     }
   }
 
-  // ── Manual save ────────────────────────────────────────────────────────────
+  // ── Manual save (a bill by hand, on the seed) ─────────────────────────────
   async function handleSave() {
     const parsed = parseFloat(amount.replace(/[^0-9.]/g, ""));
     if (!parsed || parsed <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const row = {
-      vendor_name: vendor,
-      invoice_date: today,
-      category,
-      amount: parsed,
-      total_amount: parsed,
-      status: "pending",
-      source: "manual",
-    };
-    if (supabaseReady) {
-      const { error } = await supabase.from("invoices").insert(row);
-      if (error) {
-        setScanError(error.message);
-        return;
-      }
-    } else {
-      // Offline fallback — prepend locally
-      setInvoices((cur) => [
-        {
-          id: `local-${Date.now()}`,
-          ...row,
-          line_items: [],
-          raw_image_url: null,
-          created_at: new Date().toISOString(),
-        } as InvoiceRow,
-        ...cur,
-      ]);
-    }
+    const r = await ownerFetch("/api/seed?view=invoice-add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_name: vendor, amount: parsed, category }) });
+    if (!r.ok) { setScanError((await r.json().catch(() => ({}))).error ?? "could not save"); return; }
+    await load();
     setAmount("");
     setVendor(VENDORS[0]);
     setCategory(CATEGORIES[0]);

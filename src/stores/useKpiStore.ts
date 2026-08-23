@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toastAdapter";
+import { fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toastAdapter";
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { fetchTodayScheduled } from "../data/scheduleAdapter";
 import type { ScheduledLaborResult } from "../data/scheduleAdapter";
@@ -168,8 +168,6 @@ function scoreStatus(score: number): string {
   return labels[score] ?? "Critical";
 }
 
-// ── Employer payroll tax estimate (FICA 7.65% + FUTA 0.6% + DC SUTA 2.7%) ─
-const PAYROLL_TAX_RATE = 0.11;
 
 // No placeholder numbers, ever: a tile without data says so, in neutral.
 const TILE_KEYS = [["cogs", "COGS"], ["labor", "Labor"], ["prime", "Prime Cost"], ["fixed", "Fixed Cost"]] as const;
@@ -184,8 +182,9 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
     // The numbers on screen belong to the OLD period. Clear them until the
     // new period's numbers land -- never show one period under another's label.
-    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith("Loading") });
+    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith("Loading"), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null });
     void get().pullSnapshot();
+    void get().refresh();
   },
   status: "loading",
   asOf: null,
@@ -309,48 +308,41 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("pageshow", onVisible); };
   },
 
+  // ── The drill-downs, for the selected period ─────────────────────────────
+  // Same window as the tiles (the seed's periodWindow). A reply for a period
+  // the user has since left is dropped.
   refresh: async () => {
-    const [salesResult, laborResult, salesDetailResult, laborDetailRich, cogsDetailResult, scheduledResult] = await Promise.all([
-      fetchTodaySales(),
-      fetchTodayLabor(),
-      fetchSalesDetail(),
-      fetchLaborDetail(),
-      fetchCOGSDetail(),
-      fetchTodayScheduled(),
+    const period = get().period;
+    const [salesDetailResult, laborDetailRich, cogsDetailResult, scheduledResult] = await Promise.all([
+      fetchSalesDetail(period),
+      fetchLaborDetail(period),
+      fetchCOGSDetail(period),
+      period === "day" ? fetchTodayScheduled() : Promise.resolve(null),
     ]);
-
+    if (period !== get().period) return;
     set((s) => {
-      // refresh() feeds the drill-downs only. The tiles belong to
-      // applySnapshot (the seed's period row) -- nothing here touches them.
-      const totalSales = salesResult?.total ?? s.sales.value;
-      const totalTips  = salesResult?.totalTips ?? 0;
-      let laborDetail: LaborDetail | null = s.laborDetail;
-      if (laborResult) {
-        const hoursWorked  = laborResult.totalHours;
-        const hourlyCost   = laborResult.totalLaborCost;
-        const salaryCost   = scheduledResult?.salaryAccruedToday ?? 0;
-        const payrollTax   = Math.round((hourlyCost + salaryCost) * PAYROLL_TAX_RATE * 100) / 100;
-        const laborCost    = hourlyCost + salaryCost + payrollTax;
-        laborDetail = {
-          laborCost,
-          hourlyCost,
-          salaryCost,
-          payrollTax,
-          hoursWorked,
-          employeeCount: laborResult.employeeCount,
-          openCount: laborResult.openCount,
-          totalSales,
-          totalTips,
-          salesPerManHour: hoursWorked > 0 ? totalSales / hoursWorked : null,
-          tipPct: totalSales > 0 ? (totalTips / totalSales) * 100 : null,
-};
-      }
+      const L = laborDetailRich;
+      const totalSales = L?.totalSales ?? salesDetailResult?.totals?.sales ?? s.sales.value;
+      const totalTips = L?.totalTips ?? salesDetailResult?.totals?.tips ?? 0;
+      const laborDetail: LaborDetail | null = L ? {
+        laborCost: L.laborCost ?? L.hourlyCost + L.salaryCost + (L.payrollTax ?? 0),
+        hourlyCost: L.hourlyCost,
+        salaryCost: L.salaryCost,
+        payrollTax: L.payrollTax ?? 0,
+        hoursWorked: L.hourlyHours,
+        employeeCount: L.employeeCount,
+        openCount: L.openShifts ?? 0,
+        totalSales,
+        totalTips,
+        salesPerManHour: L.hourlyHours > 0 ? totalSales / L.hourlyHours : null,
+        tipPct: totalSales > 0 ? (totalTips / totalSales) * 100 : null,
+      } : null;
       return {
         laborDetail,
-        salesDetail: salesDetailResult ?? s.salesDetail,
-        laborDetailRich: laborDetailRich ?? s.laborDetailRich,
-        cogsDetail: cogsDetailResult ?? s.cogsDetail,
-        scheduleDetail: scheduledResult ?? s.scheduleDetail,
+        salesDetail: salesDetailResult,
+        laborDetailRich,
+        cogsDetail: cogsDetailResult,
+        scheduleDetail: period === "day" ? scheduledResult : null,
         lastRefresh: Date.now(),
         lastError: null,
       };

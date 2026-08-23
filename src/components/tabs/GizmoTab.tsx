@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { TabPanel } from "./TabPanel";
-import { useKpiStore } from "../../stores/useKpiStore";
+import { useKpiStore, PERIOD_LABEL, type Period } from "../../stores/useKpiStore";
+import { ownerFetch } from "../../data/ownerFetch";
 import { useLogStore } from "../../stores/useLogStore";
 import { useSkin } from "../../theme/skins";
 
@@ -14,40 +15,18 @@ const GIZMO_DARK   = "#1A2E28";
 const GIZMO_BUBBLE = "#148A78";
 
 // ── Edge Function endpoint ───────────────────────────────────────────────────
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-const ASK_GIZMO_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ask-gizmo` : "";
-
+// Gizmo runs on the seed (G19) -- same database as the tiles, and it knows
+// which period is on the screen.
 async function callGizmo(
   messages: Message[],
   mode: "chat" | "opening_summary",
+  period: Period,
 ): Promise<{ text: string; logged_note: { id: string; text: string; created_at: string } | null }> {
-  if (!ASK_GIZMO_URL || !SUPABASE_KEY) {
-    return { text: "Gizmo isn't configured yet — Supabase credentials missing.", logged_note: null };
-  }
-
-  const payload = {
-    mode,
-    messages: messages.map((m) => ({
-      role: m.role === "gizmo" ? "assistant" : "user",
-      content: m.text,
-    })),
-  };
-
+  const payload = { mode, messages: messages.map((m) => ({ role: m.role === "gizmo" ? "assistant" : "user", content: m.text })) };
   try {
-    const res = await fetch(ASK_GIZMO_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      return { text: `Hm, hit an error: ${data.error ?? "unknown"}`, logged_note: null };
-    }
+    const res = await ownerFetch(`/api/seed?view=gizmo&period=${period}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { text: `Hm, hit an error: ${data.error ?? res.status}`, logged_note: null };
     return { text: data.text as string, logged_note: data.logged_note ?? null };
   } catch (e) {
     return { text: `Network issue reaching Gizmo — try again. (${(e as Error).message})`, logged_note: null };
@@ -169,6 +148,7 @@ function TypingDots() {
 export function GizmoTab({ open, onClose, onOpenTab }: Props) {
   const skin = useSkin();
   const salesVal   = useKpiStore((s) => s.sales.value);
+  const period     = useKpiStore((s) => s.period);
   const netVal     = useKpiStore((s) => s.net.value);
   const tiles      = useKpiStore((s) => s.tiles);
 
@@ -208,10 +188,11 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
     // Reset messages for a fresh session each time the tab opens (per spec #5)
     setMessages([]);
     setSending(true);
-    callGizmo([], "opening_summary").then(({ text }) => {
+    callGizmo([], "opening_summary", period).then(({ text }) => {
       setMessages([{ id: `g-${Date.now()}`, role: "gizmo", text }]);
       setSending(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the opening summary is for the period at open time
   }, [open]);
 
   async function sendMessage(text?: string) {
@@ -223,7 +204,7 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
     setMessages(next);
     setSending(true);
 
-    const { text: reply, logged_note } = await callGizmo(next, "chat");
+    const { text: reply, logged_note } = await callGizmo(next, "chat", period);
     setMessages((m) => [...m, { id: `g-${Date.now()}`, role: "gizmo", text: reply }]);
     setSending(false);
 
@@ -283,7 +264,7 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
         overflowX: "auto", scrollbarWidth: "none",
       }}>
         {[
-          { label: "Sales", val: salesVal > 0 ? `$${salesVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "--" },
+          { label: PERIOD_LABEL[period], val: salesVal > 0 ? `$${salesVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "--" },
           { label: "Labor", val: laborTile?.value ?? "--" },
           { label: "COGS",  val: cogsTile?.value  ?? "--" },
           { label: "Net",   val: netVal           },

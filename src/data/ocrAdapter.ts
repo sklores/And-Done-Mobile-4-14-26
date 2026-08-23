@@ -1,12 +1,11 @@
-// Client adapter for the ocr-handwriting Edge Function.
+// Handwriting OCR for a log photo.
 // Used by the Log tab to extract handwritten text from a photo into
 // the note text field.
 
 import { enhanceImageForOCR } from "./imagePreprocess";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-const OCR_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/ocr-handwriting` : "";
+// Runs on the seed now (one Claude vision call), behind the owner session.
+import { ownerFetch } from "./ownerFetch";
 
 export type OcrResult = {
   ok: boolean;
@@ -40,19 +39,12 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
  * on phone photos vs sending raw bytes.
  */
 export async function ocrHandwriting(file: File): Promise<OcrResult> {
-  if (!OCR_URL || !SUPABASE_KEY) {
-    return { ok: false, text: "", has_text: false, error: "Supabase env not configured" };
-  }
   try {
     const enhanced = await enhanceImageForOCR(file);
     const { base64, mimeType } = await fileToBase64(enhanced);
-    const res = await fetch(OCR_URL, {
+    const res = await ownerFetch("/api/seed?view=ocr", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_base64: base64, mime_type: mimeType }),
     });
     const data = await res.json();

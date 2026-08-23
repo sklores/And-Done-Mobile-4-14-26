@@ -44,6 +44,24 @@ function formatHour(h: number): string {
   return `${hr12}${ampm}`;
 }
 
+function DayBarRow({ date, sales, peak, live, partial }: { date: string; sales: number; peak: number; live: boolean; partial: boolean }) {
+  const skin = useSkin();
+  const width = sales > 0 ? Math.max((sales / Math.max(peak, 1)) * 100, 4) : 0;
+  const d = new Date(date + "T12:00:00Z");
+  const label = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }) + " " + d.getUTCDate();
+  return (
+    <div style={{ display: "flex", alignItems: "center", padding: "8px 18px", gap: 10, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+      <div style={{ width: 44, fontFamily: skin.fonts.body, fontSize: 11, fontWeight: 700, color: "#8A9C9C", flexShrink: 0 }}>{label}</div>
+      <div style={{ flex: 1, height: 10, borderRadius: 5, background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+        <div style={{ width: `${width}%`, height: "100%", borderRadius: 5, background: live ? "#2F6B58" : partial ? "#C9A227" : "#4A7C6F", opacity: live ? 0.7 : 1 }} />
+      </div>
+      <div style={{ width: 64, textAlign: "right", fontFamily: skin.fonts.display, fontSize: 13, fontWeight: 700, color: "#2A3C48", flexShrink: 0 }}>
+        ${Math.round(sales).toLocaleString()}<span style={{ fontSize: 9, color: "#8A9C9C", marginLeft: 3 }}>{live ? "live" : partial ? "partial" : ""}</span>
+      </div>
+    </div>
+  );
+}
+
 function HourBarRow({
   entry,
   peakSales,
@@ -191,6 +209,9 @@ export function SalesDrillDown({ open, onClose }: Props) {
 
   const meta            = useKpiStore((s) => s.meta);
   const snapStatus      = useKpiStore((s) => s.status);
+  const period          = useKpiStore((s) => s.period);
+  const word            = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
+  const mixLabel        = detail?.pmixRange ? `${detail.pmixRange.days} closed day${detail.pmixRange.days === 1 ? "" : "s"}` : detail?.pmixDate ? `latest full day · ${detail.pmixDate.slice(5).replace("-", "/")}` : "";
   const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
 
   // Tracked items watchlist — read from org_settings.tracked_items_json
@@ -245,7 +266,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
       score={salesScore}
       label="Sales"
       value={salesDisplay}
-      status={detail ? `${detail.pmixTop.length + detail.pmixBottom.length} items sold today` : "Today"}
+      status={detail ? `${detail.pmixAll.length} items · ${mixLabel || word}` : word}
     >
       {/* ── Channel Breakdown ─────────────────────────── */}
       <SectionHeader title="Sales by Channel" />
@@ -278,8 +299,21 @@ export function SalesDrillDown({ open, onClose }: Props) {
         <DrillRow label="  · Other"     value={fmt$(ch.other3p)}  dimmed />
       )}
 
-      {/* ── Sales by Hour ─────────────────────────────── */}
-      {detail && detail.byHour && detail.byHour.length > 0 && (() => {
+      {/* ── Sales by Day (week / month) ───────────────── */}
+      {detail && period !== "day" && detail.byDay && detail.byDay.length > 0 && (() => {
+        const peak = Math.max(...detail.byDay.map((d) => d.sales));
+        return (
+          <>
+            <SectionHeader title={`Sales by Day · ${word}`} />
+            {detail.byDay.map((d) => (
+              <DayBarRow key={d.date} date={d.date} sales={d.sales} peak={peak} live={d.live} partial={!d.complete && !d.live} />
+            ))}
+          </>
+        );
+      })()}
+
+      {/* ── Sales by Hour (today) ─────────────────────── */}
+      {detail && period === "day" && detail.byHour && detail.byHour.length > 0 && (() => {
         const peakSales = Math.max(...detail.byHour.map((e) => e.sales));
         return (
           <>
@@ -327,7 +361,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
               userSelect: "none",
             }}
           >
-            <span>Tracked Items · {soldCount}/{tracked.length} sold today</span>
+            <span>Tracked Items · {soldCount}/{tracked.length} sold · {mixLabel || word}</span>
             <span
               aria-hidden
               style={{
@@ -345,7 +379,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
               key={name}
               label={name}
               value={match ? fmt$(match.revenue) : "—"}
-              sub={match ? `${match.qty} sold today` : "not sold today"}
+              sub={match ? `${match.qty} sold` : "not sold"}
               dimmed={!match}
             />
           ))}

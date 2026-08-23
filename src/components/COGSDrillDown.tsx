@@ -153,7 +153,7 @@ export function COGSDrillDown({ open, onClose }: Props) {
           sub={`18% of ${fmt$(detail.grubhubSales)}`} dimmed />
       )}
       {detail && detail.commissionBase === 0 && (
-        <DrillRow label="No 3rd party orders today" value="$0" dimmed />
+        <DrillRow label="No 3rd party orders" value="$0" dimmed />
       )}
 
       {/* ── Comps & Voids ─────────────────────────────────── */}

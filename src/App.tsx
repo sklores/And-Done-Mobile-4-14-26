@@ -201,15 +201,15 @@ export default function App() {
     return unsubscribe;
   }, [subscribeToSnapshots]);
 
-  // ── Activity log: load from Supabase + subscribe for realtime inserts ────
+  // ── Activity log (seed) ───────────────────────────────────────────────────
   useEffect(() => {
     hydrateLog();
   }, [hydrateLog]);
 
-  // ── Maintenance & Repair: hydrate from Supabase ──────────────────────────
+  // ── Maintenance & Repair (seed): the list follows the selected period ────
   useEffect(() => {
-    hydrateMaintenance();
-  }, [hydrateMaintenance]);
+    hydrateMaintenance(period);
+  }, [hydrateMaintenance, period]);
 
   // ── Fixed-cost line items: hydrate from org_settings.pro_forma_json ──────
   useEffect(() => {

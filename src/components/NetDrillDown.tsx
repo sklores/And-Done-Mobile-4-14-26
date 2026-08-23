@@ -68,6 +68,8 @@ export function NetDrillDown({ open, onClose }: Props) {
   const skin = useSkin();
   const net    = useKpiStore((s) => s.net);
   const detail = useKpiStore((s) => s.netDetail);
+  const period = useKpiStore((s) => s.period);
+  const word   = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
 
   const isLoss = (detail?.netDollars ?? 0) < 0;
 
@@ -81,8 +83,8 @@ export function NetDrillDown({ open, onClose }: Props) {
         ? `${detail.netPct.toFixed(1)}%`
         : net.value}
       status={detail
-        ? (isLoss ? "Net Loss" : `$${Math.round(detail.netDollars).toLocaleString()} today`)
-        : "Today"}
+        ? (isLoss ? "Net Loss" : `$${Math.round(detail.netDollars).toLocaleString()} ${word}`)
+        : word}
     >
       {/* ── Waterfall bar ─────────────────────────────── */}
       {detail && (
@@ -141,7 +143,7 @@ export function NetDrillDown({ open, onClose }: Props) {
         <DrillRow
           label="Maintenance & Repair"
           value={fmt$(detail.mrDollars)}
-          sub="logged today"
+          sub={`logged ${word}`}
           dimmed
         />
       )}

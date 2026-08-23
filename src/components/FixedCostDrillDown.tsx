@@ -1,16 +1,9 @@
 import { useState } from "react";
-import { useKpiStore } from "../stores/useKpiStore";
-import { useMaintenanceStore } from "../stores/useMaintenanceStore";
+import { useKpiStore, PERIOD_LABEL } from "../stores/useKpiStore";
 import { useFixedCostStore } from "../stores/useFixedCostStore";
+import { useMaintenanceStore } from "../stores/useMaintenanceStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
-import {
-  RENT_PCT,
-  dailyFixed,
-  dailyLineItem,
-  hourlyAmortized,
-  getAmortizationFactor,
-} from "../config/fixedCostConfig";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -118,164 +111,70 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
 
 export function FixedCostDrillDown({ open, onClose }: Props) {
   const skin = useSkin();
-  const fixedTile    = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
-  const salesVal     = useKpiStore((s) => s.sales.value);
-  const allEntries   = useMaintenanceStore((s) => s.entries);
-  const removeEntry  = useMaintenanceStore((s) => s.removeEntry);
-  const lineItems    = useFixedCostStore((s) => s.lineItems);
+  const fixedTile   = useKpiStore((s) => s.tiles.find((t) => t.key === "fixed"));
+  const detail      = useKpiStore((s) => s.netDetail);
+  const period      = useKpiStore((s) => s.period);
+  const meta        = useKpiStore((s) => s.meta);
+  const entries     = useMaintenanceStore((s) => s.entries);
+  const mrTotal     = useMaintenanceStore((s) => s.total);
+  const removeEntry = useMaintenanceStore((s) => s.removeEntry);
+  const lineItems   = useFixedCostStore((s) => s.lineItems);
   const monthlyTotal = useFixedCostStore((s) => s.monthlyTotal);
-
-  // Line items shown in the "Overhead — Hourly" section are the non-live ones.
-  // Rent / Labor / Payroll Tax / M&R have their own sections fed by live data.
-  const amortizedItems = lineItems.filter((i) => !i.liveComputed);
-
-  const todayStr    = new Date().toISOString().slice(0, 10);
-  const todayEntries = allEntries.filter((e) => e.date === todayStr);
-  const todayMR      = todayEntries.reduce((sum, e) => sum + e.amount, 0);
-
+  const rentKind    = useFixedCostStore((s) => s.rent);
   const [showForm, setShowForm] = useState(false);
 
   if (!fixedTile) return null;
-
-  const rentCost      = salesVal * RENT_PCT;
-  const amortized     = hourlyAmortized();
-  const dailyTotal    = dailyFixed();
-  const factor        = getAmortizationFactor();
-  const totalFixed    = rentCost + amortized + todayMR;
-  const fixedPct      = salesVal > 0 ? (totalFixed / salesVal) * 100 : null;
-
-  // Progress label for the amortization window
-  const progressLabel = factor >= 1
-    ? "100% — window closed (after 4 PM)"
-    : factor === 0
-    ? "0% — window opens at 10 AM"
-    : `${Math.round(factor * 100)}% of day earned (10 AM – 4 PM)`;
+  const word = PERIOD_LABEL[period].toLowerCase();
+  // Every dollar here is the seed's number for the selected period (the same
+  // row the tile is built from). Overhead is split across the monthly list
+  // in proportion -- the total is the seed's, the split is for reading.
+  const rent = detail?.rentDollars ?? 0, amortized = detail?.amortizedDollars ?? 0, total = detail?.fixedDollars ?? 0;
+  const salesVal = detail?.salesDollars ?? 0;
+  const fixedPct = salesVal > 0 ? (total / salesVal) * 100 : null;
+  const share = (monthly: number) => (monthlyTotal > 0 ? amortized * (monthly / monthlyTotal) : 0);
+  const rentLabel = rentKind?.kind === "pct_of_sales" ? `Rent (${rentKind.pct}% of sales)` : "Rent";
 
   return (
-    <DrillDownModal
-      open={open}
-      onClose={onClose}
-      score={fixedTile.score}
-      label="Fixed Cost"
-      value={fixedTile.value}
-      status={fixedTile.status}
-    >
-      {/* ── Summary row ───────────────────────────────── */}
+    <DrillDownModal open={open} onClose={onClose} score={fixedTile.score} label="Fixed Cost" value={fixedTile.value} status={fixedTile.status}>
       <DrillRow
-        label="Total Fixed Today"
-        value={fmt$(totalFixed)}
-        sub={fixedPct != null ? `${fixedPct.toFixed(1)}% of net sales` : "no sales yet"}
+        label={`Total fixed · ${word}`}
+        value={fmt$(total)}
+        sub={fixedPct != null ? `${fixedPct.toFixed(1)}% of net sales${meta && meta.daysMissing > 0 ? ` · ${meta.daysMissing} day${meta.daysMissing === 1 ? "" : "s"} missing` : ""}` : detail ? "no sales yet" : "—"}
       />
 
-      {/* ── Rent (variable) ───────────────────────────── */}
-      <SectionHeader title="Rent" right="% of sales" />
-      <DrillRow
-        label="Rent (10% of sales)"
-        value={fmtDec$(rentCost)}
-        sub={salesVal > 0 ? `based on ${fmt$(salesVal)} net sales` : "—"}
-      />
+      <SectionHeader title="Rent" right={rentKind?.kind === "pct_of_sales" ? "% of sales" : "flat, prorated"} />
+      <DrillRow label={rentLabel} value={fmtDec$(rent)} sub={salesVal > 0 ? `on ${fmt$(salesVal)} net sales ${word}` : "—"} />
 
-      {/* ── Monthly fixed amortized ────────────────────── */}
-      <SectionHeader
-        title="Overhead — Hourly (10 AM – 4 PM)"
-        right={`${fmt$(monthlyTotal)}/mo`}
-      />
-      {amortizedItems.map((item) => {
-        const daily  = dailyLineItem(item);
-        const earned = daily * factor;
-        return (
-          <DrillRow
-            key={item.label}
-            label={item.label}
-            value={fmtDec$(earned)}
-            sub={`daily target: ${fmtDec$(daily)} · ${fmt$(item.monthlyAmount)}/mo`}
-          />
-        );
-      })}
-      <DrillRow
-        label="Overhead Earned So Far"
-        value={fmtDec$(amortized)}
-        sub={`${progressLabel} · daily full: ${fmtDec$(dailyTotal)}`}
-        dimmed
-      />
+      <SectionHeader title={`Overhead · ${word}`} right={monthlyTotal > 0 ? `${fmt$(monthlyTotal)}/mo` : undefined} />
+      {lineItems.length === 0 ? (
+        <div style={{ padding: "10px 18px", fontSize: 12, color: "#8A9C9C", fontFamily: skin.fonts.body }}>No fixed-cost list yet — set it up in the Pro Forma room.</div>
+      ) : lineItems.map((item) => (
+        <DrillRow key={item.label} label={item.label} value={fmtDec$(share(item.monthlyAmount))} sub={`${fmt$(item.monthlyAmount)}/mo`} />
+      ))}
+      <DrillRow label={`Overhead ${word}`} value={fmtDec$(amortized)} sub={period === "day" ? "accrues through the day" : `${meta?.daysClosed ?? 0} closed day${meta?.daysClosed === 1 ? "" : "s"} + today`} dimmed />
 
-      {/* ── Maintenance & Repair ──────────────────────── */}
-      <SectionHeader
-        title="Maintenance & Repair"
-        right={todayMR > 0 ? fmt$(todayMR) + " today" : "none today"}
-      />
-
-      {todayEntries.length === 0 && !showForm && (
-        <div style={{
-          padding: "10px 18px",
-          fontSize: 12,
-          color: "#8A9C9C",
-          fontFamily: skin.fonts.body,
-        }}>
-          No M&R logged today.
-        </div>
+      <SectionHeader title="Maintenance & Repair" right={mrTotal > 0 ? `${fmt$(mrTotal)} ${word}` : `none ${word}`} />
+      {entries.length === 0 && !showForm && (
+        <div style={{ padding: "10px 18px", fontSize: 12, color: "#8A9C9C", fontFamily: skin.fonts.body }}>No M&R logged {word}.</div>
       )}
-
-      {todayEntries.map((entry) => (
-        <div
-          key={entry.id}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "11px 18px",
-            borderBottom: "1px solid rgba(0,0,0,0.06)",
-          }}
-        >
+      {entries.map((entry) => (
+        <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 18px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>
-              {entry.description}
-            </div>
-            <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>
-              {entry.flagged ? "🏦 flagged" : "tap × to remove"}
-            </div>
+            <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 600, color: "#4A5A54" }}>{entry.description || "M&R"}</div>
+            <div style={{ fontSize: 10, color: "#8A9C9C", marginTop: 1 }}>{period === "day" ? "tap × to remove" : `${entry.date.slice(5).replace("-", "/")} · tap × to remove`}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#B94A4A" }}>
-              {fmt$(entry.amount)}
-            </div>
-            <div
-              onClick={() => removeEntry(entry.id)}
-              style={{
-                width: 22, height: 22,
-                borderRadius: "50%",
-                background: "rgba(0,0,0,0.08)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer",
-                fontSize: 12, color: "#4A5A54", fontWeight: 700,
-              }}
-            >
-              ×
-            </div>
+            <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#B94A4A" }}>{fmt$(entry.amount)}</div>
+            <button type="button" aria-label="Remove" onClick={() => removeEntry(entry.id)} style={{ width: 36, height: 36, borderRadius: "50%", border: "none", padding: 0, background: "rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: "#4A5A54", fontWeight: 700 }}>×</button>
           </div>
         </div>
       ))}
 
       {showForm && <AddMRForm onAdd={() => setShowForm(false)} />}
-
       {!showForm && (
-        <div
-          onClick={() => setShowForm(true)}
-          style={{
-            margin: "10px 18px",
-            padding: "9px 0",
-            borderRadius: 8,
-            border: "1.5px dashed #C8D8D4",
-            textAlign: "center",
-            fontFamily: skin.fonts.body,
-            fontSize: 12,
-            fontWeight: 700,
-            color: "#4A7C6F",
-            cursor: "pointer",
-          }}
-        >
+        <button type="button" onClick={() => setShowForm(true)} style={{ display: "block", width: "calc(100% - 36px)", margin: "10px 18px", padding: "11px 0", borderRadius: 8, border: "1.5px dashed #C8D8D4", background: "transparent", textAlign: "center", fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 700, color: "#4A7C6F", cursor: "pointer" }}>
           + Log M&R Expense
-        </div>
+        </button>
       )}
     </DrillDownModal>
   );

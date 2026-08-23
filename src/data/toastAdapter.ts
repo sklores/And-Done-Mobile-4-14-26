@@ -1,4 +1,5 @@
 import { ownerFetch } from "./ownerFetch";
+import type { Period } from "../stores/useKpiStore";
 // Client-side adapter: calls our own /api/toast-* endpoints.
 // All Toast auth + secrets live server-side (api/_toast.mjs).
 
@@ -23,7 +24,16 @@ export type LaborResult = {
   fetchedAt: string;
 };
 
-export type LaborDetailResult = {
+export type PeriodMetaFields = { period?: Period; period_start?: string; period_end?: string; has_data?: boolean; days_closed?: number; days_missing?: number };
+
+export type LaborDetailResult = PeriodMetaFields & {
+  payrollTax?: number;
+  laborCost?: number;
+  totalSales?: number;
+  totalTips?: number;
+  laborEstimated?: boolean;
+  openShifts?: number;
+  byDay?: { date: string; labor: number; sales: number; complete: boolean; live: boolean }[];
   hourlyCost: number;
   hourlyHours: number;
   salaryCost: number;
@@ -59,7 +69,11 @@ export type HourlySales = {
   orderCount: number;  // distinct orders opened that hour
 };
 
-export type SalesDetailResult = {
+export type SalesDetailResult = PeriodMetaFields & {
+  pmixDate?: string | null;
+  pmixRange?: { from: string; to: string; days: number } | null;
+  byDay?: { date: string; sales: number; complete: boolean; live: boolean }[];
+  totals?: { sales: number; tips: number; covers: number };
   pmixAll: PmixItem[];      // every item sold today, sorted by revenue desc
   pmixTop: PmixItem[];      // first 5 of pmixAll (legacy convenience)
   pmixBottom: PmixItem[];   // last 3 of pmixAll, reversed (legacy convenience)
@@ -88,9 +102,9 @@ export async function fetchTodayLabor(): Promise<LaborResult | null> {
   }
 }
 
-export async function fetchLaborDetail(): Promise<LaborDetailResult | null> {
+export async function fetchLaborDetail(period: Period = "day"): Promise<LaborDetailResult | null> {
   try {
-    const res = await ownerFetch("/api/toast-labor-detail", { cache: "no-store" });
+    const res = await ownerFetch(`/api/toast-labor-detail?period=${period}`, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as LaborDetailResult;
   } catch {
@@ -106,7 +120,7 @@ export type CategorySale = {
   cogsDollars: number;
 };
 
-export type COGSDetailResult = {
+export type COGSDetailResult = PeriodMetaFields & {
   categorySales: CategorySale[];
   totalRevenue: number;
   categoryCOGS: number;
@@ -131,9 +145,9 @@ export type COGSDetailResult = {
   fetchedAt: string;
 };
 
-export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
+export async function fetchCOGSDetail(period: Period = "day"): Promise<COGSDetailResult | null> {
   try {
-    const res = await ownerFetch("/api/toast-cogs-detail", { cache: "no-store" });
+    const res = await ownerFetch(`/api/toast-cogs-detail?period=${period}`, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as COGSDetailResult;
   } catch {
@@ -141,9 +155,9 @@ export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
   }
 }
 
-export async function fetchSalesDetail(): Promise<SalesDetailResult | null> {
+export async function fetchSalesDetail(period: Period = "day"): Promise<SalesDetailResult | null> {
   try {
-    const res = await ownerFetch("/api/toast-sales-detail", { cache: "no-store" });
+    const res = await ownerFetch(`/api/toast-sales-detail?period=${period}`, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as SalesDetailResult;
   } catch {

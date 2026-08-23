@@ -1,9 +1,6 @@
 import { ownerFetch } from "./ownerFetch";
-// Reads scheduled-labor data from the shift scheduling tables
-// (shift_shifts + shift_employees + shift_settings). Those tables moved to
-// the DashVue core on 2026-08-13 — reads go through supabaseShift (a
-// read-only client for that project, falling back to the main client when
-// unconfigured). Read-only — never writes back.
+// Reads the week's scheduled labor from the seed (shift_shifts + shift_employees
+// + shift_settings via /api/seed?view=schedule). Read-only; Day only.
 
 
 export type ScheduledLaborResult = {

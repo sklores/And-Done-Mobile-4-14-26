@@ -36,6 +36,8 @@ export function LaborDrillDown({ open, onClose }: Props) {
   const laborTile = useKpiStore((s) => s.tiles.find((t) => t.key === "labor"));
   const detail    = useKpiStore((s) => s.laborDetail);
   const schedule  = useKpiStore((s) => s.scheduleDetail);
+  const period    = useKpiStore((s) => s.period);
+  const word      = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
 
   if (!laborTile) return null;
 
@@ -58,7 +60,7 @@ export function LaborDrillDown({ open, onClose }: Props) {
       <DrillRow
         label="Hours Worked"
         value={detail ? `${detail.hoursWorked.toFixed(1)} hrs` : "--"}
-        sub={detail ? `${detail.openCount} active · ${detail.employeeCount} clocked in` : undefined}
+        sub={detail ? (period === "day" ? `${detail.openCount} on the clock now` : `${word} · ${detail.openCount} open shift${detail.openCount === 1 ? "" : "s"} estimated`) : undefined}
       />
       <DrillRow
         label="Tips"
@@ -88,7 +90,14 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub="employer FICA + FUTA + DC SUTA · ~11%"
       />
 
-      {/* ── Scheduled (from shift scheduling app) ──── */}
+      {/* ── Scheduled (from the Shift app) -- Day only ── */}
+      {period !== "day" && (
+        <>
+          <SectionHeader title="Scheduled" />
+          <DrillRow label="Scheduled vs worked" value="Day only" sub={`switch to Day to compare ${word === "today" ? "" : "a day's "}schedule against the clock`} dimmed />
+        </>
+      )}
+      {period === "day" && <>
       <SectionHeader title="Scheduled (Today)" />
       <DrillRow
         label="Scheduled Hours"
@@ -152,6 +161,7 @@ export function LaborDrillDown({ open, onClose }: Props) {
         sub="pre-tax, pre-tip"
         dimmed
       />
+      </>}
     </DrillDownModal>
   );
 }
