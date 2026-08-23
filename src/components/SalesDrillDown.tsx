@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useKpiStore } from "../stores/useKpiStore";
 import { DrillDownModal, DrillRow } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
-import { computeSalesState, getDailyTarget } from "../config/salesTargetConfig";
+import { scoreAgainstExpected } from "../config/salesTargetConfig";
 import { fetchTrackedItems } from "../data/trackedItemsAdapter";
 import type { PmixItem, HourlySales } from "../data/toastAdapter";
 
@@ -189,8 +189,9 @@ export function SalesDrillDown({ open, onClose }: Props) {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // Sales score: projection-based, anchored to BUSINESS_HOURS (not shifts).
-  const salesScore = computeSalesState(sales.value, getDailyTarget()).score;
+  const meta            = useKpiStore((s) => s.meta);
+  const snapStatus      = useKpiStore((s) => s.status);
+  const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
 
   // Tracked items watchlist — read from org_settings.tracked_items_json
   // (the same column desktop reads/writes from). v1 shows today's qty/rev

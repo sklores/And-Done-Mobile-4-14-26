@@ -1,257 +1,29 @@
-// Sales scoring config — projection-based.
+// Sales scoring.
 //
-// Approach: anchor scoring to "% of today's operating window elapsed" (not
-// wall-clock), project end-of-day total from running sales, score the
-// projection against a per-day-of-week target.
-//
-// Why projection beats raw pace:
-//   pace      = actual_now / expected_now           ← whiplashes (one big
-//                                                      check looks great,
-//                                                      one slow hour looks
-//                                                      terrible)
-//   projection = actual_now / shape_curve(elapsed)   ← stable (same data
-//                                                      reframed as "where
-//                                                      will we land?")
-//
-// Targets sourced from the last 28 days of kpi_snapshots (averages,
-// rounded to clean numbers, lightly tuned upward).
+// V1 kept per-day-of-week dollar targets and 10am-4pm business hours in this
+// file -- hard-coded for one restaurant. The seed now sends, with every
+// snapshot, `expected_to_date`: the same-weekday average of the last four
+// weeks for every day in the selected period, today's share prorated by how
+// far through the org's OWN open hours we are. The score is actual / that.
+// No targets in the app; no hours in the app.
 
-// ── Per-day targets (Sunday=0 ... Saturday=6) ───────────────────────────────
-// Set to 0 for closed days — tile renders as "Closed", no scoring.
-export const DAILY_TARGETS: Record<number, number> = {
-  0: 1200,   // Sunday
-  1: 1400,   // Monday
-  2: 1400,   // Tuesday
-  3: 1300,   // Wednesday
-  4: 1500,   // Thursday
-  5: 1800,   // Friday
-  6: 2300,   // Saturday
-};
+import type { SnapshotStatus } from "../stores/useKpiStore";
 
-// ── Business hours per day-of-week (HH:MM:SS) ───────────────────────────────
-// Sales scoring is anchored to *business hours*, not shift schedules. The two
-// are independent — shifts are a labor concern, hours are when the restaurant
-// is open for customers. Currently 10am-4pm all 7 days.
-type BusinessHours = { open: string; close: string };
-export const BUSINESS_HOURS: Record<number, BusinessHours | null> = {
-  0: { open: "10:00:00", close: "16:00:00" }, // Sun
-  1: { open: "10:00:00", close: "16:00:00" }, // Mon
-  2: { open: "10:00:00", close: "16:00:00" }, // Tue
-  3: { open: "10:00:00", close: "16:00:00" }, // Wed
-  4: { open: "10:00:00", close: "16:00:00" }, // Thu
-  5: { open: "10:00:00", close: "16:00:00" }, // Fri
-  6: { open: "10:00:00", close: "16:00:00" }, // Sat
-};
-
-/** Today's open/close (in ET). Returns null on closed days. */
-export function getTodayBusinessHours(d = new Date()): BusinessHours | null {
-  return BUSINESS_HOURS[dowET(d)] ?? null;
-}
-
-// ── Shape curve: window-elapsed-% → expected-done-% ─────────────────────────
-// 10am-4pm window with 70% of sales between 11am and 1pm.
-//   10am (0%)   → 0%
-//   11am (17%)  → 5%   (pre-lunch trickle)
-//   12pm (33%)  → 40%  (mid-lunch surge)
-//   1pm  (50%)  → 75%  (lunch done; 5% + 70% = 75%)
-//   2pm  (67%)  → 85%
-//   3pm  (83%)  → 92%
-//   4pm (100%)  → 100% (close)
-const SHAPE_CURVE: Array<[number, number]> = [
-  [0.00, 0.00],
-  [0.17, 0.05],
-  [0.33, 0.40],
-  [0.50, 0.75],
-  [0.67, 0.85],
-  [0.83, 0.92],
-  [1.00, 1.00],
-];
-
-// Below this elapsed-pct, projection becomes too noisy (small denominator).
-// Show a "Just opened" state instead of a flickering score.
-const MIN_ELAPSED_FOR_SCORING = 0.10;
-
-// Score thresholds — projection / target → 1..8
+// projection / expected -> 1..8
 const SCORE_BUCKETS: Array<[number, number]> = [
-  [1.20, 8], // Excellent  — >= 120% of target
+  [1.20, 8], // Excellent  -- >= 120% of expected
   [1.10, 7], // Good
   [1.00, 6], // Watch
   [0.90, 5], // Caution
   [0.80, 4], // Alert
   [0.65, 3], // Bad
-  [0.50, 2], // Critical
+  [0.00, 2], // Critical
 ];
 
-// ── Time helpers (Eastern Time, DST-aware) ──────────────────────────────────
-
-/** Today's day-of-week in ET. 0 = Sunday, 6 = Saturday. */
-export function dowET(d = new Date()): number {
-  const isoET = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const [y, m, day] = isoET.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, day)).getUTCDay();
-}
-
-/** Current ET wall-clock hour as decimal (e.g. 14.5 = 2:30pm ET). */
-export function nowETHours(d = new Date()): number {
-  const s = d.toLocaleString("sv-SE", { timeZone: "America/New_York" });
-  const time = s.split(" ")[1] ?? "00:00:00";
-  const [h, m = "0", sec = "0"] = time.split(":");
-  return Number(h) + Number(m) / 60 + Number(sec) / 3600;
-}
-
-/** "14:30:00" or "14:30" → 14.5 */
-function timeStrToHours(t: string): number {
-  const [h, m = "0", s = "0"] = t.split(":");
-  return Number(h) + Number(m) / 60 + Number(s) / 3600;
-}
-
-// ── Public API ──────────────────────────────────────────────────────────────
-
-/** Today's daily target $. Returns 0 if closed. */
-export function getDailyTarget(d = new Date()): number {
-  return DAILY_TARGETS[dowET(d)] ?? 1400;
-}
-
-/** Linear-interpolate the shape curve. Returns expected % done given elapsed %. */
-export function expectedDonePct(elapsedPct: number): number {
-  if (elapsedPct <= 0) return 0;
-  if (elapsedPct >= 1) return 1;
-  for (let i = 1; i < SHAPE_CURVE.length; i++) {
-    const [x0, y0] = SHAPE_CURVE[i - 1];
-    const [x1, y1] = SHAPE_CURVE[i];
-    if (elapsedPct <= x1) {
-      const t = (elapsedPct - x0) / (x1 - x0);
-      return y0 + t * (y1 - y0);
-    }
-  }
-  return 1;
-}
-
-/** Elapsed % of today's operating window. Returns 0 pre-open, 1 post-close. */
-export function elapsedWindowPct(
-  todayWindowStart: string | null,
-  todayWindowEnd: string | null,
-  d = new Date(),
-): number | null {
-  if (!todayWindowStart || !todayWindowEnd) return null;
-  const open  = timeStrToHours(todayWindowStart);
-  const close = timeStrToHours(todayWindowEnd);
-  if (close <= open) return null;
-  const now = nowETHours(d);
-  if (now <= open)  return 0;
-  if (now >= close) return 1;
-  return (now - open) / (close - open);
-}
-
-export type SalesScoreState =
-  | { state: "closed";       score: 5; projected: null; pace: null;   message: string }
-  | { state: "pre-open";     score: 5; projected: null; pace: null;   message: string }
-  | { state: "just-opened";  score: 5; projected: null; pace: number; message: string }
-  | { state: "in-progress";  score: number; projected: number; pace: number; message: string }
-  | { state: "post-close";   score: number; projected: number; pace: 1;     message: string };
-
-/** Map a projection/target ratio to a 1..8 score. */
-function bucketRatio(ratio: number): number {
-  for (const [threshold, score] of SCORE_BUCKETS) {
-    if (ratio >= threshold) return score;
-  }
-  return 1;
-}
-
-/**
- * Compute the projection-based sales score + supporting display data.
- *
- * Self-contained — uses BUSINESS_HOURS for today's open/close window, NOT
- * shift schedule data. Sales scoring is independent of labor.
- *
- * @param actualSales running sales total today
- * @param target      today's daily $ target (0 = closed)
- * @param now         override for testing
- */
-export function computeSalesState(
-  actualSales: number,
-  target: number,
-  now = new Date(),
-): SalesScoreState {
-  if (target <= 0) {
-    return {
-      state: "closed",
-      score: 5,
-      projected: null,
-      pace: null,
-      message: "Closed today",
-    };
-  }
-
-  const hours = getTodayBusinessHours(now);
-  if (!hours) {
-    // No business hours configured for this day-of-week → treat as closed.
-    return {
-      state: "closed",
-      score: 5,
-      projected: null,
-      pace: null,
-      message: "Closed today",
-    };
-  }
-
-  const elapsed = elapsedWindowPct(hours.open, hours.close, now);
-  if (elapsed === null || elapsed === 0) {
-    return {
-      state: "pre-open",
-      score: 5,
-      projected: null,
-      pace: null,
-      message: `Opens at ${formatTime(hours.open)}`,
-    };
-  }
-
-  const donePct = expectedDonePct(elapsed);
-
-  // Post-close: projection = actual exactly. Score on actual / target.
-  if (elapsed >= 1) {
-    const ratio = actualSales / target;
-    return {
-      state: "post-close",
-      score: bucketRatio(ratio),
-      projected: actualSales,
-      pace: 1,
-      message: `Final $${Math.round(actualSales)} · ${Math.round(ratio * 100)}% of target`,
-    };
-  }
-
-  // Just-opened: too early to project — show pace only, neutral score.
-  if (elapsed < MIN_ELAPSED_FOR_SCORING) {
-    const expectedNow = target * donePct;
-    const pace = expectedNow > 0 ? actualSales / expectedNow : 1;
-    return {
-      state: "just-opened",
-      score: 5,
-      projected: null,
-      pace,
-      message: "Just opened — too early to project",
-    };
-  }
-
-  // In-progress: project EOD, score the projection.
-  const projected = actualSales / donePct;
-  const ratio     = projected / target;
-  const expectedNow = target * donePct;
-  const pace      = expectedNow > 0 ? actualSales / expectedNow : 1;
-  return {
-    state: "in-progress",
-    score: bucketRatio(ratio),
-    projected,
-    pace,
-    message: `Proj $${Math.round(projected).toLocaleString()} · ${Math.round(ratio * 100)}% of target`,
-  };
-}
-
-/** "11:00:00" → "11:00am" */
-function formatTime(hms: string): string {
-  const h = parseInt(hms.split(":")[0], 10);
-  const m = parseInt(hms.split(":")[1] ?? "0", 10);
-  const period = h >= 12 ? "pm" : "am";
-  const h12 = ((h + 11) % 12) + 1;
-  return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2, "0")}${period}`;
+/** null = nothing to score (no data, no baseline, or the day hasn't started). */
+export function scoreAgainstExpected(actual: number, expected: number | null, status: SnapshotStatus): number | null {
+  if (status !== "ready" || expected == null || expected <= 0 || actual <= 0) return null;
+  const ratio = actual / expected;
+  for (const [min, score] of SCORE_BUCKETS) if (ratio >= min) return score;
+  return 2;
 }

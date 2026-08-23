@@ -1,3 +1,4 @@
+import { ownerFetch } from "./ownerFetch";
 // Reads review rows from the `reviews` Supabase table populated by the
 // daily sync-reviews Edge Function (Yelp, TripAdvisor, UberEats via Apify).
 // Read-only — never writes back. Tenant-scoped to GCDC.
@@ -65,9 +66,8 @@ const RECENT_LIMIT = 5;
 
 /** Fetches all reviews for GCDC and rolls them into the shape the UI needs. */
 export async function fetchReviewsBundle(): Promise<ReviewsBundle | null> {
-  if (false) return null;
   try {
-    const r = await fetch("/api/seed?view=reviews", { cache: "no-store" });
+    const r = await ownerFetch("/api/seed?view=reviews", { cache: "no-store" });
     const { data, error } = r.ok ? { data: (await r.json()) as unknown[], error: null } : { data: null, error: new Error(`reviews ${r.status}`) };
     if (error || !data) return null;
     return rollUp(data as ReviewRow[]);

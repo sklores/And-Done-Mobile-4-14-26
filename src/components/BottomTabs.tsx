@@ -41,7 +41,7 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
         <div
           role="tablist"
           aria-label="Period"
-          style={{ display: "flex", flex: 1, padding: 3, borderRadius: 999, background: "rgba(0,0,0,.10)" }}
+          style={{ display: "flex", flex: 1, padding: 3, borderRadius: 999, background: "rgba(0,0,0,.10)", minHeight: 46 }}
         >
           {PERIODS.map((p) => {
             const on = p.key === period;
@@ -55,7 +55,8 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
                   flex: 1,
                   border: "none",
                   borderRadius: 999,
-                  padding: "8px 0",
+                  padding: "0",
+                  minHeight: 40,
                   background: on ? ink : "transparent",
                   color: on ? (bg ?? skin.tabs.bg) : ink,
                   fontSize: 11,
@@ -80,7 +81,8 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
             gap: 6,
             border: `1.5px solid ${ink}`,
             borderRadius: 999,
-            padding: "8px 16px",
+            padding: "0 16px",
+            minHeight: 46,
             background: "transparent",
             color: ink,
             fontSize: 11,

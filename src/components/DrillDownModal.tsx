@@ -4,7 +4,7 @@ import { useSkin, tileForScore } from "../theme/skins";
 type Props = {
   open: boolean;
   onClose: () => void;
-  score: number;
+  score: number | null;
   label: string;
   value: string;
   status: string;
@@ -62,20 +62,20 @@ export function DrillDownModal({ open, onClose, score, label, value, status, chi
           }}
         >
           {/* Close pill */}
-          <div
+          <button type="button" aria-label="Close"
             onClick={onClose}
             style={{
               position: "absolute", top: 10, right: 14,
-              width: 28, height: 28,
+              width: 44, height: 44, border: "none", padding: 0, lineHeight: 1,
               background: "rgba(0,0,0,0.12)",
               borderRadius: "50%",
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer",
-              fontSize: 14, color: palette.label, fontWeight: 700,
+              fontSize: 18, color: palette.label, fontWeight: 700,
             }}
           >
             ×
-          </div>
+          </button>
 
           {/* Drag handle */}
           <div style={{ width: 36, height: 4, background: "rgba(0,0,0,0.15)", borderRadius: 2, margin: "0 auto 14px" }} />

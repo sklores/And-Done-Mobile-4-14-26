@@ -9,7 +9,7 @@ type BoxProps = {
   label: string;
   value: string;
   sub?: string;
-  score: number;
+  score: number | null;
   stars?: number | null;   // 0–5; renders the star strip instead of `sub`
   loading?: boolean;
   onClick?: () => void;
@@ -92,10 +92,10 @@ function StatBox({ label, value, sub, score, stars, loading, onClick }: BoxProps
 type Props = {
   reviewsRating: number | null;
   reviewsCount: number;
-  reviewsScore: number;
+  reviewsScore: number | null;
   debtTotal: number | null;
   debtOver90: number;
-  debtScore: number;
+  debtScore: number | null;
   loading?: boolean;
   onOpenReviews: () => void;
   onOpenDebt: () => void;

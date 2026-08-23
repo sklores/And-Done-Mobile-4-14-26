@@ -1,3 +1,4 @@
+import { requireSession } from "./_auth.mjs";
 // The owner app reads from the And Done seed (D15) -- one heartbeat, one
 // truth. These server functions hold the API key; the browser never sees it.
 // The app's own Toast client (_toast.mjs) is no longer used for the tiles.
@@ -14,12 +15,13 @@ export async function fromSeed(view, env = process.env, extra = {}) {
 }
 
 export function proxy(view) {
-  return async function handler(req, res) {
+  return async function handler(req, res, env = process.env) {
+    if (!requireSession(req, res, env)) return;
     res.setHeader("content-type", "application/json");
     res.setHeader("cache-control", "no-store");
     try {
       res.statusCode = 200;
-      res.end(JSON.stringify(await fromSeed(view, process.env, passThrough(req))));
+      res.end(JSON.stringify(await fromSeed(view, env, passThrough(req))));
     } catch (e) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));

@@ -555,9 +555,23 @@ export function getActiveSkin(): Skin {
 /** Tile color for a 1–8 KPI score, from the ACTIVE skin's ramp. Existing
  *  call sites keep their bare tileForScore(score) signature — callers are
  *  components that also read useSkin(), so they re-render on skin change. */
-export function tileForScore(score: number): TileStop {
+export function tileForScore(score: number | null | undefined): TileStop {
+  if (score == null) return neutralTile();
   const idx = Math.min(8, Math.max(1, Math.round(score))) - 1;
   return getActiveSkin().spectrum[idx];
+}
+
+/** A tile with nothing to score: the skin's "Caution" stop, desaturated to
+ *  grey. Never a fake green. */
+export function neutralTile(): TileStop {
+  const base = getActiveSkin().spectrum[4];
+  const grey = (hex: string, mix = 0.55) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return hex;
+    const v = parseInt(m[1], 16), r = v >> 16, g = (v >> 8) & 255, b = v & 255, l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    const c = (x: number) => Math.round(x + (l - x) * mix).toString(16).padStart(2, "0");
+    return `#${c(r)}${c(g)}${c(b)}`;
+  };
+  return { ...base, bg: grey(base.bg, 0.7), label: grey(base.label), value: grey(base.value), status: grey(base.status), statusText: grey(base.statusText), border: base.border ? grey(base.border) : undefined };
 }
 
 /** Legacy export — Coastal's ramp (kept for compatibility). */

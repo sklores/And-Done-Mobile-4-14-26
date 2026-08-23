@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import react from "@vitejs/plugin-react";
 import type { ServerResponse } from "node:http";
 
@@ -19,40 +21,19 @@ export default defineConfig(({ mode }) => {
       {
         name: "toast-api-dev",
         configureServer(server) {
-          // The tiles are served by the And Done seed (D15). In dev, proxy the same
-          // way production does -- api/_seed.mjs -- so local == prod.
-          const VIEWS: Record<string, string> = { "toast-sales": "sales", "toast-labor": "labor", "toast-labor-detail": "labor-detail", "toast-sales-detail": "sales-detail", "toast-cogs-detail": "cogs-detail", "snapshot": "snapshot" };
-          for (const [path, view] of Object.entries(VIEWS)) {
-            server.middlewares.use(`/api/${path}`, async (req, res) => {
+          // Dev runs the SAME handler modules Vercel runs (api/*.mjs), with the
+          // .env.local values passed in -- so local == prod, auth included.
+          const HANDLERS = ["snapshot", "seed", "toast-sales", "toast-labor", "toast-labor-detail", "toast-sales-detail", "toast-cogs-detail", "weather", "login", "session", "logout"];
+          for (const name of HANDLERS) {
+            server.middlewares.use(`/api/${name}`, async (req, res) => {
               try {
-                const { fromSeed, passThrough } = await import("./api/_seed.mjs");
-                respond(res, 200, await fromSeed(view, env, passThrough(req)));
+                const { default: handler } = await import(pathToFileURL(path.resolve(process.cwd(), "api", `${name}.mjs`)).href);
+                await handler(req, res, { ...process.env, ...env });
               } catch (e) {
                 respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
               }
             });
           }
-          server.middlewares.use("/api/seed", async (req, res) => {
-            try {
-              const url = new URL(req.url ?? "", "http://x");
-              const base = env.SEED_API_BASE, key = env.SEED_API_KEY, org = env.SEED_ORG_SLUG ?? "gcdc";
-              const qs = new URLSearchParams({ org, view: url.searchParams.get("view") ?? "" });
-              for (const k of ["from", "to"]) { const v = url.searchParams.get(k); if (v) qs.set(k, v); }
-              const r = await fetch(`${base}/api/owner?${qs}`, { headers: { Authorization: `Bearer ${key}` } });
-              respond(res, r.status, await r.json());
-            } catch (e) {
-              respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
-            }
-          });
-
-          server.middlewares.use("/api/weather", async (_req, res) => {
-            try {
-              const { default: handler } = await import("./api/weather.mjs" as string);
-              await handler(_req, res);
-            } catch (e) {
-              respond(res, 200, { condition: "clear", error: e instanceof Error ? e.message : String(e) });
-            }
-          });
         },
       },
     ],

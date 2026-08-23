@@ -1,3 +1,4 @@
+import { ownerFetch } from "./ownerFetch";
 // A/P aging — reads the latest snapshot of what the business OWES.
 //
 // Source: the And Done seed's `ap_aging_snapshots` (the QuickBooks A/P Aging
@@ -35,7 +36,7 @@ const num = (v: unknown): number => {
 
 export async function fetchAging(): Promise<AgingSnapshot | null> {
   try {
-    const r = await fetch("/api/seed?view=aging", { cache: "no-store" });
+    const r = await ownerFetch("/api/seed?view=aging", { cache: "no-store" });
     if (!r.ok) return null;
     const data = (await r.json()) as Record<string, unknown> | null;
     if (!data) return null;

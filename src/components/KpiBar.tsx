@@ -8,7 +8,7 @@ type Props = {
   /** Net bar only: shows dollar amount alongside the % */
   valueSub?: string;
   /** 1–8 benchmark score — when provided, bar uses the shared tile gradient */
-  score?: number;
+  score?: number | null;
   alerting?: boolean;
   loading?: boolean;
   onClick?: () => void;

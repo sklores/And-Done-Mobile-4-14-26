@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSkin } from "./theme/skins";
 import { money } from "./lib/money";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
-import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
+import { scoreAgainstExpected } from "./config/salesTargetConfig";
 import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
 import { fetchAging, agingToDebtScore, type AgingSnapshot } from "./data/agingAdapter";
 import { useAppStore } from "./stores/useAppStore";
@@ -59,8 +59,10 @@ export default function App() {
   const period                = useKpiStore((s) => s.period);
   const periodWord            = period === "day" ? "today" : period === "wtd" ? "week to date" : "month to date";
   const tiles                 = useKpiStore((s) => s.tiles);
-  const lastRefresh           = useKpiStore((s) => s.lastRefresh);
-  const lastSnapshotAt        = useKpiStore((s) => s.lastSnapshotAt);
+  const snapStatus            = useKpiStore((s) => s.status);
+  const asOf                  = useKpiStore((s) => s.asOf);
+  const meta                  = useKpiStore((s) => s.meta);
+  const pullSnapshot          = useKpiStore((s) => s.pullSnapshot);
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
@@ -226,7 +228,7 @@ export default function App() {
       if (b && b.overallRating != null) {
         setReviewsScore(ratingToReviewScore(b.overallRating));
         setReviewsRating(b.overallRating);
-        setReviewsCount(b.totalRatedReviews);
+        setReviewsCount(b.totalReviews);
       }
     });
     return () => { cancelled = true; };
@@ -301,8 +303,9 @@ export default function App() {
       setPullY(0);
       setBeamPulseKey((k) => k + 1);
       await Promise.all([
-        refresh(),
-        fetchWeather().then(setWeatherData),
+        pullSnapshot(),                       // the tiles
+        refresh().catch(() => undefined),     // the drill-downs; a failure there must not strand the gesture
+        fetchWeather().then(setWeatherData).catch(() => undefined),
         new Promise((r) => setTimeout(r, 600)), // minimum spinner time
       ]);
       setIsRefreshing(false);
@@ -318,10 +321,10 @@ export default function App() {
 
   const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
-  // ── Sales score: projection-based (see salesTargetConfig.ts) ─────────────
-  // Tile shows ONLY "Sales" + dollar amount. No sub-line.
-  const salesState = computeSalesState(sales.value, getDailyTarget());
-  const salesScore = salesState.score;
+  // ── Sales score: actual vs the seed's expected-to-date for THIS period ────
+  // (same-weekday 4-week baseline, today prorated by open hours). No score
+  // until there is a baseline and data.
+  const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
 
   // Net score comes from the store (bucketed thresholds in useKpiStore).
   // Avoids the prior divergence where the home tile used a different scale
@@ -329,17 +332,20 @@ export default function App() {
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
   const netScore   = net.score;
 
-  // Loading state for skeletons — true until we have any real data
-  // (either a snapshot or a Toast refresh has completed).
-  const isLoadingKpis = lastRefresh === null && lastSnapshotAt === null;
+  // Skeletons while the selected period's numbers are in flight.
+  const isLoadingKpis = snapStatus === "loading";
 
   // ── Crisis-level pulse alerts ─────────────────────────────────────────────
   const alertingKeys = useMemo(() => {
     const keys = new Set<string>();
     const T = ALERT_THRESHOLDS;
-    if (sales.value < T.sales.below) keys.add("sales");
-    if (netPctNum   < T.net.below)   keys.add("net");
-    tiles.forEach((t) => {
+    const ready = snapStatus === "ready";              // nothing to alarm about while loading / empty
+    const expected = meta?.expectedToDate ?? null;
+    // A "dangerously slow" day is judged against expectation for the period,
+    // not a single-day dollar floor -- a week can't be "below $400".
+    if (ready && expected != null && expected > 0 && sales.value < expected * T.sales.belowFractionOfExpected) keys.add("sales");
+    if (ready && netPctNum < T.net.below) keys.add("net");
+    if (ready) tiles.forEach((t) => {
       const v = parseFloat(t.value);
       if (!Number.isFinite(v)) return;
       if (t.key === "cogs"  && v > T.cogs.above)  keys.add("cogs");
@@ -348,7 +354,7 @@ export default function App() {
       if (t.key === "fixed" && v > T.fixed.above)  keys.add("fixed");
     });
     return keys;
-  }, [sales.value, netPctNum, tiles]);
+  }, [sales.value, netPctNum, tiles, snapStatus, meta]);
 
   // Pull indicator progress 0→1
   // pullProgress used to drive the now-removed pull-to-refresh spinner.
@@ -535,8 +541,11 @@ export default function App() {
                   {weatherData.condition === "wind"   && "💨"}
                   {weatherData.tempF != null && ` ${weatherData.tempF}°`}
                 </span>
-                <span>
-                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <span title={asOf ?? undefined}>
+                  {snapStatus === "loading" ? "…"
+                    : snapStatus === "error" ? "offline"
+                    : asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                    : "no data yet"}
                 </span>
               </span>
             </div>

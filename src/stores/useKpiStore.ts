@@ -3,8 +3,7 @@ import { fetchTodaySales, fetchTodayLabor, fetchSalesDetail, fetchLaborDetail, f
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { fetchTodayScheduled } from "../data/scheduleAdapter";
 import type { ScheduledLaborResult } from "../data/scheduleAdapter";
-import { RENT_PCT, hourlyAmortized, fixedScore } from "../config/fixedCostConfig";
-import { getTodayMRTotal } from "./useMaintenanceStore";
+import { fixedScore } from "../config/fixedCostConfig";
 import { money } from "../lib/money";
 
 export type KpiKey =
@@ -16,7 +15,8 @@ export type Kpi = {
   label: string;
   value: string;
   status: string;
-  score: number;
+  /** 1-8 benchmark score; null = no data to score (neutral tile, never a fake green). */
+  score: number | null;
 };
 
 export type LaborDetail = {
@@ -61,6 +61,16 @@ function netScore(pct: number): number {
 // Shape of a kpi_snapshots row from Supabase
 type KpiSnapshot = {
   period?: string;
+  has_data?: boolean;
+  has_tick?: boolean;
+  as_of?: string | null;
+  days_expected?: number;
+  days_closed?: number;
+  days_partial?: number;
+  days_missing?: number;
+  expected_to_date?: number | null;
+  open_fraction?: number;
+  labor_estimated?: boolean;
   sales_total: number;
   sales_tips: number;
   sales_instore: number;
@@ -100,11 +110,20 @@ export const PERIOD_LABEL: Record<Period, string> = { day: "Today", wtd: "Week t
 const PERIOD_KEY = "and-done.period";
 const readPeriod = (): Period => { try { const v = localStorage.getItem(PERIOD_KEY); return v === "wtd" || v === "mtd" ? v : "day"; } catch { return "day"; } };
 
+export type SnapshotStatus = "loading" | "ready" | "empty" | "error";
+export type PeriodMeta = { daysExpected: number; daysClosed: number; daysPartial: number; daysMissing: number; laborEstimated: boolean; hasTick: boolean; expectedToDate: number | null };
+
 type KpiState = {
   period: Period;
   setPeriod: (p: Period) => void;
+  /** What the tiles are showing right now: loading (switching / first pull),
+   *  ready, empty (no data for this period yet), error (last pull failed). */
+  status: SnapshotStatus;
+  /** When the newest number on screen was captured -- the only honest clock. */
+  asOf: string | null;
+  meta: PeriodMeta | null;
   sales: { value: number; label: string; sub: string };
-  net: { value: string; dollars: number; label: string; sub: string; score: number };
+  net: { value: string; dollars: number; label: string; sub: string; score: number | null };
   netDetail: NetDetail | null;
   tiles: Kpi[];
   laborDetail: LaborDetail | null;
@@ -117,7 +136,7 @@ type KpiState = {
   lastSnapshotAt: string | null;
   refresh: () => Promise<void>;
   pullSnapshot: () => Promise<void>;
-  applySnapshot: (snap: KpiSnapshot) => void;
+  applySnapshot: (snap: KpiSnapshot, requested: Period) => void;
   subscribeToSnapshots: () => () => void;
 };
 
@@ -149,27 +168,30 @@ function scoreStatus(score: number): string {
   return labels[score] ?? "Critical";
 }
 
-const COGS_PCT_MOCK = 26.4;
-
 // ── Employer payroll tax estimate (FICA 7.65% + FUTA 0.6% + DC SUTA 2.7%) ─
 const PAYROLL_TAX_RATE = 0.11;
 
-const placeholderTiles: Kpi[] = [
-  { key: "cogs",    label: "COGS",       value: "26.4%", status: "Excellent", score: 8 },
-  { key: "labor",   label: "Labor",      value: "--",    status: "Loading",   score: 5 },
-  { key: "prime",   label: "Prime Cost", value: "--",    status: "Loading",   score: 5 },
-  { key: "fixed",   label: "Fixed Cost", value: "--",    status: "Loading",   score: 5 },
-];
+// No placeholder numbers, ever: a tile without data says so, in neutral.
+const TILE_KEYS = [["cogs", "COGS"], ["labor", "Labor"], ["prime", "Prime Cost"], ["fixed", "Fixed Cost"]] as const;
+const tilesWith = (status: string): Kpi[] => TILE_KEYS.map(([key, label]) => ({ key, label, value: "--", status, score: null }));
+const placeholderTiles: Kpi[] = tilesWith("Loading");
+let pullGeneration = 0;   // every pull gets a number; a reply from an older pull is ignored
 
 export const useKpiStore = create<KpiState>((set, get) => ({
   period: readPeriod(),
   setPeriod: (p) => {
+    if (p === get().period) return;
     try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
-    set({ period: p, sales: { ...get().sales, sub: PERIOD_LABEL[p] } });
+    // The numbers on screen belong to the OLD period. Clear them until the
+    // new period's numbers land -- never show one period under another's label.
+    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith("Loading") });
     void get().pullSnapshot();
   },
-  sales: { value: 0, label: "Sales", sub: "Today" },
-  net: { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 },
+  status: "loading",
+  asOf: null,
+  meta: null,
+  sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[readPeriod()] },
+  net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[readPeriod()], score: null },
   netDetail: null,
   tiles: placeholderTiles,
   laborDetail: null,
@@ -181,88 +203,75 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   lastError: null,
   lastSnapshotAt: null,
 
-  // ── Apply a kpi_snapshots row to the store ──────────────────────────────
-  applySnapshot: (snap: KpiSnapshot) => {
-    const period: Period = snap.period === "wtd" || snap.period === "mtd" ? snap.period : "day";
-    if (period !== get().period) return; // a stale poll from before the selector moved
+  // ── Apply a snapshot row for ONE period ──────────────────────────────────
+  // The seed's row is the truth for the tiles: totals, percents, net -- all
+  // summed server-side over the same closes the desk uses. Three states:
+  //   has_data false  -> empty: nothing for this period yet (before the first tick)
+  //   sales 0         -> ready, but every ratio is "--" (nothing to divide by)
+  //   otherwise       -> ready, scored
+  applySnapshot: (snap: KpiSnapshot, requested: Period) => {
+    if (requested !== get().period) return;   // the selector moved while this was in flight
+    const period = requested;
     const periodWord = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
+    const meta: PeriodMeta = {
+      daysExpected: snap.days_expected ?? 1, daysClosed: snap.days_closed ?? 0, daysPartial: snap.days_partial ?? 0, daysMissing: snap.days_missing ?? 0,
+      laborEstimated: snap.labor_estimated === true, hasTick: snap.has_tick === true, expectedToDate: snap.expected_to_date ?? null,
+    };
+    const asOf = snap.as_of ?? snap.captured_at ?? null;
+    const common = { asOf, meta, lastSnapshotAt: snap.captured_at ?? null, lastRefresh: Date.now(), lastError: null };
+
+    if (snap.has_data === false) {
+      set({ ...common, status: "empty", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith("No data yet"), net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[period], score: null }, netDetail: null });
+      return;
+    }
     const totalSales = snap.sales_total ?? 0;
-    if (totalSales <= 0) return;
+    const laborCost = snap.labor_total ?? 0, cogsDollars = snap.cogs_total ?? 0;
+    const rentCost = snap.rent_dollars ?? 0, amortizedCost = snap.amortized_dollars ?? 0, mrDollars = snap.mr_dollars ?? 0;
+    const totalFixed = snap.fixed_total ?? rentCost + amortizedCost + mrDollars;
+    const netDollars = snap.net_profit ?? totalSales - cogsDollars - laborCost - totalFixed;
 
-    // Fixed costs: prefer snapshot fields (rent + amortized are deterministic
-    // and computed server-side), but always recompute M&R locally so a
-    // freshly-added entry doesn't have to wait 5 min for the next sync.
-    const todayMR       = getTodayMRTotal();
-    const rentCost      = snap.rent_dollars      ?? (totalSales * RENT_PCT);
-    const amortizedCost = snap.amortized_dollars ?? hourlyAmortized();
-    const totalFixed    = rentCost + amortizedCost + todayMR;
-
-    const laborCost   = snap.labor_total ?? 0;
-    const cogsDollars = snap.cogs_total  ?? 0;
-    // Net: server now subtracts fixed costs too. Recompute locally so the
-    // M&R override (above) flows through.
-    const netDollars  = totalSales - cogsDollars - laborCost - totalFixed;
-    const netPct      = (netDollars / totalSales) * 100;
-    const nScore      = netScore(netPct);
+    if (totalSales <= 0) {
+      set({ ...common, status: "ready", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith("No sales yet"), net: { value: "--", dollars: Math.round(netDollars), label: "Net Profit", sub: `${money(netDollars)} ${periodWord}`, score: null }, netDetail: null });
+      return;
+    }
 
     function cogsScore(pct: number) {
       if (pct <= 25) return 8; if (pct <= 28) return 7; if (pct <= 31) return 6;
       if (pct <= 34) return 5; if (pct <= 37) return 4; if (pct <= 42) return 3;
       return 2;
     }
-    const cogsPct  = snap.cogs_pct  ?? 0;
-    const laborPct = snap.labor_pct ?? 0;
-    const primePct = snap.prime_cost_pct ?? 0;
-    const fixedPct = (totalFixed / totalSales) * 100;
-
-    const updatedTiles = get().tiles.map((t) => {
-      if (t.key === "cogs") {
-        const s = cogsScore(cogsPct);
-        return { key: "cogs" as const, label: "COGS", value: `${cogsPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
-      }
-      if (t.key === "labor") {
-        const s = laborScore(laborPct);
-        return { key: "labor" as const, label: "Labor", value: `${laborPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
-      }
-      if (t.key === "prime") {
-        const s = primeScore(primePct);
-        return { key: "prime" as const, label: "Prime Cost", value: `${primePct.toFixed(1)}%`, status: scoreStatus(s), score: s };
-      }
-      if (t.key === "fixed") {
-        const s = fixedScore(fixedPct);
-        return { key: "fixed" as const, label: "Fixed Cost", value: `${fixedPct.toFixed(1)}%`, status: scoreStatus(s), score: s };
-      }
-      return t;
-    });
-
+    const cogsPct = snap.cogs_pct ?? (cogsDollars / totalSales) * 100;
+    const laborPct = snap.labor_pct ?? (laborCost / totalSales) * 100;
+    const primePct = snap.prime_cost_pct ?? ((cogsDollars + laborCost) / totalSales) * 100;
+    const fixedPct = snap.fixed_pct ?? (totalFixed / totalSales) * 100;
+    const netPct = snap.net_profit_pct ?? (netDollars / totalSales) * 100;
+    const tile = (key: Kpi["key"], label: string, pct: number, score: number): Kpi => ({ key, label, value: `${pct.toFixed(1)}%`, status: scoreStatus(score), score });
+    const tiles: Kpi[] = [
+      tile("cogs", "COGS", cogsPct, cogsScore(cogsPct)),
+      tile("labor", "Labor", laborPct, laborScore(laborPct)),
+      tile("prime", "Prime Cost", primePct, primeScore(primePct)),
+      tile("fixed", "Fixed Cost", fixedPct, fixedScore(fixedPct)),
+    ];
     const netDetail: NetDetail = {
-      salesDollars:     totalSales,
-      laborDollars:     Math.round(laborCost * 100) / 100,
-      cogsDollars:      Math.round(cogsDollars * 100) / 100,
-      primeDollars:     Math.round((laborCost + cogsDollars) * 100) / 100,
-      primePct:         primePct,
-      fixedDollars:     Math.round(totalFixed * 100) / 100,
-      fixedPct:         fixedPct,
-      rentDollars:      Math.round(rentCost * 100) / 100,
+      salesDollars: totalSales,
+      laborDollars: Math.round(laborCost * 100) / 100,
+      cogsDollars: Math.round(cogsDollars * 100) / 100,
+      primeDollars: Math.round((laborCost + cogsDollars) * 100) / 100,
+      primePct,
+      fixedDollars: Math.round(totalFixed * 100) / 100,
+      fixedPct,
+      rentDollars: Math.round(rentCost * 100) / 100,
       amortizedDollars: Math.round(amortizedCost * 100) / 100,
-      mrDollars:        Math.round(todayMR * 100) / 100,
-      netDollars:       Math.round(netDollars * 100) / 100,
-      netPct:           Math.round(netPct * 10) / 10,
+      mrDollars: Math.round(mrDollars * 100) / 100,
+      netDollars: Math.round(netDollars * 100) / 100,
+      netPct: Math.round(netPct * 10) / 10,
     };
-
     set({
+      ...common, status: "ready",
       sales: { value: totalSales, label: "Sales", sub: PERIOD_LABEL[period] },
-      tiles: updatedTiles,
-      net: {
-        value:   `${netPct.toFixed(1)}%`,
-        dollars: Math.round(netDollars),
-        label:   "Net Profit",
-        sub:     `${money(netDollars)} ${periodWord}`,
-        score:   nScore,
-      },
+      tiles,
+      net: { value: `${netPct.toFixed(1)}%`, dollars: Math.round(netDollars), label: "Net Profit", sub: `${money(netDollars)} ${periodWord}`, score: netScore(netPct) },
       netDetail,
-      lastSnapshotAt: snap.captured_at,
-      lastRefresh: Date.now(),
     });
   },
 
@@ -270,19 +279,34 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   // The heartbeat writes every 5 minutes; polling at 60s keeps the tiles as
   // fresh as the data is. No database access from the browser, no anon key.
   pullSnapshot: async () => {
+    const period = get().period;
+    const gen = ++pullGeneration;
     try {
-      const r = await fetch(`/api/snapshot?period=${get().period}`, { cache: "no-store" });
-      if (!r.ok) return;
-      const data = await r.json();
-      if (data) get().applySnapshot(data as KpiSnapshot);
+      const r = await fetch(`/api/snapshot?period=${period}`, { cache: "no-store" });
+      if (gen !== pullGeneration) return;            // a newer pull is in flight
+      if (r.status === 401) { window.dispatchEvent(new Event("owner-session-expired")); return; }
+      if (!r.ok) throw new Error(`snapshot ${r.status}`);
+      const data = (await r.json()) as KpiSnapshot | null;
+      if (gen !== pullGeneration) return;
+      if (!data) throw new Error("snapshot: empty reply");
+      get().applySnapshot(data, period);
     } catch (e) {
-      console.warn("[seed] snapshot fetch failed", e);
+      if (gen !== pullGeneration) return;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[seed] snapshot fetch failed", msg);
+      // Say so. Keep whatever was on screen, but mark it: the status drives
+      // the "as of" line and the tiles' dimming.
+      set({ status: "error", lastError: msg });
     }
   },
   subscribeToSnapshots: () => {
     void get().pullSnapshot();
     const timer = setInterval(() => void get().pullSnapshot(), 60_000);
-    return () => clearInterval(timer);
+    // The installed PWA suspends timers in the background; on return, pull now.
+    const onVisible = () => { if (document.visibilityState === "visible") void get().pullSnapshot(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("pageshow", onVisible); };
   },
 
   refresh: async () => {
@@ -296,51 +320,17 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     ]);
 
     set((s) => {
+      // refresh() feeds the drill-downs only. The tiles belong to
+      // applySnapshot (the seed's period row) -- nothing here touches them.
       const totalSales = salesResult?.total ?? s.sales.value;
       const totalTips  = salesResult?.totalTips ?? 0;
-
-      // ── COGS tile (real if available, mock fallback) ───────────────
-      let cogsTile: Kpi = s.tiles.find((t) => t.key === "cogs") ?? placeholderTiles[0];
-      const cogsPctActual    = cogsDetailResult?.effectiveCOGSPct ?? COGS_PCT_MOCK;
-      const cogsDollarsActual = cogsDetailResult?.effectiveCOGS
-        ?? (totalSales * COGS_PCT_MOCK / 100);
-
-      function cogsScore(pct: number): number {
-        if (pct <= 25) return 8;
-        if (pct <= 28) return 7;
-        if (pct <= 31) return 6;
-        if (pct <= 34) return 5;
-        if (pct <= 37) return 4;
-        if (pct <= 42) return 3;
-        return 2;
-      }
-      if (cogsDetailResult && totalSales > 0) {
-        const cScore = cogsScore(cogsPctActual);
-        cogsTile = {
-          key: "cogs", label: "COGS",
-          value: `${cogsPctActual.toFixed(1)}%`,
-          status: scoreStatus(cScore), score: cScore,
-        };
-      }
-
-      // ── Labor ──────────────────────────────────────────────────────
-      let laborTile: Kpi = s.tiles.find((t) => t.key === "labor") ?? placeholderTiles[1];
-      let primeTile: Kpi = s.tiles.find((t) => t.key === "prime") ?? placeholderTiles[2];
       let laborDetail: LaborDetail | null = s.laborDetail;
-
       if (laborResult) {
         const hoursWorked  = laborResult.totalHours;
         const hourlyCost   = laborResult.totalLaborCost;
-
-        // Salary is now schedule-driven: the weekly_salary pool (from
-        // shift_settings) amortized across the sum of daily operating
-        // windows (Mon–Sun earliest-start → latest-end). `scheduledResult`
-        // carries the live accrued-today figure.
-        const salaryCost = scheduledResult?.salaryAccruedToday ?? 0;
-
+        const salaryCost   = scheduledResult?.salaryAccruedToday ?? 0;
         const payrollTax   = Math.round((hourlyCost + salaryCost) * PAYROLL_TAX_RATE * 100) / 100;
         const laborCost    = hourlyCost + salaryCost + payrollTax;
-
         laborDetail = {
           laborCost,
           hourlyCost,
@@ -353,101 +343,8 @@ export const useKpiStore = create<KpiState>((set, get) => ({
           totalTips,
           salesPerManHour: hoursWorked > 0 ? totalSales / hoursWorked : null,
           tipPct: totalSales > 0 ? (totalTips / totalSales) * 100 : null,
-        };
-
-        if (totalSales > 0) {
-          const laborPct = (laborCost / totalSales) * 100;
-          const lScore   = laborScore(laborPct);
-          laborTile = {
-            key: "labor", label: "Labor",
-            value: `${laborPct.toFixed(1)}%`,
-            status: scoreStatus(lScore), score: lScore,
-          };
-          const primePct = laborPct + cogsPctActual;
-          const pScore   = primeScore(primePct);
-          primeTile = {
-            key: "prime", label: "Prime Cost",
-            value: `${primePct.toFixed(1)}%`,
-            status: scoreStatus(pScore), score: pScore,
-          };
-        } else if (laborCost > 0) {
-          laborTile = { key: "labor", label: "Labor", value: money(laborCost), status: "No Sales", score: 2 };
-          primeTile = { key: "prime", label: "Prime Cost", value: "No Sales", status: "Critical", score: 2 };
-        } else {
-          laborTile = { key: "labor", label: "Labor", value: money(salaryCost + (salaryCost * PAYROLL_TAX_RATE)), status: "Idle", score: 5 };
-          primeTile = { key: "prime", label: "Prime Cost", value: "--", status: "Idle", score: 5 };
-        }
+};
       }
-
-      // ── Fixed Cost ─────────────────────────────────────────────────
-      const todayMR       = getTodayMRTotal();
-      const rentCost      = totalSales * RENT_PCT;
-      const amortizedCost = hourlyAmortized(); // drips 10 AM → 4 PM ET
-      const totalFixed    = rentCost + amortizedCost + todayMR;
-
-      let fixedTile: Kpi;
-      if (totalSales > 0) {
-        const fixedPct = (totalFixed / totalSales) * 100;
-        const fScore   = fixedScore(fixedPct);
-        fixedTile = {
-          key: "fixed", label: "Fixed Cost",
-          value: `${fixedPct.toFixed(1)}%`,
-          status: scoreStatus(fScore), score: fScore,
-        };
-      } else {
-        // No sales yet — show raw daily burden in dollars
-        fixedTile = {
-          key: "fixed", label: "Fixed Cost",
-          value: money(amortizedCost + todayMR),
-          status: "No Sales", score: 4,
-        };
-      }
-
-      const updatedTiles = s.tiles.map((t) => {
-        if (t.key === "cogs")  return cogsTile;
-        if (t.key === "labor") return laborTile;
-        if (t.key === "prime") return primeTile;
-        if (t.key === "fixed") return fixedTile;
-        return t;
-      });
-
-      // ── Net Profit ─────────────────────────────────────────────────
-      const laborCostFinal  = laborDetail?.laborCost ?? 0; // full cost: hourly + salary + payroll tax
-      const cogsDollars     = cogsDollarsActual;
-      const primeDollars    = laborCostFinal + cogsDollars;
-      const netDollars      = totalSales - primeDollars - totalFixed;
-      const netPct          = totalSales > 0 ? (netDollars / totalSales) * 100 : 0;
-      const nScore          = totalSales > 0 ? netScore(netPct) : 5;
-
-      const netDetail: NetDetail | null = totalSales > 0 ? {
-        salesDollars:     totalSales,
-        laborDollars:     laborCostFinal,
-        cogsDollars:      Math.round(cogsDollarsActual * 100) / 100,
-        primeDollars:     Math.round(primeDollars * 100) / 100,
-        primePct:         totalSales > 0 ? (primeDollars / totalSales) * 100 : 0,
-        fixedDollars:     Math.round(totalFixed * 100) / 100,
-        fixedPct:         totalSales > 0 ? (totalFixed / totalSales) * 100 : 0,
-        rentDollars:      Math.round(rentCost * 100) / 100,
-        amortizedDollars: Math.round(amortizedCost * 100) / 100,
-        mrDollars:        Math.round(todayMR * 100) / 100,
-        netDollars:       Math.round(netDollars * 100) / 100,
-        netPct:           Math.round(netPct * 10) / 10,
-      } : s.netDetail;
-
-      const netState = totalSales > 0
-        ? {
-            value:   `${netPct.toFixed(1)}%`,
-            dollars: Math.round(netDollars),
-            label:   "Net Profit",
-            sub:     `${money(netDollars)} today`,
-            score:   nScore,
-          }
-        : { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 };
-
-      // The tiles belong to the heartbeat snapshot -- one truth (D15). This
-      // path used to overwrite them with its own arithmetic (fixed cost 10%
-      // vs the seed's 45%, net +29% vs -2.5%); now it feeds the drill-downs only.
-      void netState; void netDetail; void updatedTiles; void totalSales;
       return {
         laborDetail,
         salesDetail: salesDetailResult ?? s.salesDetail,

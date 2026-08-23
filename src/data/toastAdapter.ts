@@ -1,3 +1,4 @@
+import { ownerFetch } from "./ownerFetch";
 // Client-side adapter: calls our own /api/toast-* endpoints.
 // All Toast auth + secrets live server-side (api/_toast.mjs).
 
@@ -69,7 +70,7 @@ export type SalesDetailResult = {
 
 export async function fetchTodaySales(): Promise<SalesResult | null> {
   try {
-    const res = await fetch("/api/toast-sales", { cache: "no-store" });
+    const res = await ownerFetch("/api/toast-sales", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as SalesResult;
   } catch {
@@ -79,7 +80,7 @@ export async function fetchTodaySales(): Promise<SalesResult | null> {
 
 export async function fetchTodayLabor(): Promise<LaborResult | null> {
   try {
-    const res = await fetch("/api/toast-labor", { cache: "no-store" });
+    const res = await ownerFetch("/api/toast-labor", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as LaborResult;
   } catch {
@@ -89,7 +90,7 @@ export async function fetchTodayLabor(): Promise<LaborResult | null> {
 
 export async function fetchLaborDetail(): Promise<LaborDetailResult | null> {
   try {
-    const res = await fetch("/api/toast-labor-detail", { cache: "no-store" });
+    const res = await ownerFetch("/api/toast-labor-detail", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as LaborDetailResult;
   } catch {
@@ -132,7 +133,7 @@ export type COGSDetailResult = {
 
 export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
   try {
-    const res = await fetch("/api/toast-cogs-detail", { cache: "no-store" });
+    const res = await ownerFetch("/api/toast-cogs-detail", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as COGSDetailResult;
   } catch {
@@ -142,7 +143,7 @@ export async function fetchCOGSDetail(): Promise<COGSDetailResult | null> {
 
 export async function fetchSalesDetail(): Promise<SalesDetailResult | null> {
   try {
-    const res = await fetch("/api/toast-sales-detail", { cache: "no-store" });
+    const res = await ownerFetch("/api/toast-sales-detail", { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as SalesDetailResult;
   } catch {

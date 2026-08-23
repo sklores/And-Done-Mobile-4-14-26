@@ -1,3 +1,4 @@
+import { ownerFetch } from "./ownerFetch";
 // Reads scheduled-labor data from the shift scheduling tables
 // (shift_shifts + shift_employees + shift_settings). Those tables moved to
 // the DashVue core on 2026-08-13 — reads go through supabaseShift (a
@@ -72,11 +73,17 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
   // Pull the whole current week's shifts (need it for weekly window sum)
   // plus the joined employee for hourly-cost / active filter.
   // From the seed (D15): the week's shifts with their employee, plus weekly_salary.
-  const r = await fetch(`/api/seed?view=schedule&from=${monday}&to=${sunday}`, { cache: "no-store" });
   type ShiftRow = { shift_date: string; start_time: string; end_time: string; employee_id?: string; shift_employees: { id: string; is_active?: boolean; hourly_rate: number | null } | null };
-  const payload = r.ok ? ((await r.json()) as { shifts: ShiftRow[]; weeklySalary: string | null }) : null;
+  let payload: { shifts: ShiftRow[]; weeklySalary: string | null } | null = null;
+  let shiftErr: Error | null = null;
+  try {
+    // Like every other adapter: a network failure is a null result, not an
+    // exception that strands refresh() and the pull-to-refresh gesture.
+    const r = await ownerFetch(`/api/seed?view=schedule&from=${monday}&to=${sunday}`, { cache: "no-store" });
+    if (r.ok) payload = (await r.json()) as { shifts: ShiftRow[]; weeklySalary: string | null };
+    else shiftErr = new Error(`schedule ${r.status}`);
+  } catch (e) { shiftErr = e instanceof Error ? e : new Error(String(e)); }
   const shiftRows = payload?.shifts ?? null;
-  const shiftErr: Error | null = r.ok ? null : new Error(`schedule ${r.status}`);
   const settingRows = payload ? { value: payload.weeklySalary } : null;
 
   if (shiftErr) {
