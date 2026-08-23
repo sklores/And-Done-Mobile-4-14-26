@@ -23,10 +23,10 @@ export default defineConfig(({ mode }) => {
           // way production does -- api/_seed.mjs -- so local == prod.
           const VIEWS: Record<string, string> = { "toast-sales": "sales", "toast-labor": "labor", "toast-labor-detail": "labor-detail", "toast-sales-detail": "sales-detail", "toast-cogs-detail": "cogs-detail", "snapshot": "snapshot" };
           for (const [path, view] of Object.entries(VIEWS)) {
-            server.middlewares.use(`/api/${path}`, async (_req, res) => {
+            server.middlewares.use(`/api/${path}`, async (req, res) => {
               try {
-                const { fromSeed } = await import("./api/_seed.mjs");
-                respond(res, 200, await fromSeed(view, env));
+                const { fromSeed, passThrough } = await import("./api/_seed.mjs");
+                respond(res, 200, await fromSeed(view, env, passThrough(req)));
               } catch (e) {
                 respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
               }

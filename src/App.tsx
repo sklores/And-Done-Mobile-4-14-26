@@ -56,6 +56,8 @@ export default function App() {
   const businessName          = useAppStore((s) => s.businessName);
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
+  const period                = useKpiStore((s) => s.period);
+  const periodWord            = period === "day" ? "today" : period === "wtd" ? "week to date" : "month to date";
   const tiles                 = useKpiStore((s) => s.tiles);
   const lastRefresh           = useKpiStore((s) => s.lastRefresh);
   const lastSnapshotAt        = useKpiStore((s) => s.lastSnapshotAt);
@@ -541,7 +543,7 @@ export default function App() {
               kind="sales"
               label={sales.label}
               value={salesDisplay}
-              sub=""
+              sub={period === "day" ? "" : periodWord}
               score={salesScore}
               alerting={alertingKeys.has("sales")}
               loading={isLoadingKpis}
@@ -553,7 +555,7 @@ export default function App() {
               label={net.label}
               value={net.value}
               valueSub={net.dollars !== 0 ? `$${net.dollars.toLocaleString()}` : undefined}
-              sub="today"
+              sub={periodWord}
               score={netScore}
               loading={isLoadingKpis}
               isLast
@@ -597,7 +599,7 @@ export default function App() {
       {/* ── Bottom tab panels ───────────────────────── */}
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />
       <LogTab      open={openTab === "log"}      onClose={() => setOpenTab(null)} />
-      <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} />
+      <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} onOpenTab={setOpenTab} />
 
     </div>
   );

@@ -4,7 +4,7 @@ import { useKpiStore } from "../../stores/useKpiStore";
 import { useLogStore } from "../../stores/useLogStore";
 import { useSkin } from "../../theme/skins";
 
-type Props = { open: boolean; onClose: () => void };
+type Props = { open: boolean; onClose: () => void; onOpenTab?: (k: "invoices" | "log") => void };
 
 type Message = { id: string; role: "gizmo" | "user"; text: string };
 
@@ -166,7 +166,7 @@ function TypingDots() {
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
-export function GizmoTab({ open, onClose }: Props) {
+export function GizmoTab({ open, onClose, onOpenTab }: Props) {
   const skin = useSkin();
   const salesVal   = useKpiStore((s) => s.sales.value);
   const netVal     = useKpiStore((s) => s.net.value);
@@ -264,6 +264,17 @@ export function GizmoTab({ open, onClose }: Props) {
         <div style={{ fontFamily: skin.fonts.body, fontSize: 11, color: "#8A9C9C", marginTop: 1 }}>
           your pocket restaurant analyst
         </div>
+        {onOpenTab ? (
+          // Invoices and Log gave their bar slots to the period selector; they live here now.
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            {(["invoices", "log"] as const).map((k) => (
+              <button key={k} onClick={() => onOpenTab(k)} style={{
+                border: `1px solid ${GIZMO_ACCENT}55`, borderRadius: 999, padding: "5px 12px", background: "#fff",
+                color: GIZMO_DARK, fontFamily: skin.fonts.body, fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", cursor: "pointer",
+              }}>{k}</button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* ── Live snapshot chips ───────────────────────── */}

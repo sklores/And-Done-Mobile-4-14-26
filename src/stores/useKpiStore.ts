@@ -59,6 +59,7 @@ function netScore(pct: number): number {
 
 // Shape of a kpi_snapshots row from Supabase
 type KpiSnapshot = {
+  period?: string;
   sales_total: number;
   sales_tips: number;
   sales_instore: number;
@@ -93,7 +94,14 @@ type KpiSnapshot = {
   captured_at: string;
 };
 
+export type Period = "day" | "wtd" | "mtd";
+export const PERIOD_LABEL: Record<Period, string> = { day: "Today", wtd: "Week to date", mtd: "Month to date" };
+const PERIOD_KEY = "and-done.period";
+const readPeriod = (): Period => { try { const v = localStorage.getItem(PERIOD_KEY); return v === "wtd" || v === "mtd" ? v : "day"; } catch { return "day"; } };
+
 type KpiState = {
+  period: Period;
+  setPeriod: (p: Period) => void;
   sales: { value: number; label: string; sub: string };
   net: { value: string; dollars: number; label: string; sub: string; score: number };
   netDetail: NetDetail | null;
@@ -107,6 +115,7 @@ type KpiState = {
   lastError: string | null;
   lastSnapshotAt: string | null;
   refresh: () => Promise<void>;
+  pullSnapshot: () => Promise<void>;
   applySnapshot: (snap: KpiSnapshot) => void;
   subscribeToSnapshots: () => () => void;
 };
@@ -152,6 +161,12 @@ const placeholderTiles: Kpi[] = [
 ];
 
 export const useKpiStore = create<KpiState>((set, get) => ({
+  period: readPeriod(),
+  setPeriod: (p) => {
+    try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
+    set({ period: p, sales: { ...get().sales, sub: PERIOD_LABEL[p] } });
+    void get().pullSnapshot();
+  },
   sales: { value: 0, label: "Sales", sub: "Today" },
   net: { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 },
   netDetail: null,
@@ -167,6 +182,9 @@ export const useKpiStore = create<KpiState>((set, get) => ({
 
   // ── Apply a kpi_snapshots row to the store ──────────────────────────────
   applySnapshot: (snap: KpiSnapshot) => {
+    const period: Period = snap.period === "wtd" || snap.period === "mtd" ? snap.period : "day";
+    if (period !== get().period) return; // a stale poll from before the selector moved
+    const periodWord = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
     const totalSales = snap.sales_total ?? 0;
     if (totalSales <= 0) return;
 
@@ -238,7 +256,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
         value:   `${netPct.toFixed(1)}%`,
         dollars: Math.round(netDollars),
         label:   "Net Profit",
-        sub:     `$${Math.round(netDollars).toLocaleString()} today`,
+        sub:     `$${Math.round(netDollars).toLocaleString()} ${periodWord}`,
         score:   nScore,
       },
       netDetail,
@@ -250,21 +268,20 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   // ── Latest snapshot from the seed (D15) ─────────────────────────────────
   // The heartbeat writes every 5 minutes; polling at 60s keeps the tiles as
   // fresh as the data is. No database access from the browser, no anon key.
+  pullSnapshot: async () => {
+    try {
+      const r = await fetch(`/api/snapshot?period=${get().period}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data) get().applySnapshot(data as KpiSnapshot);
+    } catch (e) {
+      console.warn("[seed] snapshot fetch failed", e);
+    }
+  },
   subscribeToSnapshots: () => {
-    let stopped = false;
-    const pull = async () => {
-      try {
-        const r = await fetch("/api/snapshot", { cache: "no-store" });
-        if (!r.ok) return;
-        const data = await r.json();
-        if (data && !stopped) get().applySnapshot(data as KpiSnapshot);
-      } catch (e) {
-        console.warn("[seed] snapshot fetch failed", e);
-      }
-    };
-    pull();
-    const timer = setInterval(pull, 60_000);
-    return () => { stopped = true; clearInterval(timer); };
+    void get().pullSnapshot();
+    const timer = setInterval(() => void get().pullSnapshot(), 60_000);
+    return () => clearInterval(timer);
   },
 
   refresh: async () => {
@@ -426,11 +443,11 @@ export const useKpiStore = create<KpiState>((set, get) => ({
           }
         : { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 };
 
+      // The tiles belong to the heartbeat snapshot -- one truth (D15). This
+      // path used to overwrite them with its own arithmetic (fixed cost 10%
+      // vs the seed's 45%, net +29% vs -2.5%); now it feeds the drill-downs only.
+      void netState; void netDetail; void updatedTiles; void totalSales;
       return {
-        sales: { ...s.sales, value: totalSales },
-        net: netState,
-        netDetail,
-        tiles: updatedTiles,
         laborDetail,
         salesDetail: salesDetailResult ?? s.salesDetail,
         laborDetailRich: laborDetailRich ?? s.laborDetailRich,
