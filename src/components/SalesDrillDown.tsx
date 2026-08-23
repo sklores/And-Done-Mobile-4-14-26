@@ -274,12 +274,12 @@ export function SalesDrillDown({ open, onClose }: Props) {
       <DrillRow
         label="Dine In"
         value={ch ? fmt$(ch.dinein) : "--"}
-        sub={ch ? `${((ch.dinein / totalCh) * 100).toFixed(0)}% of sales` : undefined}
+        sub={ch ? `${(totalCh > 0 ? (ch.dinein / totalCh) * 100 : 0).toFixed(0)}% of sales` : undefined}
       />
       <DrillRow
         label="Takeout"
         value={ch ? fmt$(ch.takeout) : "--"}
-        sub={ch ? `${((ch.takeout / totalCh) * 100).toFixed(0)}% of sales` : undefined}
+        sub={ch ? `${(totalCh > 0 ? (ch.takeout / totalCh) * 100 : 0).toFixed(0)}% of sales` : undefined}
       />
       <DrillRow
         label="3rd Party Total"

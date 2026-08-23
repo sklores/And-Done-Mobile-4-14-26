@@ -47,13 +47,19 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
   const [desc, setDesc]       = useState("");
   const [error, setError]     = useState("");
 
-  function submit() {
+  const [busy, setBusy] = useState(false);
+  async function submit() {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError("Enter a valid amount"); return; }
     if (!desc.trim())     { setError("Add a description"); return; }
-    addEntry(amt, desc);
-    setAmount(""); setDesc(""); setError("");
-    onAdd();
+    setBusy(true);
+    try {
+      await addEntry(amt, desc);     // the form only closes once the seed has it
+      setAmount(""); setDesc(""); setError("");
+      onAdd();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "could not save");
+    } finally { setBusy(false); }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -86,11 +92,11 @@ function AddMRForm({ onAdd }: { onAdd: () => void }) {
         placeholder="Description (e.g. Hood cleaning)"
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
+        onKeyDown={(e) => { if (e.key === "Enter") void submit(); }}
         style={inputStyle}
       />
       <button
-        onClick={submit}
+        onClick={() => { if (!busy) void submit(); }}
         style={{
           background: "#2F6B58",
           color: "#fff",

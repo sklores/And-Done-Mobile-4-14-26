@@ -43,7 +43,7 @@ export function PinGate({ children }: { children: ReactNode }) {
           <>
             <input
               autoFocus inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={pin} placeholder="PIN" aria-label="Owner PIN"
-              onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 8); setPin(v); if (v.length === 4) void submit(v); }}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
               style={{ marginTop: 22, width: "100%", boxSizing: "border-box", borderRadius: 12, border: "1px solid #D5DDDB", background: "#F3F6F5", padding: "14px 12px", fontSize: 22, letterSpacing: ".5em", textAlign: "center", color: INK, outline: "none" }}
             />
             <button type="submit" disabled={busy || pin.length < 4} style={{ marginTop: 14, width: "100%", minHeight: 46, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", opacity: busy || pin.length < 4 ? 0.5 : 1 }}>

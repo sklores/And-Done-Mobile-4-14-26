@@ -19,8 +19,9 @@ export default async function handler(req, res, env = process.env) {
     for (const k of ["from", "to", "period"]) { const v = url.searchParams.get(k); if (v) qs.set(k, v); }
     const body = isPost ? JSON.stringify(await readJson(req)) : undefined;
     const r = await fetch(`${base}/api/owner?${qs}`, { method: isPost ? "POST" : "GET", headers: { Authorization: `Bearer ${key}`, ...(isPost ? { "content-type": "application/json" } : {}) }, body, cache: "no-store" });
-    res.statusCode = r.status;
-    res.end(await r.text());
+    // The seed rejecting OUR key is a server misconfiguration, never "sign in again".
+    res.statusCode = r.status === 401 || r.status === 403 ? 502 : r.status;
+    res.end(r.status === 401 || r.status === 403 ? JSON.stringify({ error: `seed rejected the API key (${r.status})` }) : await r.text());
   } catch (e) {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));

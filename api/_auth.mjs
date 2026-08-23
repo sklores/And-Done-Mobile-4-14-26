@@ -26,9 +26,11 @@ export function hasSession(req, env = process.env) {
   const raw = (req.headers?.cookie ?? "").split(";").map((c) => c.trim()).find((c) => c.startsWith(`${COOKIE}=`));
   if (!raw) return false;
   const [exp, mac] = raw.slice(COOKIE.length + 1).split(".");
-  if (!exp || !mac || Number(exp) < Date.now()) return false;
-  const want = sign(exp, env);
-  return want.length === mac.length && timingSafeEqual(Buffer.from(want), Buffer.from(mac));
+  if (!exp || !mac || !/^\d+$/.test(exp) || !/^[0-9a-f]{64}$/.test(mac) || Number(exp) < Date.now()) return false;
+  try {
+    const want = Buffer.from(sign(exp, env), "hex"), got = Buffer.from(mac, "hex");
+    return want.length === got.length && timingSafeEqual(want, got);
+  } catch { return false; }
 }
 
 /** 401 and false when there is no session. */

@@ -23,6 +23,8 @@ type MaintenanceState = {
   removeEntry: (id: string) => Promise<void>;
 };
 
+let pending: Period | null = null;   // the period of the most recent hydrate call
+
 export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   entries: [],
   period: null,
@@ -30,10 +32,12 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   loaded: false,
 
   hydrate: async (period) => {
+    pending = period;
     try {
       const r = await ownerFetch(`/api/seed?view=mr&period=${period}`);
       if (!r.ok) return;
       const j = (await r.json()) as { entries: MaintenanceEntry[]; total: number };
+      if (pending !== period) return;   // the selector moved on while this was in flight
       set({ entries: j.entries, total: j.total, period, loaded: true });
     } catch (e) {
       console.warn("[mr] hydrate failed", e);

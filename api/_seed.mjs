@@ -10,7 +10,7 @@ export async function fromSeed(view, env = process.env, extra = {}) {
   if (!base || !key) throw new Error("SEED_API_BASE / SEED_API_KEY not set");
   const qs = new URLSearchParams({ org, view, ...extra });
   const r = await fetch(`${base}/api/owner?${qs}`, { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
-  if (!r.ok) throw new Error(`seed ${view}: ${r.status}`);
+  if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? `seed rejected the API key (${r.status})` : `seed ${view}: ${r.status}`);
   return r.json();
 }
 
