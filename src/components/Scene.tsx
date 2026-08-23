@@ -10,6 +10,8 @@ import { NewYorkScene } from './NewYorkScene'
 interface Props {
   weather?: WeatherCondition
   beamPulseKey?: number
+  /** Live Reviews score 1-8 — Coastal uses it for the balloon color. */
+  reviewsScore?: number
 }
 
 export function Scene(props: Props) {

@@ -9,8 +9,6 @@ type Props = {
   valueSub?: string;
   /** 1–8 benchmark score — when provided, bar uses the shared tile gradient */
   score?: number;
-  /** Last stacked bar before the marquee — needs bottom margin for rhythm */
-  isLast?: boolean;
   alerting?: boolean;
   loading?: boolean;
   onClick?: () => void;
@@ -33,8 +31,12 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
       style={{
         background: bg,
         borderRadius: 10,
-        margin: "8px 10px 0",
-        padding: "12px 16px",
+        // Vertical rhythm belongs to the parent stack's `gap`. A margin
+        // here stacked ON TOP of it, making the space above Net Profit
+        // double every other gap.
+        margin: "0 10px",
+        padding: "14px 16px",
+        minHeight: 72,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",

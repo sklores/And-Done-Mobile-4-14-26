@@ -5,6 +5,7 @@ import { fetchTodayScheduled } from "../data/scheduleAdapter";
 import type { ScheduledLaborResult } from "../data/scheduleAdapter";
 import { RENT_PCT, hourlyAmortized, fixedScore } from "../config/fixedCostConfig";
 import { getTodayMRTotal } from "./useMaintenanceStore";
+import { money } from "../lib/money";
 
 export type KpiKey =
   | "sales" | "cogs" | "labor" | "prime"
@@ -250,13 +251,13 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     };
 
     set({
-      sales: { value: totalSales, label: "Sales", sub: "Today" },
+      sales: { value: totalSales, label: "Sales", sub: PERIOD_LABEL[period] },
       tiles: updatedTiles,
       net: {
         value:   `${netPct.toFixed(1)}%`,
         dollars: Math.round(netDollars),
         label:   "Net Profit",
-        sub:     `$${Math.round(netDollars).toLocaleString()} ${periodWord}`,
+        sub:     `${money(netDollars)} ${periodWord}`,
         score:   nScore,
       },
       netDetail,
@@ -370,10 +371,10 @@ export const useKpiStore = create<KpiState>((set, get) => ({
             status: scoreStatus(pScore), score: pScore,
           };
         } else if (laborCost > 0) {
-          laborTile = { key: "labor", label: "Labor", value: `$${Math.round(laborCost)}`, status: "No Sales", score: 2 };
+          laborTile = { key: "labor", label: "Labor", value: money(laborCost), status: "No Sales", score: 2 };
           primeTile = { key: "prime", label: "Prime Cost", value: "No Sales", status: "Critical", score: 2 };
         } else {
-          laborTile = { key: "labor", label: "Labor", value: `$${Math.round(salaryCost + (salaryCost * PAYROLL_TAX_RATE))}`, status: "Idle", score: 5 };
+          laborTile = { key: "labor", label: "Labor", value: money(salaryCost + (salaryCost * PAYROLL_TAX_RATE)), status: "Idle", score: 5 };
           primeTile = { key: "prime", label: "Prime Cost", value: "--", status: "Idle", score: 5 };
         }
       }
@@ -397,7 +398,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
         // No sales yet — show raw daily burden in dollars
         fixedTile = {
           key: "fixed", label: "Fixed Cost",
-          value: `$${Math.round(amortizedCost + todayMR)}`,
+          value: money(amortizedCost + todayMR),
           status: "No Sales", score: 4,
         };
       }
@@ -438,7 +439,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
             value:   `${netPct.toFixed(1)}%`,
             dollars: Math.round(netDollars),
             label:   "Net Profit",
-            sub:     `$${Math.round(netDollars).toLocaleString()} today`,
+            sub:     `${money(netDollars)} today`,
             score:   nScore,
           }
         : { value: "--", dollars: 0, label: "Net Profit", sub: "Today", score: 5 };

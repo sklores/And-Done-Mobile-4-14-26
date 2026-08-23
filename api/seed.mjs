@@ -1,6 +1,6 @@
 // GET /api/seed?view=<view>&from=&to= -- generic pass-through to the And
 // Done seed for the secondary tabs (invoices, reviews, schedule, fixed-costs).
-const ALLOWED = new Set(["invoices", "reviews", "schedule", "fixed-costs"]);
+const ALLOWED = new Set(["invoices", "reviews", "schedule", "fixed-costs", "aging"]);
 export default async function handler(req, res) {
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");
