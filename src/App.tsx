@@ -401,6 +401,19 @@ export default function App() {
   const frameSeamColor = isDusky ? skin.chrome.frameSeamDusk : skin.chrome.frameSeam;
   const namePlateText  = isDusky ? skin.chrome.namePlateTextDusk : skin.chrome.namePlateText;
 
+  // Fullscreen hides the phone's own clock, so the nameplate carries one.
+  // Ticks every 20s (minutes only) and again the moment the app is looked
+  // at, so it is never showing a stale minute after a night on the counter.
+  const [clock, setClock] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const tick = () => setClock(new Date());
+    const id = setInterval(tick, 20_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("pageshow", tick);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); window.removeEventListener("pageshow", tick); };
+  }, []);
+  const clockLabel = clock.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
   // The canvas -- html AND body -- is always the skin's frame color, so no
   // black can appear anywhere the app itself doesn't paint (the fullscreen
   // letterbox, the overscroll gutter). theme-color follows it too, for the
@@ -544,7 +557,8 @@ export default function App() {
                   {weatherData.condition === "wind"   && "💨"}
                   {weatherData.tempF != null && ` ${weatherData.tempF}°`}
                 </span>
-
+                <span style={{ opacity: 0.55 }}>·</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{clockLabel}</span>
               </span>
             </div>
           </div>
