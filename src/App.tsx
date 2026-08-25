@@ -401,24 +401,15 @@ export default function App() {
   const frameSeamColor = isDusky ? skin.chrome.frameSeamDusk : skin.chrome.frameSeam;
   const namePlateText  = isDusky ? skin.chrome.namePlateTextDusk : skin.chrome.namePlateText;
 
-  // Sync body background + <meta name="theme-color">:
-  //   - installed (fullscreen OR standalone): match frameColor, so every
-  //     pixel the app owns -- including behind the system bars when the OS
-  //     lets us have them -- is the skin's frame.
-  //   - browser tab: match Chrome's dark chrome (#000000), since there the
-  //     app doesn't visually own the top of the screen anyway.
-  // NB: the manifest asks for `fullscreen`, which does NOT match
-  // (display-mode: standalone) -- checking only that painted the app black.
+  // The canvas -- html AND body -- is always the skin's frame color, so no
+  // black can appear anywhere the app itself doesn't paint (the fullscreen
+  // letterbox, the overscroll gutter). theme-color follows it too, for the
+  // status bar in the modes that still have one.
   useEffect(() => {
-    const m = (q: string) => window.matchMedia?.(q)?.matches === true;
-    const isInstalled =
-      typeof window !== "undefined" &&
-      (m("(display-mode: fullscreen)") || m("(display-mode: standalone)") || m("(display-mode: minimal-ui)")
-        || (navigator as Navigator & { standalone?: boolean }).standalone === true);
-    const targetColor = isInstalled ? frameColor : "#000000";
-    document.body.style.background = targetColor;
+    document.documentElement.style.background = frameColor;
+    document.body.style.background = frameColor;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", targetColor);
+    if (meta) meta.setAttribute("content", frameColor);
   }, [frameColor]);
 
   return (
