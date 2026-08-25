@@ -401,18 +401,21 @@ export default function App() {
   const frameSeamColor = isDusky ? skin.chrome.frameSeamDusk : skin.chrome.frameSeam;
   const namePlateText  = isDusky ? skin.chrome.namePlateTextDusk : skin.chrome.namePlateText;
 
-  // Sync body background + <meta name="theme-color"> so the Android system
-  // nav bar (bottom: three lines / square / <) tints sensibly:
-  //   - PWA / installed: match frameColor (driftwood by day, navy at night)
-  //     so the system nav bar feels continuous with the app's bottom tabs.
-  //   - Browser / URL: match Chrome's dark chrome (#000000) so the bottom
-  //     bar matches the URL bar's color, since in browser mode the app
-  //     doesn't visually own the top of the screen anyway.
+  // Sync body background + <meta name="theme-color">:
+  //   - installed (fullscreen OR standalone): match frameColor, so every
+  //     pixel the app owns -- including behind the system bars when the OS
+  //     lets us have them -- is the skin's frame.
+  //   - browser tab: match Chrome's dark chrome (#000000), since there the
+  //     app doesn't visually own the top of the screen anyway.
+  // NB: the manifest asks for `fullscreen`, which does NOT match
+  // (display-mode: standalone) -- checking only that painted the app black.
   useEffect(() => {
-    const isStandalone =
+    const m = (q: string) => window.matchMedia?.(q)?.matches === true;
+    const isInstalled =
       typeof window !== "undefined" &&
-      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
-    const targetColor = isStandalone ? frameColor : "#000000";
+      (m("(display-mode: fullscreen)") || m("(display-mode: standalone)") || m("(display-mode: minimal-ui)")
+        || (navigator as Navigator & { standalone?: boolean }).standalone === true);
+    const targetColor = isInstalled ? frameColor : "#000000";
     document.body.style.background = targetColor;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", targetColor);
@@ -446,7 +449,7 @@ export default function App() {
           // NOTE (staged): pairs with the status-bar-style decision in
           // index.html — verify legibility of the status text over the notch
           // band on a real iPhone before merging.
-          paddingTop: "env(safe-area-inset-top)",
+          paddingTop: "max(env(safe-area-inset-top), 10px)",
           transition: "background 1.2s ease",
         }}
       >
