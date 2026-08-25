@@ -1,9 +1,14 @@
 import { useSkin } from "../theme/skins";
 import { useKpiStore, type Period } from "../stores/useKpiStore";
+import { GizmoHead } from "./GizmoHead";
+import { useGizmoBlink } from "../hooks/useGizmoBlink";
 
-// The bottom bar: the period the tiles sum over (Day / WTD / MTD) on the
-// left, Gizmo on the right. Invoices and Log moved into the drill-downs;
-// the operator asked for the bar to be these two things.
+// The bottom bar: which period the tiles sum over, and Gizmo.
+//
+// ONE continuous surface in the frame color -- no inset track, no second
+// slab -- so it reads like the nameplate at the top of the screen instead of
+// four stacked tones. Selection is weight plus an underline. Gizmo is his own
+// face in a bubble; he blinks.
 
 export type TabKey = "invoices" | "log" | "gizmo";
 
@@ -23,26 +28,17 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
   const skin = useSkin();
   const period = useKpiStore((s) => s.period);
   const setPeriod = useKpiStore((s) => s.setPeriod);
+  const blink = useGizmoBlink();
   const ink = textColor ?? "#1A2E28";
-  // paddingBottom: iOS home-indicator safe area — extends the tab-bar color
-  // into the gesture-bar zone so the controls clear it. No-op on Android (inset 0).
+  const surface = bg ?? skin.tabs.bg;
+
   return (
-    <div style={{ background: bg ?? skin.tabs.bg, flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", transition: "background 1.2s ease" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 12px",
-          borderTop: "1px solid rgba(0,0,0,.07)",
-          fontFamily: skin.fonts.body,
-        }}
-      >
-        <div
-          role="tablist"
-          aria-label="Period"
-          style={{ display: "flex", flex: 1, padding: 3, borderRadius: 999, background: "rgba(0,0,0,.10)", minHeight: 46 }}
-        >
+    // paddingBottom: the surface runs past the controls to the true bottom
+    // edge -- clear of the phone's gesture bar, and continuous with the
+    // system nav bar wherever the OS lets a PWA draw under it.
+    <div style={{ background: surface, flexShrink: 0, paddingBottom: "max(env(safe-area-inset-bottom), 12px)", transition: "background 1.2s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 20px 0", fontFamily: skin.fonts.body }}>
+        <div role="tablist" aria-label="Period" style={{ display: "flex", flex: 1, gap: 4 }}>
           {PERIODS.map((p) => {
             const on = p.key === period;
             return (
@@ -53,21 +49,43 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
                 onClick={() => setPeriod(p.key)}
                 style={{
                   flex: 1,
+                  minHeight: 44,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
                   border: "none",
-                  borderRadius: 999,
-                  padding: "0",
-                  minHeight: 40,
-                  background: on ? ink : "transparent",
-                  color: on ? (bg ?? skin.tabs.bg) : ink,
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  background: "transparent",
+                  padding: 0,
                   cursor: "pointer",
-                  transition: "background .2s ease, color .2s ease",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
-                {p.label}
+                <span
+                  style={{
+                    color: ink,
+                    opacity: on ? 1 : 0.52,
+                    fontSize: 12.5,
+                    fontWeight: on ? 800 : 600,
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                    transition: "opacity .2s ease",
+                  }}
+                >
+                  {p.label}
+                </span>
+                <span
+                  aria-hidden
+                  style={{
+                    height: 2.5,
+                    width: on ? 20 : 0,
+                    borderRadius: 2,
+                    background: ink,
+                    opacity: on ? 1 : 0,
+                    transition: "width .22s ease, opacity .22s ease",
+                  }}
+                />
               </button>
             );
           })}
@@ -76,24 +94,21 @@ export function BottomTabs({ onOpen, bg, textColor }: Props) {
           onClick={() => onOpen("gizmo")}
           aria-label="Open Gizmo"
           style={{
+            width: 46,
+            height: 46,
+            flexShrink: 0,
+            borderRadius: 999,
+            border: `1.5px solid ${ink}2E`,
+            background: "rgba(255,255,255,.24)",
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            border: `1.5px solid ${ink}`,
-            borderRadius: 999,
-            padding: "0 16px",
-            minHeight: 46,
-            background: "transparent",
-            color: ink,
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            justifyContent: "center",
+            padding: 0,
             cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
-          <span aria-hidden style={{ width: 7, height: 7, borderRadius: 999, background: ink, boxShadow: `0 0 0 3px ${ink}33` }} />
-          Gizmo
+          <GizmoHead size={34} blink={blink} />
         </button>
       </div>
     </div>

@@ -4,7 +4,7 @@ type Props = {
   kind: "sales" | "net";
   label: string;
   value: string;
-  sub: string;
+  sub?: string;
   /** Net bar only: shows dollar amount alongside the % */
   valueSub?: string;
   /** 1–8 benchmark score — when provided, bar uses the shared tile gradient */

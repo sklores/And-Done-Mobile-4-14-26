@@ -57,7 +57,6 @@ export default function App() {
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
   const period                = useKpiStore((s) => s.period);
-  const periodWord            = period === "day" ? "today" : period === "wtd" ? "week to date" : "month to date";
   const tiles                 = useKpiStore((s) => s.tiles);
   const snapStatus            = useKpiStore((s) => s.status);
   const asOf                  = useKpiStore((s) => s.asOf);
@@ -326,6 +325,16 @@ export default function App() {
   // until there is a baseline and data.
   const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
 
+  // One freshness line for the whole screen, on the Sales bar: which period
+  // these numbers are, and when they were captured. (It used to ride the
+  // weather line up in the nameplate, where it read like a forecast.)
+  const stamp = asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : null;
+  const salesSub =
+    snapStatus === "loading" ? "loading…"
+      : snapStatus === "error" ? "offline · last known numbers"
+      : snapStatus === "empty" ? "no numbers yet today"
+      : [{ day: "Today", wtd: "Week", mtd: "Month" }[period], stamp].filter(Boolean).join(" · ");
+
   // Net score comes from the store (bucketed thresholds in useKpiStore).
   // Avoids the prior divergence where the home tile used a different scale
   // than the drill-down + email.
@@ -541,12 +550,7 @@ export default function App() {
                   {weatherData.condition === "wind"   && "💨"}
                   {weatherData.tempF != null && ` ${weatherData.tempF}°`}
                 </span>
-                <span title={asOf ?? undefined}>
-                  {snapStatus === "loading" ? "…"
-                    : snapStatus === "error" ? "offline"
-                    : asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-                    : "no data yet"}
-                </span>
+
               </span>
             </div>
           </div>
@@ -574,7 +578,7 @@ export default function App() {
               kind="sales"
               label={sales.label}
               value={salesDisplay}
-              sub={period === "day" ? "" : periodWord}
+              sub={salesSub}
               score={salesScore}
               alerting={alertingKeys.has("sales")}
               loading={isLoadingKpis}
@@ -597,7 +601,6 @@ export default function App() {
               label={net.label}
               value={net.value}
               valueSub={net.dollars !== 0 ? money(net.dollars) : undefined}
-              sub={periodWord}
               score={netScore}
               loading={isLoadingKpis}
               alerting={alertingKeys.has("net")}

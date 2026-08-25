@@ -172,7 +172,7 @@ function scoreStatus(score: number): string {
 // No placeholder numbers, ever: a tile without data says so, in neutral.
 const TILE_KEYS = [["cogs", "COGS"], ["labor", "Labor"], ["prime", "Prime Cost"], ["fixed", "Fixed Cost"]] as const;
 const tilesWith = (status: string): Kpi[] => TILE_KEYS.map(([key, label]) => ({ key, label, value: "--", status, score: null }));
-const placeholderTiles: Kpi[] = tilesWith("Loading");
+const placeholderTiles: Kpi[] = tilesWith("");
 let pullGeneration = 0;   // every pull gets a number; a reply from an older pull is ignored
 
 export const useKpiStore = create<KpiState>((set, get) => ({
@@ -182,7 +182,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
     // The numbers on screen belong to the OLD period. Clear them until the
     // new period's numbers land -- never show one period under another's label.
-    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith("Loading"), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null });
+    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith(""), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null });
     void get().pullSnapshot();
     void get().refresh();
   },
@@ -220,7 +220,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     const common = { asOf, meta, lastSnapshotAt: snap.captured_at ?? null, lastRefresh: Date.now(), lastError: null };
 
     if (snap.has_data === false) {
-      set({ ...common, status: "empty", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith("No data yet"), net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[period], score: null }, netDetail: null });
+      set({ ...common, status: "empty", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith(""), net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[period], score: null }, netDetail: null });
       return;
     }
     const totalSales = snap.sales_total ?? 0;
@@ -230,7 +230,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     const netDollars = snap.net_profit ?? totalSales - cogsDollars - laborCost - totalFixed;
 
     if (totalSales <= 0) {
-      set({ ...common, status: "ready", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith("No sales yet"), net: { value: "--", dollars: Math.round(netDollars), label: "Net Profit", sub: `${money(netDollars)} ${periodWord}`, score: null }, netDetail: null });
+      set({ ...common, status: "ready", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith(""), net: { value: "--", dollars: Math.round(netDollars), label: "Net Profit", sub: `${money(netDollars)} ${periodWord}`, score: null }, netDetail: null });
       return;
     }
 

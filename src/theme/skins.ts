@@ -561,17 +561,29 @@ export function tileForScore(score: number | null | undefined): TileStop {
   return getActiveSkin().spectrum[idx];
 }
 
-/** A tile with nothing to score: the skin's "Caution" stop, desaturated to
- *  grey. Never a fake green. */
+/** A tile with nothing to score. Derived from the skin's OWN page color,
+ *  fully desaturated: an empty tile must read as blank paper, never as a
+ *  score. (It used to be the spectrum's caution stop desaturated -- which on
+ *  a green-ish skin still looked like a pass.) */
 export function neutralTile(): TileStop {
-  const base = getActiveSkin().spectrum[4];
-  const grey = (hex: string, mix = 0.55) => {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return hex;
-    const v = parseInt(m[1], 16), r = v >> 16, g = (v >> 8) & 255, b = v & 255, l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-    const c = (x: number) => Math.round(x + (l - x) * mix).toString(16).padStart(2, "0");
-    return `#${c(r)}${c(g)}${c(b)}`;
+  const m = /^#?([0-9a-f]{6})$/i.exec(getActiveSkin().pageBg.trim());
+  const v = m ? parseInt(m[1], 16) : 0xe6ebea;
+  const l = 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255);
+  const at = (amt: number) => {
+    const c = Math.max(0, Math.min(255, Math.round(l + amt)));
+    const h = c.toString(16).padStart(2, "0");
+    return `#${h}${h}${h}`;
   };
-  return { ...base, bg: grey(base.bg, 0.7), label: grey(base.label), value: grey(base.value), status: grey(base.status), statusText: grey(base.statusText), border: base.border ? grey(base.border) : undefined };
+  const light = l > 140;
+  const s = (lightAmt: number, darkAmt: number) => at(light ? lightAmt : darkAmt);
+  return {
+    bg: s(8, 16),                       // a hair off the page: a card with nothing in it
+    label: s(-125, 115),
+    value: s(-140, 135),
+    status: s(-118, 108),
+    statusText: s(-118, 108),
+    border: s(-24, 30),
+  };
 }
 
 /** Legacy export — Coastal's ramp (kept for compatibility). */
