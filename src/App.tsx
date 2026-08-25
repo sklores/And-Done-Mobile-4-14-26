@@ -446,17 +446,27 @@ export default function App() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          // iOS notched-device safe area: push the framed scene below the
-          // status bar / Dynamic Island so the clock no longer overlaps it.
-          // No-op on Android (inset reports 0). The global box-sizing:border-box
-          // keeps this padding *inside* the 100dvh, so it doesn't add scroll.
-          // NOTE (staged): pairs with the status-bar-style decision in
-          // index.html — verify legibility of the status text over the notch
-          // band on a real iPhone before merging.
-          paddingTop: "max(env(safe-area-inset-top), 10px)",
           transition: "background 1.2s ease",
         }}
       >
+        {/* Top rail -- the frame color, mirroring the bottom bar.
+            Fullscreen hides the status bar and Android letterboxes its strip
+            black; that strip is outside the page, so we cannot paint it. What
+            we CAN do is give it something deliberate to meet: the app is
+            framed in driftwood top and bottom, and the black reads as the
+            phone rather than as a seam we forgot. On a notched iPhone the
+            safe-area inset makes this rail exactly the notch band, which is
+            the same job it did as padding before. */}
+        <div
+          aria-hidden
+          style={{
+            height: "max(env(safe-area-inset-top), 14px)",
+            flexShrink: 0,
+            background: frameColor,
+            borderBottom: `1px solid ${frameSeamColor}`,
+            transition: "background 1.2s ease",
+          }}
+        />
         {/* Scrollable content */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
 
