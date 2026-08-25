@@ -1,18 +1,30 @@
 {
-  "name": "And Done — GCDC Dashboard",
+  "name": "And Done",
   "short_name": "And Done",
   "description": "Real-time restaurant dashboard for GCDC Grilled Cheese Bar",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "portrait",
-  "background_color": "#C4B090",
+  "background_color": "#26425f",
   "theme_color": "#C4B090",
   "icons": [
     {
-      "src": "/icon-and.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/and-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/and-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/and-icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "display_override": [
