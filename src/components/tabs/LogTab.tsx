@@ -1,10 +1,16 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { TabPanel } from "./TabPanel";
 import { useLogStore } from "../../stores/useLogStore";
 import { useSkin } from "../../theme/skins";
 import { ocrHandwriting } from "../../data/ocrAdapter";
 
 type Props = { open: boolean; onClose: () => void };
+
+const countLineStyle = (bodyFont: string): React.CSSProperties => ({
+  fontSize: 9, fontWeight: 700, letterSpacing: ".1em",
+  textTransform: "uppercase", color: "#8A9C9C",
+  fontFamily: bodyFont, marginBottom: 4,
+});
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -21,24 +27,81 @@ export function LogTab({ open, onClose }: Props) {
   const entries   = useLogStore((s) => s.entries);
   const addEntry  = useLogStore((s) => s.addEntry);
   const removeEntry = useLogStore((s) => s.removeEntry);
+  const hydrate   = useLogStore((s) => s.hydrate);
+  // The store owns the hydrate phase; read the fields straight off it so a
+  // rename fails the build instead of silently flipping this screen to a
+  // permanent "couldn't load" over a read that succeeded.
+  const loadStatus = useLogStore((s) => s.status);
+  const loadError  = useLogStore((s) => s.error);
+  const loaded     = useLogStore((s) => s.loaded);
 
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
-  const [ocrStatus, setOcrStatus] = useState<"idle" | "reading" | "no-text">("idle");
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "reading" | "no-text" | "failed">("idle");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // A delete that failed belongs next to the list it was pressed in, not under
+  // the composer at the top of the panel.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleAdd() {
+  // The list is only ever in one of three named states. The store's own status
+  // names the failure when it has one, and a pull this screen started that
+  // never marked the store loaded names it either way -- "no entries" is never
+  // stated over a read that never landed.
+  const [pulling, setPulling] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+
+  async function reload() {
+    setPulling(true);
+    try { await hydrate(); } finally { setPulling(false); setAttempted(true); }
+  }
+
+  useEffect(() => {
+    if (!open || loaded || pulling) return;
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one pull per open while the log is unloaded
+  }, [open]);
+
+  const loading    = pulling || loadStatus === "loading";
+  // The fallback stands on its own: a pull this screen started that finished
+  // without the store marking itself loaded IS a failed read, whatever other
+  // fields the store grows later.
+  const loadFailed = !loading && (loadStatus === "error" || (attempted && !loaded));
+
+  // The note only leaves the composer once the seed has it. A failed save
+  // keeps the text and the photo on screen and says what went wrong.
+  async function handleAdd() {
     const trimmed = draft.trim();
-    if (!trimmed && !photo) return;
-    void addEntry(trimmed, "manual", { mediaFile: photo });
-    setDraft("");
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhoto(null);
-    setPhotoPreview(null);
-    setOcrStatus("idle");
-    if (fileRef.current) fileRef.current.value = "";
+    if ((!trimmed && !photo) || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addEntry(trimmed, "manual", { mediaFile: photo });
+      setDraft("");
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+      setPhoto(null);
+      setPhotoPreview(null);
+      setOcrStatus("idle");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "could not save — your note is still here");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove(id: string) {
+    setDeleteError(null);
+    try {
+      await removeEntry(id);
+    } catch (e) {
+      // The store already put the row back, so the list still matches the
+      // seed. All that's left to do is say the delete didn't land.
+      setDeleteError(e instanceof Error ? e.message : "could not delete");
+    }
   }
 
   async function handleExtractText() {
@@ -57,13 +120,15 @@ export function LogTab({ open, onClose }: Props) {
       // Auto-clear the "no text" message after 2.5s
       setTimeout(() => setOcrStatus("idle"), 2500);
     } else {
-      // On error, fail silently — operator can type the note manually
-      setOcrStatus("idle");
+      // The read failed: say so rather than bouncing back to the idle label,
+      // which looks like nothing happened. Typing the note still works.
+      setOcrStatus("failed");
+      setTimeout(() => setOcrStatus("idle"), 4000);
     }
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") handleAdd();
+    if (e.key === "Enter") void handleAdd();
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -82,7 +147,7 @@ export function LogTab({ open, onClose }: Props) {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  const canSubmit = draft.trim().length > 0 || photo !== null;
+  const canSubmit = (draft.trim().length > 0 || photo !== null) && !saving;
 
   return (
     <TabPanel open={open} onClose={onClose} title="Activity Log" accent="#2A3C48">
@@ -140,7 +205,7 @@ export function LogTab({ open, onClose }: Props) {
             }}
           />
           <button
-            onClick={handleAdd}
+            onClick={() => void handleAdd()}
             disabled={!canSubmit}
             style={{
               background: canSubmit ? "#2A3C48" : "rgba(0,0,0,0.08)",
@@ -156,9 +221,20 @@ export function LogTab({ open, onClose }: Props) {
               transition: "background 0.2s",
             }}
           >
-            LOG
+            {saving ? "SAVING…" : "LOG"}
           </button>
         </div>
+
+        {/* A save that failed: the note is still in the box above. */}
+        {saveError && (
+          <div style={{
+            marginTop: 8,
+            fontFamily: skin.fonts.body, fontSize: 11, fontWeight: 700,
+            color: "#B94A4A",
+          }}>
+            ⚠ Not saved — {saveError}
+          </div>
+        )}
 
         {/* Photo preview strip */}
         {photoPreview && (
@@ -188,15 +264,19 @@ export function LogTab({ open, onClose }: Props) {
                 background:
                   ocrStatus === "reading"  ? "rgba(0,0,0,0.06)" :
                   ocrStatus === "no-text"  ? "rgba(255,200,80,0.16)" :
+                  ocrStatus === "failed"   ? "rgba(185,74,74,0.10)" :
                                              "rgba(78,200,154,0.14)",
                 color:
                   ocrStatus === "reading"  ? "#8A9C9C" :
                   ocrStatus === "no-text"  ? "#7A5510" :
+                  ocrStatus === "failed"   ? "#B94A4A" :
                                              "#084020",
                 border:
                   ocrStatus === "no-text"
                     ? "1px solid rgba(255,200,80,0.45)"
-                    : "1px solid rgba(78,200,154,0.30)",
+                    : ocrStatus === "failed"
+                      ? "1px solid rgba(185,74,74,0.35)"
+                      : "1px solid rgba(78,200,154,0.30)",
                 borderRadius: 8,
                 padding: "8px 10px",
                 fontFamily: skin.fonts.body,
@@ -213,7 +293,9 @@ export function LogTab({ open, onClose }: Props) {
                 ? "Reading note…"
                 : ocrStatus === "no-text"
                   ? "No text detected — type the note instead"
-                  : "📝 Extract text from photo"}
+                  : ocrStatus === "failed"
+                    ? "Couldn't read the photo — tap to try again"
+                    : "📝 Extract text from photo"}
             </button>
             <button
               onClick={clearPhoto}
@@ -233,13 +315,38 @@ export function LogTab({ open, onClose }: Props) {
 
       {/* ── Entry list ─────────────────────────────────── */}
       <div style={{ padding: "0 18px 32px", display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: ".1em",
-          textTransform: "uppercase", color: "#8A9C9C",
-          fontFamily: skin.fonts.body, marginBottom: 4,
-        }}>
-          {entries.length} entries today
-        </div>
+        {/* A delete that failed: the note is still on the seed, and the store
+            has already put its row back in the list below. */}
+        {deleteError && (
+          <div style={{
+            fontFamily: skin.fonts.body, fontSize: 11, fontWeight: 700,
+            color: "#B94A4A", marginBottom: 2,
+          }}>
+            ⚠ Not deleted — {deleteError}
+          </div>
+        )}
+
+        {loadFailed ? (
+          <button
+            type="button"
+            onClick={() => void reload()}
+            style={{
+              ...countLineStyle(skin.fonts.body),
+              background: "none", border: "none", padding: 0,
+              textAlign: "left", cursor: "pointer", color: "#B94A4A",
+            }}
+          >
+            Couldn't load the log — tap to retry
+          </button>
+        ) : (
+          <div style={countLineStyle(skin.fonts.body)}>
+            {/* Nothing here knows what the seed caps the log at, so this says
+                only what it can see: how many rows are on the screen. */}
+            {loading
+              ? "Loading…"
+              : `${entries.length} ${entries.length === 1 ? "entry" : "entries"} shown`}
+          </div>
+        )}
 
         {entries.map((entry) => (
           <div
@@ -324,7 +431,7 @@ export function LogTab({ open, onClose }: Props) {
             {/* Delete (manual + gizmo entries) */}
             {(entry.type === "manual" || entry.type === "gizmo") && (
               <button
-                onClick={() => void removeEntry(entry.id)}
+                onClick={() => void handleRemove(entry.id)}
                 style={{
                   background: "none", border: "none", cursor: "pointer",
                   color: "#C0CCCC", fontSize: 16, padding: 0, lineHeight: 1,
@@ -340,9 +447,34 @@ export function LogTab({ open, onClose }: Props) {
         {entries.length === 0 && (
           <div style={{
             textAlign: "center", padding: "40px 0",
-            color: "#8A9C9C", fontFamily: skin.fonts.body, fontSize: 13,
+            color: loadFailed ? "#B94A4A" : "#8A9C9C",
+            fontFamily: skin.fonts.body, fontSize: 13,
           }}>
-            No entries yet — add your first note above.
+            {loadFailed ? (
+              <>
+                <div>Couldn't load your notes.</div>
+                {loadError && (
+                  <div style={{ fontSize: 11, marginTop: 3, opacity: 0.8 }}>{loadError}</div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void reload()}
+                  style={{
+                    marginTop: 10,
+                    background: "#2A3C48", color: "#fff", border: "none",
+                    borderRadius: 10, padding: "8px 16px",
+                    fontFamily: skin.fonts.body, fontWeight: 800, fontSize: 11,
+                    letterSpacing: ".04em", cursor: "pointer",
+                  }}
+                >
+                  RETRY
+                </button>
+              </>
+            ) : loading ? (
+              "Loading your notes…"
+            ) : (
+              "No entries yet — add your first note above."
+            )}
           </div>
         )}
       </div>

@@ -1,7 +1,10 @@
-import { ownerFetch } from "./ownerFetch";
+import { ownerRead } from "./ownerFetch";
+import type { ReadResult } from "./ownerFetch";
 // Reads review rows from the `reviews` Supabase table populated by the
-// daily sync-reviews Edge Function (Yelp, TripAdvisor, UberEats via Apify).
-// Read-only — never writes back. Tenant-scoped to GCDC.
+// sync-reviews job. Read-only — never writes back. Tenant-scoped to GCDC.
+//
+// A failed read is reported as such: "no reviews on file" (an answer) and
+// "we could not read the reviews" (not an answer) never render the same.
 
 
 // ── Tenant ───────────────────────────────────────────────────────────────
@@ -64,16 +67,28 @@ const PLATFORM_ORDER: ReviewPlatform[] = [
 ];
 const RECENT_LIMIT = 5;
 
-/** Fetches all reviews for GCDC and rolls them into the shape the UI needs. */
-export async function fetchReviewsBundle(): Promise<ReviewsBundle | null> {
-  try {
-    const r = await ownerFetch("/api/seed?view=reviews", { cache: "no-store" });
-    const { data, error } = r.ok ? { data: (await r.json()) as unknown[], error: null } : { data: null, error: new Error(`reviews ${r.status}`) };
-    if (error || !data) return null;
-    return rollUp(data as ReviewRow[]);
-  } catch {
-    return null;
+export type ReviewsResult = ReadResult<ReviewsBundle>;
+
+/** Fetches all reviews for GCDC and rolls them into the shape the UI needs,
+ *  with what happened to the read attached. An array — including an empty one
+ *  — is the feed saying what it has: zero rows is a "ready" bundle whose
+ *  overallRating is null, which is "no reviews yet". Anything else (a failed
+ *  read, a null body, a payload that isn't a list) is "error": the feed did
+ *  not answer, and "no reviews yet" is not ours to say on its behalf. */
+export async function fetchReviewsResult(): Promise<ReviewsResult> {
+  const read = await ownerRead<unknown[]>("/api/seed?view=reviews");
+  if (read.status !== "ready" || !Array.isArray(read.data)) {
+    const error = read.status === "error" ? read.error : "reviews came back in an unexpected shape";
+    console.warn("[reviews] read failed", error);
+    return { status: "error", data: null, error };
   }
+  return { status: "ready", data: rollUp(read.data as ReviewRow[]), error: null };
+}
+
+/** Back-compat convenience: the bundle alone. Callers that need to tell "no
+ *  reviews yet" from "the read failed" use fetchReviewsResult(). */
+export async function fetchReviewsBundle(): Promise<ReviewsBundle | null> {
+  return (await fetchReviewsResult()).data;
 }
 
 function rollUp(rows: ReviewRow[]): ReviewsBundle {
@@ -171,9 +186,13 @@ export const PLATFORM_COLOR: Record<ReviewPlatform, string> = {
   findmeglutenfree: "#3FA34D",
 };
 
-/** Map an average star rating (1–5) to the tile/chip 1–8 score scale. */
-export function ratingToReviewScore(avg: number | null): number {
-  if (avg == null || !Number.isFinite(avg)) return 5;
+/** Map an average star rating (1–5) to the tile/chip 1–8 score scale.
+ *
+ *  No rating — an empty feed, or a read that failed — returns null, the app's
+ *  no-score value that paints the neutral tile. It must not come back as 5:
+ *  that is "Caution", a judgement about a restaurant we have no reviews for. */
+export function ratingToReviewScore(avg: number | null | undefined): number | null {
+  if (avg == null || !Number.isFinite(avg)) return null;
   if (avg >= 4.7) return 8;
   if (avg >= 4.4) return 7;
   if (avg >= 4.1) return 6;

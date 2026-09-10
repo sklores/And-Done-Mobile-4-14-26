@@ -3,6 +3,7 @@ import { fetchSalesDetail, fetchLaborDetail, fetchCOGSDetail } from "../data/toa
 import type { SalesDetailResult, LaborDetailResult, COGSDetailResult } from "../data/toastAdapter";
 import { fetchTodayScheduled } from "../data/scheduleAdapter";
 import type { ScheduledLaborResult } from "../data/scheduleAdapter";
+import type { FetchStatus } from "../data/ownerFetch";
 import { fixedScore } from "../config/fixedCostConfig";
 import { money } from "../lib/money";
 
@@ -111,7 +112,11 @@ const PERIOD_KEY = "and-done.period";
 const readPeriod = (): Period => { try { const v = localStorage.getItem(PERIOD_KEY); return v === "wtd" || v === "mtd" ? v : "day"; } catch { return "day"; } };
 
 export type SnapshotStatus = "loading" | "ready" | "empty" | "error";
-export type PeriodMeta = { daysExpected: number; daysClosed: number; daysPartial: number; daysMissing: number; laborEstimated: boolean; hasTick: boolean; expectedToDate: number | null };
+export type PeriodMeta = { daysExpected: number; daysClosed: number; daysPartial: number; daysMissing: number; laborEstimated: boolean; hasTick: boolean; expectedToDate: number | null;
+  /** How much of the day's open window has elapsed, 0-1 (the seed's
+   *  open_fraction). The only honest basis for reading a cost ratio against
+   *  sales-so-far -- without it, morning ratios look like a crisis. */
+  openFraction: number | null };
 
 type KpiState = {
   period: Period;
@@ -134,6 +139,12 @@ type KpiState = {
   lastRefresh: number | null;
   lastError: string | null;
   lastSnapshotAt: string | null;
+  /** The drill-down reads (sales / labor / COGS / schedule) as a group: a
+   *  failed one is "error" with its message in detailError, so a sheet with no
+   *  data can say "couldn't load -- tap to retry" instead of "Loading..."
+   *  forever. Retry = refresh(). */
+  detailStatus: FetchStatus;
+  detailError: string | null;
   refresh: () => Promise<void>;
   pullSnapshot: () => Promise<void>;
   applySnapshot: (snap: KpiSnapshot, requested: Period) => void;
@@ -182,7 +193,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
     // The numbers on screen belong to the OLD period. Clear them until the
     // new period's numbers land -- never show one period under another's label.
-    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith(""), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null });
+    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith(""), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null, scheduleDetail: null, detailStatus: "loading", detailError: null });
     void get().pullSnapshot();
     void get().refresh();
   },
@@ -201,6 +212,8 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   lastRefresh: null,
   lastError: null,
   lastSnapshotAt: null,
+  detailStatus: "idle",
+  detailError: null,
 
   // ── Apply a snapshot row for ONE period ──────────────────────────────────
   // The seed's row is the truth for the tiles: totals, percents, net -- all
@@ -215,6 +228,7 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     const meta: PeriodMeta = {
       daysExpected: snap.days_expected ?? 1, daysClosed: snap.days_closed ?? 0, daysPartial: snap.days_partial ?? 0, daysMissing: snap.days_missing ?? 0,
       laborEstimated: snap.labor_estimated === true, hasTick: snap.has_tick === true, expectedToDate: snap.expected_to_date ?? null,
+      openFraction: Number.isFinite(snap.open_fraction as number) ? (snap.open_fraction as number) : null,
     };
     const asOf = snap.as_of ?? snap.captured_at ?? null;
     const common = { asOf, meta, lastSnapshotAt: snap.captured_at ?? null, lastRefresh: Date.now(), lastError: null };
@@ -283,7 +297,9 @@ export const useKpiStore = create<KpiState>((set, get) => ({
     try {
       const r = await fetch(`/api/snapshot?period=${period}`, { cache: "no-store" });
       if (gen !== pullGeneration) return;            // a newer pull is in flight
-      if (r.status === 401) { window.dispatchEvent(new Event("owner-session-expired")); return; }
+      // Session gone: the front door reopens (PinGate listens), and the tiles
+      // say so rather than sitting on "loading" behind the lock screen.
+      if (r.status === 401) { set({ status: "error", lastError: "session expired" }); window.dispatchEvent(new Event("owner-session-expired")); return; }
       if (!r.ok) throw new Error(`snapshot ${r.status}`);
       const data = (await r.json()) as KpiSnapshot | null;
       if (gen !== pullGeneration) return;
@@ -313,13 +329,31 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   // the user has since left is dropped.
   refresh: async () => {
     const period = get().period;
-    const [salesDetailResult, laborDetailRich, cogsDetailResult, scheduledResult] = await Promise.all([
+    set((s) => ({ detailStatus: s.detailStatus === "ready" ? s.detailStatus : "loading" }));
+    const [salesRead, laborRead, cogsRead, scheduleRead] = await Promise.all([
       fetchSalesDetail(period),
       fetchLaborDetail(period),
       fetchCOGSDetail(period),
       period === "day" ? fetchTodayScheduled() : Promise.resolve(null),
     ]);
     if (period !== get().period) return;
+
+    // A sheet can show its numbers or say why it can't -- there is no third
+    // thing. Collect the reason from every read that came back without data.
+    const failures: string[] = [];
+    for (const [name, read] of [["sales", salesRead], ["labor", laborRead], ["COGS", cogsRead], ["schedule", scheduleRead]] as const) {
+      if (!read) continue;                                            // not asked for in this period
+      if (read.status === "error") failures.push(`${name}: ${read.error}`);
+      else if (read.status === "empty") failures.push(`${name}: no data returned`);
+    }
+    const detailError = failures.length ? failures.join(" · ") : null;
+    if (detailError) console.warn("[seed] drill-down fetch failed", detailError);
+
+    const salesDetailResult = salesRead.status === "ready" ? salesRead.data : null;
+    const laborDetailRich = laborRead.status === "ready" ? laborRead.data : null;
+    const cogsDetailResult = cogsRead.status === "ready" ? cogsRead.data : null;
+    const scheduledResult = scheduleRead && scheduleRead.status === "ready" ? scheduleRead.data : null;
+
     set((s) => {
       const L = laborDetailRich;
       const totalSales = L?.totalSales ?? salesDetailResult?.totals?.sales ?? s.sales.value;
@@ -343,8 +377,14 @@ export const useKpiStore = create<KpiState>((set, get) => ({
         laborDetailRich,
         cogsDetail: cogsDetailResult,
         scheduleDetail: period === "day" ? scheduledResult : null,
-        lastRefresh: Date.now(),
-        lastError: null,
+        // Only a clean pass is a clean refresh: lastRefresh is when the sheets
+        // last had good data, not when we last tried.
+        lastRefresh: detailError ? s.lastRefresh : Date.now(),
+        // ...and this pass's outcome replaces the last one's: a recovered read
+        // clears the error rather than leaving the store claiming it forever.
+        lastError: detailError,
+        detailStatus: detailError ? "error" : "ready",
+        detailError,
       };
     });
   },

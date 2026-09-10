@@ -20,7 +20,15 @@ const SCORE_BUCKETS: Array<[number, number]> = [
   [0.00, 2], // Critical
 ];
 
-/** null = nothing to score (no data, no baseline, or the day hasn't started). */
+/** null = nothing to score (no data, no baseline, or the day hasn't started).
+ *
+ *  One formula, actual / expected, for every surface that scores sales -- the
+ *  home bar, the drill-down and the crisis alarm all call this and can never
+ *  disagree about the same dollars. When the period has days the heartbeat
+ *  never reported, the SCORE is left alone and the screen says what was left
+ *  out instead (App.tsx's `coverage` caveat, "built from 19 of 28 days"):
+ *  naming the gap is honest, quietly re-grading against a smaller target would
+ *  turn missing data into a greener tile. */
 export function scoreAgainstExpected(actual: number, expected: number | null, status: SnapshotStatus): number | null {
   if (status !== "ready" || expected == null || expected <= 0 || actual <= 0) return null;
   const ratio = actual / expected;

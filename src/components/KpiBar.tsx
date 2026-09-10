@@ -11,10 +11,13 @@ type Props = {
   score?: number | null;
   alerting?: boolean;
   loading?: boolean;
+  /** The last snapshot pull failed: this is the previous number, kept on
+   *  screen but no longer live. Dimmed, and `sub` says so. */
+  stale?: boolean;
   onClick?: () => void;
 };
 
-export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loading, onClick }: Props) {
+export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loading, stale, onClick }: Props) {
   const skin = useSkin();
   const defaults = kind === "sales" ? skin.salesBar : skin.netBar;
   const palette = typeof score === "number" ? tileForScore(score) : null;
@@ -42,6 +45,7 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
         justifyContent: "space-between",
         fontFamily: skin.fonts.body,
         cursor: onClick ? "pointer" : undefined,
+        opacity: stale ? 0.68 : undefined,
         animation: alerting ? "kpiPulse 2s ease-in-out infinite" : undefined,
       }}
     >
@@ -52,11 +56,17 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
           fontWeight: 700,
           letterSpacing: ".1em",
           textTransform: "uppercase",
+          // The sub line now carries a period word, an as-of and (when the
+          // period has gaps) a coverage note. Let the label give ground
+          // before anything runs off the edge of a narrow phone.
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}
       >
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
         {loading ? (
           <div
             aria-hidden
@@ -101,6 +111,10 @@ export function KpiBar({ kind, label, value, sub, valueSub, score, alerting, loa
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: ".08em",
+                // Wraps rather than overflows: this line is where the
+                // period, the as-of and any missing-day caveat live.
+                maxWidth: 132,
+                textAlign: "right",
               }}
             >
               {sub}

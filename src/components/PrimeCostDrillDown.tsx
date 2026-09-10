@@ -1,14 +1,13 @@
 import { useKpiStore } from "../stores/useKpiStore";
-import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { DrillDownModal, DrillRow, DrillLoad } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
 import { PRIME_TARGET_PCT } from "../config/cogsConfig";
-import { buildGroups, GROUP_COGS_PCT, type CogsGroup } from "../config/cogsGroups";
+import { buildGroups, type CogsGroup } from "../config/cogsGroups";
+import { money, money2 } from "../lib/money";
 
 type Props = { open: boolean; onClose: () => void };
 
-function fmt$(n: number) {
-  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
+const ORDER: CogsGroup[] = ["Food", "Beverage", "Alcohol"];
 
 function SectionHeader({ title, right }: { title: string; right?: string }) {
   const skin = useSkin();
@@ -69,7 +68,7 @@ function SplitBar({ laborPct, cogsPct }: { laborPct: number; cogsPct: number }) 
   );
 }
 
-/** vs. target gauge row */
+/** vs. target gauge row — only ever rendered against a real target. */
 function TargetRow({ actual, target }: { actual: number; target: number }) {
   const skin = useSkin();
   const diff = actual - target;
@@ -112,18 +111,33 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
   const laborDetailRich = useKpiStore((s) => s.laborDetailRich);
   const cogsDetail      = useKpiStore((s) => s.cogsDetail);
   const salesVal        = useKpiStore((s) => s.sales.value);
+  const meta            = useKpiStore((s) => s.meta);
+  const snapStatus      = useKpiStore((s) => s.status);
+  const asOf            = useKpiStore((s) => s.asOf);
+  const refresh         = useKpiStore((s) => s.refresh);
+  const detailStatus    = useKpiStore((s) => s.detailStatus);
 
   if (!primeTile) return null;
 
   const primePct = parseFloat(primeTile.value) || 0;
   const laborPct = laborDetail && salesVal > 0
     ? (laborDetail.laborCost / salesVal) * 100
-    : 0;
+    : null;
   // The period's effective COGS % from the seed; no split bar until it is here.
-  const cogsPct = cogsDetail?.effectiveCOGSPct ?? null;
+  const cogsPct = cogsDetail && Number.isFinite(cogsDetail.effectiveCOGSPct)
+    ? cogsDetail.effectiveCOGSPct
+    : null;
 
-  // Food/Bev/Alcohol breakdown from live category data
+  // Food/Bev/Alcohol breakdown — revenue from the category rows, cost from the
+  // seed's own rate on each row (never a house 26/20/22).
   const groups = cogsDetail ? buildGroups(cogsDetail.categorySales) : null;
+  // ...and buildGroups([]) is three groups of zero, not three groups worth $0:
+  // a COGS read that carried no category rows has measured nothing here, so the
+  // rows only exist once some category revenue does (the same guard the COGS
+  // sheet puts on the same data).
+  const groupTotal = groups
+    ? groups.Food.revenue + groups.Beverage.revenue + groups.Alcohol.revenue
+    : 0;
 
   return (
     <DrillDownModal
@@ -133,24 +147,30 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
       label="Prime Cost"
       value={primeTile.value}
       status={primeTile.status}
+      feed={{ status: snapStatus, asOf, daysExpected: meta?.daysExpected, daysMissing: meta?.daysMissing }}
     >
       {/* ── Split bar ─────────────────────────────────── */}
-      {primePct > 0 && cogsPct != null && laborDetail && <SplitBar laborPct={laborPct} cogsPct={cogsPct} />}
+      {primePct > 0 && cogsPct != null && laborPct != null && <SplitBar laborPct={laborPct} cogsPct={cogsPct} />}
 
       {/* ── vs. Target ────────────────────────────────── */}
-      {primePct > 0 && <TargetRow actual={primePct} target={PRIME_TARGET_PCT} />}
+      {/* No target ships in the app (the old one was summed from a column the
+          config file declared a mock). Say so rather than score against it. */}
+      {primePct > 0 && PRIME_TARGET_PCT != null && <TargetRow actual={primePct} target={PRIME_TARGET_PCT} />}
+      {primePct > 0 && PRIME_TARGET_PCT == null && (
+        <DrillRow label="vs. Target" value="--" sub="no prime-cost target on file for this restaurant" dimmed />
+      )}
 
       {/* ── Labor Breakdown ───────────────────────────── */}
-      <SectionHeader title="Labor" right={laborDetailRich ? undefined : "loading…"} />
+      <SectionHeader title="Labor" />
 
       <DrillRow
         label="Hourly Labor"
-        value={laborDetailRich ? fmt$(laborDetailRich.hourlyCost) : "--"}
+        value={laborDetailRich ? money(laborDetailRich.hourlyCost) : "--"}
         sub={laborDetailRich ? `${laborDetailRich.hourlyHours.toFixed(1)} hrs` : undefined}
       />
       <DrillRow
         label="Salary / Exempt"
-        value={laborDetailRich ? fmt$(laborDetailRich.salaryCost) : "--"}
+        value={laborDetailRich ? money(laborDetailRich.salaryCost) : "--"}
         sub={laborDetailRich?.salaryCost === 0 ? "none clocked in" : undefined}
         dimmed={laborDetailRich?.salaryCost === 0}
       />
@@ -160,13 +180,13 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
         <>
           <DrillRow
             label="Front of House"
-            value={fmt$(laborDetailRich.fohCost)}
+            value={money(laborDetailRich.fohCost)}
             sub="servers · bartenders · hosts"
             dimmed
           />
           <DrillRow
             label="Back of House"
-            value={fmt$(laborDetailRich.bohCost)}
+            value={money(laborDetailRich.bohCost)}
             sub="kitchen · prep · dish"
             dimmed
           />
@@ -191,7 +211,7 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
       {laborDetailRich?.projectedEOD != null && (
         <DrillRow
           label="Projected EOD Labor"
-          value={fmt$(laborDetailRich.projectedEOD)}
+          value={money(laborDetailRich.projectedEOD)}
           sub="extrapolated to 10 PM close"
         />
       )}
@@ -199,21 +219,34 @@ export function PrimeCostDrillDown({ open, onClose }: Props) {
       {/* ── COGS Breakdown ────────────────────────────── */}
       <SectionHeader
         title="COGS"
-        right={cogsDetail ? `${cogsDetail.effectiveCOGSPct.toFixed(1)}% effective` : "loading…"}
+        right={cogsPct != null ? `${cogsPct.toFixed(1)}% effective` : undefined}
       />
-      {groups ? (
-        (["Food", "Beverage", "Alcohol"] as CogsGroup[]).map((g) => (
-          <DrillRow
-            key={g}
-            label={`${g} (${GROUP_COGS_PCT[g]}%)`}
-            value={`$${groups[g].cost.toFixed(2)}`}
-            sub={`$${groups[g].revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} sales`}
-            dimmed={groups[g].revenue === 0}
-          />
-        ))
-      ) : (
-        <DrillRow label="Loading COGS data…" value="--" />
-      )}
+      {groups && groupTotal > 0 ? (
+        ORDER.map((g) => {
+          const d = groups[g];
+          return (
+            <DrillRow
+              key={g}
+              label={d.pct != null ? `${g} (${d.pct.toFixed(1)}%)` : g}
+              value={d.cost != null ? money2(d.cost) : "--"}
+              sub={d.cost != null
+                ? `${money(d.revenue)} sales`
+                : `${money(d.revenue)} sales · no cost from the seed`}
+              dimmed={d.revenue === 0 || d.cost == null}
+            />
+          );
+        })
+      ) : cogsDetail ? (
+        <DrillRow label="No category data from Toast" value="--" sub="Sales categories may not be configured in Toast" dimmed />
+      ) : null}
+
+      <DrillLoad
+        open={open}
+        present={!!laborDetailRich && !!cogsDetail}
+        status={detailStatus}
+        subject="the prime-cost breakdown"
+        load={refresh}
+      />
 
     </DrillDownModal>
   );

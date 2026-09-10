@@ -1,7 +1,12 @@
-import { ownerFetch } from "./ownerFetch";
+import { ownerRead } from "./ownerFetch";
+import type { ReadResult } from "./ownerFetch";
 import type { Period } from "../stores/useKpiStore";
 // Client-side adapter: calls our own /api/toast-* endpoints.
 // All Toast auth + secrets live server-side (api/_toast.mjs).
+//
+// Every read hands back a ReadResult: a failure says "error" and carries the
+// message. It is never flattened to null, which the caller could only render
+// as "still loading" or as nothing at all.
 
 export type SalesResult = {
   total: number;
@@ -82,34 +87,16 @@ export type SalesDetailResult = PeriodMetaFields & {
   fetchedAt: string;
 };
 
-export async function fetchTodaySales(): Promise<SalesResult | null> {
-  try {
-    const res = await ownerFetch("/api/toast-sales", { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as SalesResult;
-  } catch {
-    return null;
-  }
+export function fetchTodaySales(): Promise<ReadResult<SalesResult>> {
+  return ownerRead<SalesResult>("/api/toast-sales");
 }
 
-export async function fetchTodayLabor(): Promise<LaborResult | null> {
-  try {
-    const res = await ownerFetch("/api/toast-labor", { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as LaborResult;
-  } catch {
-    return null;
-  }
+export function fetchTodayLabor(): Promise<ReadResult<LaborResult>> {
+  return ownerRead<LaborResult>("/api/toast-labor");
 }
 
-export async function fetchLaborDetail(period: Period = "day"): Promise<LaborDetailResult | null> {
-  try {
-    const res = await ownerFetch(`/api/toast-labor-detail?period=${period}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as LaborDetailResult;
-  } catch {
-    return null;
-  }
+export function fetchLaborDetail(period: Period = "day"): Promise<ReadResult<LaborDetailResult>> {
+  return ownerRead<LaborDetailResult>(`/api/toast-labor-detail?period=${period}`);
 }
 
 export type CategorySale = {
@@ -145,22 +132,10 @@ export type COGSDetailResult = PeriodMetaFields & {
   fetchedAt: string;
 };
 
-export async function fetchCOGSDetail(period: Period = "day"): Promise<COGSDetailResult | null> {
-  try {
-    const res = await ownerFetch(`/api/toast-cogs-detail?period=${period}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as COGSDetailResult;
-  } catch {
-    return null;
-  }
+export function fetchCOGSDetail(period: Period = "day"): Promise<ReadResult<COGSDetailResult>> {
+  return ownerRead<COGSDetailResult>(`/api/toast-cogs-detail?period=${period}`);
 }
 
-export async function fetchSalesDetail(period: Period = "day"): Promise<SalesDetailResult | null> {
-  try {
-    const res = await ownerFetch(`/api/toast-sales-detail?period=${period}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return (await res.json()) as SalesDetailResult;
-  } catch {
-    return null;
-  }
+export function fetchSalesDetail(period: Period = "day"): Promise<ReadResult<SalesDetailResult>> {
+  return ownerRead<SalesDetailResult>(`/api/toast-sales-detail?period=${period}`);
 }

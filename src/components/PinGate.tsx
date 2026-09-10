@@ -27,7 +27,10 @@ export function PinGate({ children }: { children: ReactNode }) {
       const r = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin: value }) });
       if (r.ok) { setPin(""); setState("open"); return; }
       const j = await r.json().catch(() => ({}));
-      setErr(r.status === 429 ? (j.error ?? "too many attempts") : "That's not it.");
+      // Only the seed's own rejection means the PIN is wrong. A 500 (this app
+      // is misconfigured) or 502 (the seed did not answer) is unavailability,
+      // and says so in words -- it is not a denial.
+      setErr(r.status === 429 ? (j.error ?? "too many attempts") : r.status === 401 || r.status === 403 ? "That's not it." : (j.error ?? "Couldn't reach the server."));
       setPin("");
     } catch { setErr("Can't reach the server."); }
     finally { setBusy(false); }

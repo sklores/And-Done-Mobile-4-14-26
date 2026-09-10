@@ -18,19 +18,26 @@ const GIZMO_BUBBLE = "#148A78";
 // ── Edge Function endpoint ───────────────────────────────────────────────────
 // Gizmo runs on the seed (G19) -- same database as the tiles, and it knows
 // which period is on the screen.
+type GizmoReply =
+  | { ok: true; text: string; logged_note: { id: string; text: string; created_at: string } | null }
+  | { ok: false; error: string };
+
 async function callGizmo(
   messages: Message[],
   mode: "chat" | "opening_summary",
   period: Period,
-): Promise<{ text: string; logged_note: { id: string; text: string; created_at: string } | null }> {
+): Promise<GizmoReply> {
   const payload = { mode, messages: messages.map((m) => ({ role: m.role === "gizmo" ? "assistant" : "user", content: m.text })) };
   try {
     const res = await ownerFetch(`/api/seed?view=gizmo&period=${period}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { text: `Hm, hit an error: ${data.error ?? res.status}`, logged_note: null };
-    return { text: data.text as string, logged_note: data.logged_note ?? null };
+    const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string; logged_note?: { id: string; text: string; created_at: string } | null };
+    // A failed call is never dressed up as an answer: it would look like
+    // Gizmo speaking, and would ride back as a model turn on the next send.
+    if (!res.ok) return { ok: false, error: String(data.error ?? res.status) };
+    if (typeof data.text !== "string") return { ok: false, error: "empty reply" };
+    return { ok: true, text: data.text, logged_note: data.logged_note ?? null };
   } catch (e) {
-    return { text: `Network issue reaching Gizmo — try again. (${(e as Error).message})`, logged_note: null };
+    return { ok: false, error: (e as Error).message || "network issue" };
   }
 }
 
@@ -124,6 +131,9 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
   const period     = useKpiStore((s) => s.period);
   const netVal     = useKpiStore((s) => s.net.value);
   const tiles      = useKpiStore((s) => s.tiles);
+  const snapStatus = useKpiStore((s) => s.status);
+  const asOf       = useKpiStore((s) => s.asOf);
+  const meta       = useKpiStore((s) => s.meta);
 
   const laborTile = tiles.find((t) => t.key === "labor");
   const cogsTile  = tiles.find((t) => t.key === "cogs");
@@ -131,9 +141,11 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
   const [sending, setSending]   = useState(false);
+  const [gizmoError, setGizmoError] = useState<string | null>(null);
   const [blink, setBlink]       = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const openedOnce = useRef(false);
+  const retryRef = useRef<(() => void) | null>(null);
 
   // Periodic blink
   useEffect(() => {
@@ -147,7 +159,7 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
   // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+  }, [messages, sending, gizmoError]);
 
   // Opening summary: fire once per mount of the open tab
   useEffect(() => {
@@ -160,26 +172,39 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
 
     // Reset messages for a fresh session each time the tab opens (per spec #5)
     setMessages([]);
-    setSending(true);
-    callGizmo([], "opening_summary", period).then(({ text }) => {
-      setMessages([{ id: `g-${Date.now()}`, role: "gizmo", text }]);
-      setSending(false);
-    });
+    const openingSummary = () => {
+      setGizmoError(null);
+      setSending(true);
+      void callGizmo([], "opening_summary", period).then((reply) => {
+        setSending(false);
+        if (!reply.ok) {
+          setGizmoError(reply.error);
+          retryRef.current = openingSummary;
+          return;
+        }
+        setMessages([{ id: `g-${Date.now()}`, role: "gizmo", text: reply.text }]);
+      });
+    };
+    openingSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the opening summary is for the period at open time
   }, [open]);
 
-  async function sendMessage(text?: string) {
-    const trimmed = (text ?? input).trim();
-    if (!trimmed || sending) return;
-    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: trimmed };
-    if (!text) setInput("");
-    const next = [...messages, userMsg];
-    setMessages(next);
+  async function deliver(history: Message[]) {
+    setGizmoError(null);
     setSending(true);
-
-    const { text: reply, logged_note } = await callGizmo(next, "chat", period);
-    setMessages((m) => [...m, { id: `g-${Date.now()}`, role: "gizmo", text: reply }]);
+    const reply = await callGizmo(history, "chat", period);
     setSending(false);
+
+    if (!reply.ok) {
+      // The question stays in the thread and the failure is shown as a failure,
+      // with a retry that re-sends exactly these turns.
+      setGizmoError(reply.error);
+      retryRef.current = () => void deliver(history);
+      return;
+    }
+
+    const { text: replyText, logged_note } = reply;
+    setMessages((m) => [...m, { id: `g-${Date.now()}`, role: "gizmo", text: replyText }]);
 
     // If Gizmo wrote a log note, mirror it into the store so the Log tab
     // updates instantly even if realtime hasn't delivered yet.
@@ -196,9 +221,35 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
     }
   }
 
+  async function sendMessage(text?: string) {
+    const trimmed = (text ?? input).trim();
+    if (!trimmed || sending) return;
+    const userMsg: Message = { id: `u-${Date.now()}`, role: "user", text: trimmed };
+    if (!text) setInput("");
+    const next = [...messages, userMsg];
+    setMessages(next);
+    await deliver(next);
+  }
+
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") void sendMessage();
   }
+
+  // The chips are the same snapshot the home screen shows, so they carry the
+  // same stamp: a number and its as-of travel together, and a stale or failed
+  // pull is labelled rather than passed off as live.
+  const stamp = asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : null;
+  const chipsNote =
+    snapStatus === "loading" ? "loading…"
+      // "last known" only if a snapshot was actually known: a first pull that
+      // failed has nothing behind the chips to be stale.
+      : snapStatus === "error" ? (stamp ? `offline · last known ${stamp}` : "couldn't load the numbers")
+      : snapStatus === "empty" ? `no numbers yet for ${PERIOD_LABEL[period].toLowerCase()}`
+      : [
+          stamp,
+          meta && meta.daysMissing > 0 ? `${meta.daysMissing} day${meta.daysMissing === 1 ? "" : "s"} missing` : null,
+          meta?.laborEstimated ? "labor estimated" : null,
+        ].filter(Boolean).join(" · ") || "as-of unknown";
 
   return (
     <TabPanel open={open} onClose={onClose} title="Gizmo" accent={GIZMO_DARK}>
@@ -231,10 +282,11 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
         ) : null}
       </div>
 
-      {/* ── Live snapshot chips ───────────────────────── */}
+      {/* ── Snapshot chips (with the snapshot's own as-of) ─ */}
       <div style={{
-        display: "flex", gap: 8, padding: "10px 18px 14px",
+        display: "flex", gap: 8, padding: "10px 18px 0",
         overflowX: "auto", scrollbarWidth: "none",
+        opacity: snapStatus === "ready" ? 1 : 0.55,
       }}>
         {[
           { label: PERIOD_LABEL[period], val: salesVal > 0 ? `$${salesVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "--" },
@@ -256,6 +308,14 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
             </div>
           </div>
         ))}
+      </div>
+      <div style={{
+        padding: "5px 18px 12px",
+        fontFamily: skin.fonts.body, fontSize: 9.5, fontWeight: 700,
+        letterSpacing: ".04em", textTransform: "uppercase",
+        color: snapStatus === "error" ? "#B94A4A" : "#8A9C9C",
+      }}>
+        {chipsNote}
       </div>
 
       {/* ── Chat messages ─────────────────────────────── */}
@@ -313,6 +373,31 @@ export function GizmoTab({ open, onClose, onOpenTab }: Props) {
             }}>
               <TypingDots />
             </div>
+          </div>
+        )}
+
+        {gizmoError && !sending && (
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <button
+              type="button"
+              onClick={() => retryRef.current?.()}
+              style={{
+                maxWidth: "82%",
+                background: "rgba(185,74,74,0.08)",
+                border: "1px solid rgba(185,74,74,0.35)",
+                borderRadius: 12,
+                padding: "9px 12px",
+                textAlign: "left",
+                fontFamily: skin.fonts.body,
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#B94A4A",
+                cursor: "pointer",
+                lineHeight: 1.45,
+              }}
+            >
+              ⚠ Couldn't reach Gizmo — {gizmoError}. Tap to retry.
+            </button>
           </div>
         )}
 

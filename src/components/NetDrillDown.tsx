@@ -1,12 +1,10 @@
 import { useKpiStore } from "../stores/useKpiStore";
-import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { useFixedCostStore } from "../stores/useFixedCostStore";
+import { DrillDownModal, DrillRow, DrillNote, DrillLoad } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
+import { money } from "../lib/money";
 
 type Props = { open: boolean; onClose: () => void };
-
-function fmt$(n: number) {
-  return `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
 
 function SectionHeader({ title }: { title: string }) {
   const skin = useSkin();
@@ -65,13 +63,22 @@ function WaterfallBar({ sales, prime, fixed, net }: {
 }
 
 export function NetDrillDown({ open, onClose }: Props) {
-  const skin = useSkin();
-  const net    = useKpiStore((s) => s.net);
-  const detail = useKpiStore((s) => s.netDetail);
-  const period = useKpiStore((s) => s.period);
+  const net          = useKpiStore((s) => s.net);
+  const detail       = useKpiStore((s) => s.netDetail);
+  const period       = useKpiStore((s) => s.period);
+  const meta         = useKpiStore((s) => s.meta);
+  const snapStatus   = useKpiStore((s) => s.status);
+  const asOf         = useKpiStore((s) => s.asOf);
+  const pullSnapshot = useKpiStore((s) => s.pullSnapshot);
+  const rentKind     = useFixedCostStore((s) => s.rent);
   const word   = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
 
   const isLoss = (detail?.netDollars ?? 0) < 0;
+  // The org's own rent shape, from the seed's org_rates -- the same fact the
+  // Fixed sheet and the P&L read. It is not 10% because this app says so.
+  const rentLabel = rentKind?.kind === "pct_of_sales" ? `Rent (${rentKind.pct}% of sales)` : "Rent";
+  const shareOfSales = (part: number) =>
+    detail && detail.salesDollars > 0 ? `${((part / detail.salesDollars) * 100).toFixed(1)}% of sales` : undefined;
 
   return (
     <DrillDownModal
@@ -83,8 +90,9 @@ export function NetDrillDown({ open, onClose }: Props) {
         ? `${detail.netPct.toFixed(1)}%`
         : net.value}
       status={detail
-        ? (isLoss ? "Net Loss" : `$${Math.round(detail.netDollars).toLocaleString()} ${word}`)
+        ? (isLoss ? "Net Loss" : `${money(detail.netDollars)} ${word}`)
         : word}
+      feed={{ status: snapStatus, asOf, daysExpected: meta?.daysExpected, daysMissing: meta?.daysMissing }}
     >
       {/* ── Waterfall bar ─────────────────────────────── */}
       {detail && (
@@ -100,7 +108,7 @@ export function NetDrillDown({ open, onClose }: Props) {
       <SectionHeader title="Revenue" />
       <DrillRow
         label="Net Sales"
-        value={detail ? fmt$(detail.salesDollars) : "--"}
+        value={detail ? money(detail.salesDollars) : "--"}
         sub="pre-tax · pre-tip"
       />
 
@@ -108,48 +116,46 @@ export function NetDrillDown({ open, onClose }: Props) {
       <SectionHeader title="Less: Prime Cost" />
       <DrillRow
         label="Labor"
-        value={detail ? fmt$(detail.laborDollars) : "--"}
-        sub={detail ? `${((detail.laborDollars / detail.salesDollars) * 100).toFixed(1)}% of sales` : undefined}
+        value={detail ? money(detail.laborDollars) : "--"}
+        sub={detail ? shareOfSales(detail.laborDollars) : undefined}
         dimmed
       />
       <DrillRow
         label="COGS"
-        value={detail ? fmt$(detail.cogsDollars) : "--"}
-        sub={detail && detail.salesDollars > 0
-          ? `${((detail.cogsDollars / detail.salesDollars) * 100).toFixed(1)}% of sales`
-          : undefined}
+        value={detail ? money(detail.cogsDollars) : "--"}
+        sub={detail ? shareOfSales(detail.cogsDollars) : undefined}
         dimmed
       />
       <DrillRow
         label="Prime Cost Total"
-        value={detail ? fmt$(detail.primeDollars) : "--"}
+        value={detail ? money(detail.primeDollars) : "--"}
         sub={detail ? `${detail.primePct.toFixed(1)}% of sales` : undefined}
       />
 
       {/* ── Fixed Cost ────────────────────────────────── */}
       <SectionHeader title="Less: Fixed Cost" />
       <DrillRow
-        label="Rent (10% of sales)"
-        value={detail ? fmt$(detail.rentDollars) : "--"}
+        label={rentLabel}
+        value={detail ? money(detail.rentDollars) : "--"}
         dimmed
       />
       <DrillRow
         label="Amortized Fixed"
-        value={detail ? fmt$(detail.amortizedDollars) : "--"}
+        value={detail ? money(detail.amortizedDollars) : "--"}
         sub="utilities · insurance · loan · etc."
         dimmed
       />
       {detail && detail.mrDollars > 0 && (
         <DrillRow
           label="Maintenance & Repair"
-          value={fmt$(detail.mrDollars)}
+          value={money(detail.mrDollars)}
           sub={`logged ${word}`}
           dimmed
         />
       )}
       <DrillRow
         label="Fixed Cost Total"
-        value={detail ? fmt$(detail.fixedDollars) : "--"}
+        value={detail ? money(detail.fixedDollars) : "--"}
         sub={detail ? `${detail.fixedPct.toFixed(1)}% of sales` : undefined}
       />
 
@@ -157,23 +163,27 @@ export function NetDrillDown({ open, onClose }: Props) {
       <SectionHeader title="= Net Profit" />
       <DrillRow
         label={isLoss ? "Net Loss" : "Net Profit"}
-        value={detail
-          ? `${isLoss ? "−" : ""}${fmt$(detail.netDollars)}`
-          : "--"}
+        value={detail ? money(detail.netDollars) : "--"}
         sub={detail ? `${detail.netPct.toFixed(1)}% margin` : undefined}
       />
 
-      {!detail && (
-        <div style={{
-          padding: "24px 18px",
-          textAlign: "center",
-          fontFamily: skin.fonts.body,
-          fontSize: 12,
-          color: "#8A9C9C",
-        }}>
-          Waiting for sales data…
-        </div>
+      {/* Nothing for this period yet is not a failed read -- say which it is.
+          A snapshot that landed with no sales is "ready" with no netDetail
+          (nothing to divide by): that is an answer, so it is the named empty
+          here, never "couldn't load" over a read that succeeded. */}
+      {!detail && (snapStatus === "ready" || snapStatus === "empty") && (
+        <DrillNote>No sales on file for {word} yet.</DrillNote>
       )}
+      <DrillLoad
+        open={open}
+        present={!!detail || snapStatus === "ready" || snapStatus === "empty"}
+        /* A snapshot that landed with nothing in it is a read that succeeded:
+           it reaches this as "ready" (the named empty above says so), never as
+           a failure. */
+        status={snapStatus === "empty" ? "ready" : snapStatus}
+        subject="the P&L for this period"
+        load={pullSnapshot}
+      />
     </DrillDownModal>
   );
 }

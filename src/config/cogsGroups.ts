@@ -1,30 +1,68 @@
-// Maps Toast category names → Food / Beverage / Alcohol group.
-// Any unrecognised category falls back to "Food".
+// Maps the seed's category rows → Food / Beverage / Alcohol groups.
+//
+// The COST is the seed's, always: apps/web sends each category's own rate and
+// dollars (CategorySale.cogsPct / cogsDollars) from the org's effective-dated
+// org_rates row -- the same numbers the COGS tile and the P&L are built from.
+// This file used to recompute cost from a hard-coded 26/20/22, so changing an
+// org's food rate moved the tile and left the drill-down under it showing
+// "Food (26% COGS)" and a smaller number. A rate is a per-restaurant fact; it
+// is never a constant in the app.
+//
+// A category the seed priced with nothing stays unknown: cost null, rendered
+// "--". Never a zero standing in for a missing read.
 import type { CategorySale } from "../data/toastAdapter";
 
 export type CogsGroup = "Food" | "Beverage" | "Alcohol";
-export type GroupData  = { revenue: number; cost: number };
+export type GroupData = {
+  revenue: number;
+  /** Seed-costed dollars for the group; null = the seed priced nothing here. */
+  cost: number | null;
+  /** Blended COGS % implied by the seed's OWN dollars; null = nothing to divide. */
+  pct: number | null;
+};
 
-/** Roll up categorySales into the three groups and apply fixed COGS %. */
-export function buildGroups(cats: CategorySale[]): Record<CogsGroup, GroupData> {
-  const groups: Record<CogsGroup, GroupData> = {
-    Food:     { revenue: 0, cost: 0 },
-    Beverage: { revenue: 0, cost: 0 },
-    Alcohol:  { revenue: 0, cost: 0 },
-  };
-  for (const cat of cats) {
-    const g = categoryGroup(cat.name);
-    groups[g].revenue += cat.revenue;
-    groups[g].cost    += cat.revenue * (GROUP_COGS_PCT[g] / 100);
-  }
-  return groups;
+const GROUPS: CogsGroup[] = ["Food", "Beverage", "Alcohol"];
+
+const finite = (v: unknown): number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
+
+/** One category's cost, from the seed: its dollars if they are on the wire,
+ *  else its own rate applied to its own revenue. Null if it sent neither. */
+function seedCost(cat: CategorySale): number | null {
+  const dollars = finite(cat.cogsDollars);
+  if (dollars != null) return dollars;
+  const pct = finite(cat.cogsPct);
+  return pct != null ? (cat.revenue * pct) / 100 : null;
 }
 
-export const GROUP_COGS_PCT: Record<CogsGroup, number> = {
-  Food:     26,
-  Beverage: 20,
-  Alcohol:  22,
-};
+/** Roll up categorySales into the three groups, carrying the seed's cost. */
+export function buildGroups(cats: CategorySale[]): Record<CogsGroup, GroupData> {
+  const sum: Record<CogsGroup, number> = { Food: 0, Beverage: 0, Alcohol: 0 };
+  const revenue: Record<CogsGroup, number> = { Food: 0, Beverage: 0, Alcohol: 0 };
+  // A group is only costed if EVERY row in it came priced -- a partial sum
+  // presented as the group's cost is the same lie as a zero.
+  const priced: Record<CogsGroup, boolean> = { Food: false, Beverage: false, Alcohol: false };
+  const unpriced: Record<CogsGroup, boolean> = { Food: false, Beverage: false, Alcohol: false };
+
+  for (const cat of cats) {
+    const g = categoryGroup(cat.name);
+    revenue[g] += cat.revenue;
+    const cost = seedCost(cat);
+    if (cost == null) unpriced[g] = true;
+    else { sum[g] += cost; priced[g] = true; }
+  }
+
+  const out = {} as Record<CogsGroup, GroupData>;
+  for (const g of GROUPS) {
+    const cost = priced[g] && !unpriced[g] ? sum[g] : null;
+    out[g] = {
+      revenue: revenue[g],
+      cost,
+      pct: cost != null && revenue[g] > 0 ? (cost / revenue[g]) * 100 : null,
+    };
+  }
+  return out;
+}
 
 const FOOD_CATS = new Set([
   "Food","Sandwiches","Grilled Cheese","Soups","Soup","Sides","Side",

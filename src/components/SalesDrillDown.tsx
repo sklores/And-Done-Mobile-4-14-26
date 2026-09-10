@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
 import { useKpiStore } from "../stores/useKpiStore";
-import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { DrillDownModal, DrillRow, DrillLoad } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
 import { scoreAgainstExpected } from "../config/salesTargetConfig";
-import { fetchTrackedItems } from "../data/trackedItemsAdapter";
+import { fetchTrackedItems, TRACKED_ITEMS_AVAILABLE } from "../data/trackedItemsAdapter";
+import { money, money2 } from "../lib/money";
 import type { PmixItem, HourlySales } from "../data/toastAdapter";
 
 type Props = { open: boolean; onClose: () => void };
 
-function fmt$(n: number) {
-  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-function fmtDec$(n: number) {
-  return `$${n.toFixed(2)}`;
+/** Wall-clock for an ISO stamp, or null when there isn't one. */
+function clock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, right }: { title: string; right?: string }) {
   const skin = useSkin();
   return (
     <div
@@ -30,9 +31,13 @@ function SectionHeader({ title }: { title: string }) {
         background: "#F2F7F6",
         borderTop: "1px solid rgba(0,0,0,0.05)",
         borderBottom: "1px solid rgba(0,0,0,0.05)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
       }}
     >
-      {title}
+      <span>{title}</span>
+      {right && <span style={{ fontSize: 9, opacity: 0.65 }}>{right}</span>}
     </div>
   );
 }
@@ -56,7 +61,7 @@ function DayBarRow({ date, sales, peak, live, partial }: { date: string; sales: 
         <div style={{ width: `${width}%`, height: "100%", borderRadius: 5, background: live ? "#2F6B58" : partial ? "#C9A227" : "#4A7C6F", opacity: live ? 0.7 : 1 }} />
       </div>
       <div style={{ width: 64, textAlign: "right", fontFamily: skin.fonts.display, fontSize: 13, fontWeight: 700, color: "#2A3C48", flexShrink: 0 }}>
-        ${Math.round(sales).toLocaleString()}<span style={{ fontSize: 9, color: "#8A9C9C", marginLeft: 3 }}>{live ? "live" : partial ? "partial" : ""}</span>
+        {money(sales)}<span style={{ fontSize: 9, color: "#8A9C9C", marginLeft: 3 }}>{live ? "live" : partial ? "partial" : ""}</span>
       </div>
     </div>
   );
@@ -131,7 +136,7 @@ function HourBarRow({
           flexShrink: 0,
         }}
       >
-        {entry.sales > 0 ? fmt$(entry.sales) : "—"}
+        {entry.sales > 0 ? money(entry.sales) : "—"}
       </div>
     </div>
   );
@@ -194,7 +199,7 @@ function PmixRow({ item, rank, accent }: { item: PmixItem; rank: number; accent?
           flexShrink: 0,
         }}
       >
-        {fmtDec$(item.revenue)}
+        {money2(item.revenue)}
       </div>
     </div>
   );
@@ -205,27 +210,37 @@ export function SalesDrillDown({ open, onClose }: Props) {
   const sales           = useKpiStore((s) => s.sales);
   const detail          = useKpiStore((s) => s.salesDetail);
 
-  const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-
   const meta            = useKpiStore((s) => s.meta);
   const snapStatus      = useKpiStore((s) => s.status);
+  const asOf            = useKpiStore((s) => s.asOf);
+  const refresh         = useKpiStore((s) => s.refresh);
+  const detailStatus    = useKpiStore((s) => s.detailStatus);
   const period          = useKpiStore((s) => s.period);
   const word            = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
   const mixLabel        = detail?.pmixRange ? `${detail.pmixRange.days} closed day${detail.pmixRange.days === 1 ? "" : "s"}` : detail?.pmixDate ? `latest full day · ${detail.pmixDate.slice(5).replace("-", "/")}` : "";
   const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
+
+  // A headline of "$0" is a claim. Only print the number once a snapshot has
+  // actually landed (a failed refresh keeps the last one, and the header's
+  // own line says so).
+  const haveNumbers = snapStatus === "ready" || (snapStatus === "error" && asOf != null);
+  const salesDisplay = haveNumbers ? money(sales.value) : "--";
 
   // Tracked items watchlist — read from org_settings.tracked_items_json
   // (the same column desktop reads/writes from). v1 shows today's qty/rev
   // for each name by joining against today's pmix; WoW comparison would
   // need a new Toast analytics call (follow-up).
   const [tracked, setTracked] = useState<string[]>([]);
+  const [trackedFailed, setTrackedFailed] = useState(false);
   const [trackedExpanded, setTrackedExpanded] = useState(false);
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    fetchTrackedItems().then((names) => {
-      if (!cancelled) setTracked(names);
-    });
+    // A read that throws leaves `tracked` at [] -- which is why it has to be
+    // caught and named: an empty watchlist and an unread one are not the same.
+    fetchTrackedItems()
+      .then((names) => { if (!cancelled) { setTracked(names); setTrackedFailed(false); } })
+      .catch(() => { if (!cancelled) setTrackedFailed(true); });
     return () => { cancelled = true; };
   }, [open]);
 
@@ -247,16 +262,22 @@ export function SalesDrillDown({ open, onClose }: Props) {
   // total as a share of headline sales (same denominator the operator sees as
   // "Sales" at the top of this sheet). Unmatched items contribute $0.
   const trackedTotal = trackedMatches.reduce((sum, t) => sum + (t.match?.revenue ?? 0), 0);
-  const trackedPctOfSales = sales.value > 0 ? (trackedTotal / sales.value) * 100 : 0;
+  const trackedPctOfSales = haveNumbers && sales.value > 0 ? (trackedTotal / sales.value) * 100 : null;
 
   // Derive total 3rd party
   const ch = detail?.channels;
   const thirdParty  = ch ? (ch.doordash + ch.ubereats + ch.grubhub + ch.other3p) : null;
   const totalCh     = ch ? (ch.dinein + ch.takeout + ch.doordash + ch.ubereats + ch.grubhub + ch.other3p) : 0;
+  const channelsAt  = clock(detail?.fetchedAt);
+  // The rows and the headline are two feeds on two timers -- the same tick
+  // when they agree, one heartbeat apart when they don't. Percentages below
+  // are of the channels' OWN subtotal, which is why the gap has to be said.
+  const channelGap  = ch && haveNumbers ? sales.value - totalCh : null;
 
-  function pct(val: number) {
-    if (!totalCh) return "";
-    return ` · ${((val / totalCh) * 100).toFixed(0)}%`;
+  /** Share of the channel subtotal (not of the headline). */
+  function chPct(val: number) {
+    if (!totalCh) return undefined;
+    return `${((val / totalCh) * 100).toFixed(0)}% of channel total`;
   }
 
   return (
@@ -266,37 +287,46 @@ export function SalesDrillDown({ open, onClose }: Props) {
       score={salesScore}
       label="Sales"
       value={salesDisplay}
-      status={detail ? `${detail.pmixAll.length} items · ${mixLabel || word}` : word}
+      status={detail ? `${detail.pmixAll?.length ?? 0} items · ${mixLabel || word}` : word}
+      feed={{ status: snapStatus, asOf, daysExpected: meta?.daysExpected, daysMissing: meta?.daysMissing }}
     >
       {/* ── Channel Breakdown ─────────────────────────── */}
-      <SectionHeader title="Sales by Channel" />
+      <SectionHeader title="Sales by Channel" right={channelsAt ? `as of ${channelsAt}` : undefined} />
 
       <DrillRow
         label="Dine In"
-        value={ch ? fmt$(ch.dinein) : "--"}
-        sub={ch ? `${(totalCh > 0 ? (ch.dinein / totalCh) * 100 : 0).toFixed(0)}% of sales` : undefined}
+        value={ch ? money(ch.dinein) : "--"}
+        sub={ch ? chPct(ch.dinein) : undefined}
       />
       <DrillRow
         label="Takeout"
-        value={ch ? fmt$(ch.takeout) : "--"}
-        sub={ch ? `${(totalCh > 0 ? (ch.takeout / totalCh) * 100 : 0).toFixed(0)}% of sales` : undefined}
+        value={ch ? money(ch.takeout) : "--"}
+        sub={ch ? chPct(ch.takeout) : undefined}
       />
       <DrillRow
         label="3rd Party Total"
-        value={thirdParty != null ? fmt$(thirdParty) : "--"}
-        sub={ch && totalCh ? `${((thirdParty! / totalCh) * 100).toFixed(0)}% of sales` : undefined}
+        value={thirdParty != null ? money(thirdParty) : "--"}
+        sub={thirdParty != null ? chPct(thirdParty) : undefined}
       />
       {ch && ch.doordash > 0 && (
-        <DrillRow label="  · DoorDash"  value={fmt$(ch.doordash)} sub={`${pct(ch.doordash).replace(" · ", "")}`.trim() || undefined} dimmed />
+        <DrillRow label="  · DoorDash"  value={money(ch.doordash)} sub={chPct(ch.doordash)} dimmed />
       )}
       {ch && ch.ubereats > 0 && (
-        <DrillRow label="  · Uber Eats" value={fmt$(ch.ubereats)} sub={`${pct(ch.ubereats).replace(" · ", "")}`.trim() || undefined} dimmed />
+        <DrillRow label="  · Uber Eats" value={money(ch.ubereats)} sub={chPct(ch.ubereats)} dimmed />
       )}
       {ch && ch.grubhub > 0 && (
-        <DrillRow label="  · Grubhub"   value={fmt$(ch.grubhub)}  sub={`${pct(ch.grubhub).replace(" · ", "")}`.trim() || undefined} dimmed />
+        <DrillRow label="  · Grubhub"   value={money(ch.grubhub)}  sub={chPct(ch.grubhub)} dimmed />
       )}
       {ch && ch.other3p > 0 && (
-        <DrillRow label="  · Other"     value={fmt$(ch.other3p)}  dimmed />
+        <DrillRow label="  · Other"     value={money(ch.other3p)}  dimmed />
+      )}
+      {channelGap != null && Math.abs(channelGap) >= 1 && (
+        <DrillRow
+          label="Channel total"
+          value={money(totalCh)}
+          sub={`headline is ${money(sales.value)} — the two feeds are minutes apart`}
+          dimmed
+        />
       )}
 
       {/* ── Sales by Day (week / month) ───────────────── */}
@@ -330,8 +360,16 @@ export function SalesDrillDown({ open, onClose }: Props) {
         );
       })()}
 
-      {/* ── Tracked Items watchlist (curated on desktop, collapsible) ─ */}
-      {tracked.length > 0 && (
+      {/* ── Tracked Items watchlist (curated on desktop, collapsible) ─
+          No V2 surface owns the list yet (TRACKED_ITEMS_AVAILABLE), so the
+          empty array the adapter returns is "there is nowhere to read this
+          from" -- named here, because rendering nothing reads as "the operator
+          tracks nothing". A failed read is a third thing again. */}
+      {!TRACKED_ITEMS_AVAILABLE ? (
+        <SectionHeader title="Tracked Items" right="no watchlist source in V2 yet" />
+      ) : trackedFailed ? (
+        <SectionHeader title="Tracked Items" right="couldn't load the watchlist" />
+      ) : tracked.length > 0 && (
         <>
           <div
             role="button"
@@ -378,8 +416,8 @@ export function SalesDrillDown({ open, onClose }: Props) {
             <DrillRow
               key={name}
               label={name}
-              value={match ? fmt$(match.revenue) : "—"}
-              sub={match ? `${match.qty} sold` : "not sold"}
+              value={match ? money(match.revenue) : "—"}
+              sub={match ? `${match.qty} sold` : detail ? "not sold" : "no product mix loaded"}
               dimmed={!match}
             />
           ))}
@@ -418,7 +456,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
                     color: "#2F6B58",
                   }}
                 >
-                  {trackedPctOfSales.toFixed(1)}% of sales
+                  {trackedPctOfSales != null ? `${trackedPctOfSales.toFixed(1)}% of sales` : "no sales to compare"}
                 </span>
                 <span
                   style={{
@@ -428,7 +466,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
                     color: "#1A2E28",
                   }}
                 >
-                  {fmt$(trackedTotal)}
+                  {money(trackedTotal)}
                 </span>
               </span>
             </div>
@@ -456,19 +494,7 @@ export function SalesDrillDown({ open, onClose }: Props) {
         </>
       )}
 
-      {!detail && (
-        <div
-          style={{
-            padding: "24px 18px",
-            color: "#8A9C9C",
-            fontFamily: skin.fonts.body,
-            fontSize: 12,
-            textAlign: "center",
-          }}
-        >
-          Loading sales detail…
-        </div>
-      )}
+      <DrillLoad open={open} present={!!detail} status={detailStatus} subject="the sales detail" load={refresh} />
     </DrillDownModal>
   );
 }

@@ -6,6 +6,8 @@
 const LAT = 38.8977
 const LON = -77.0365
 
+// windKph may be null when the feed omits it: the wind upgrades simply
+// don't apply, rather than a missing wind being read as a calm one.
 const WMO_TO_CONDITION = (code, windKph) => {
   if (code === 0 || code === 1 || code === 2) {
     return windKph > 30 ? 'wind' : 'clear'
@@ -22,6 +24,8 @@ const WMO_TO_CONDITION = (code, windKph) => {
   return windKph > 30 ? 'wind' : 'clear'
 }
 
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
 export default async function handler(_req, res) {
   res.setHeader('content-type', 'application/json')
   res.setHeader('cache-control', 's-maxage=1800, stale-while-revalidate') // 30 min cache
@@ -30,15 +34,19 @@ export default async function handler(_req, res) {
     const r = await fetch(url)
     if (!r.ok) throw new Error(`open-meteo ${r.status}`)
     const data = await r.json()
-    const code    = data.current?.weather_code ?? 0
-    const windKph = data.current?.wind_speed_10m ?? 0
-    const tempF   = data.current?.temperature_2m ?? null
+    const code    = num(data.current?.weather_code)
+    // No code, no reading: a missing sky is not a clear one.
+    if (code === null) throw new Error('open-meteo: no current weather_code')
+    const windKph = num(data.current?.wind_speed_10m)
+    const tempF   = num(data.current?.temperature_2m)
     const condition = WMO_TO_CONDITION(code, windKph)
     res.statusCode = 200
     res.end(JSON.stringify({ condition, tempF, code, windKph, fetchedAt: new Date().toISOString() }))
   } catch (e) {
-    // Fail gracefully — clear sky is a safe default
-    res.statusCode = 200
-    res.end(JSON.stringify({ condition: 'clear', error: e.message }))
+    // A dead feed is unavailable, not sunny: no condition to paint, and the
+    // miss is not cached at the CDN for the next half hour.
+    res.setHeader('cache-control', 'no-store')
+    res.statusCode = 502
+    res.end(JSON.stringify({ condition: null, tempF: null, unavailable: true, error: e instanceof Error ? e.message : String(e) }))
   }
 }
