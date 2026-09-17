@@ -35,6 +35,10 @@ export async function fromSeed(view, env = process.env, extra = {}) {
   } catch (e) {
     throw fail(502, `seed ${view}: unreachable (${e instanceof Error ? e.message : String(e)})`);
   }
+  // 422 = the seed says a swipe asked for a window past the bounce (a day
+  // rolled over mid-swipe). The phone's request was wrong, not the seed:
+  // pass it through so the app can go home instead of showing "offline".
+  if (r.status === 422) throw fail(422, `seed ${view}: out of range`);
   if (!r.ok) throw fail(502, r.status === 401 || r.status === 403 ? `seed rejected the API key (${r.status})` : `seed ${view}: ${r.status}`);
   // A body we cannot parse is an unknown, not an empty tick.
   try { return await r.json(); } catch { throw fail(502, `seed ${view}: reply was not JSON`); }
@@ -46,7 +50,7 @@ export function proxy(view) {
     res.setHeader("content-type", "application/json");
     res.setHeader("cache-control", "no-store");
     try {
-      const data = await fromSeed(view, env, passThrough(req));
+      const data = await fromSeed(view, env, passThrough(req, view));
       res.statusCode = 200;
       res.end(JSON.stringify(data));
     } catch (e) {
@@ -58,8 +62,14 @@ export function proxy(view) {
   };
 }
 
-/** The only query param the browser may forward: which period the tiles sum. */
-export function passThrough(req) {
-  const period = new URL(req.url ?? "", "http://x").searchParams.get("period");
-  return period === "wtd" || period === "mtd" ? { period } : {};
+/** The query params the browser may forward: which period the tiles sum, and
+ *  -- for the tiles only -- how many whole periods back the swipe has gone.
+ *  Drill-downs are today's period by design, so `back` never rides on them. */
+export function passThrough(req, view) {
+  const q = new URL(req.url ?? "", "http://x").searchParams;
+  const period = q.get("period");
+  const out = period === "wtd" || period === "mtd" ? { period } : {};
+  const back = q.get("back");
+  if (view === "snapshot" && back != null && /^(?:[1-9]|1[01])$/.test(back)) out.back = back;
+  return out;
 }

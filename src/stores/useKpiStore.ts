@@ -62,6 +62,13 @@ function netScore(pct: number): number {
 // Shape of a kpi_snapshots row from Supabase
 type KpiSnapshot = {
   period?: string;
+  /** The window these numbers cover (org-local YYYY-MM-DD). */
+  period_start?: string;
+  period_end?: string;
+  /** Whole periods back from today's (0 = today's own, live). */
+  back?: number;
+  /** The seed's answer to "may the phone step back once more?" */
+  can_go_back?: boolean;
   has_data?: boolean;
   has_tick?: boolean;
   as_of?: string | null;
@@ -120,7 +127,21 @@ export type PeriodMeta = { daysExpected: number; daysClosed: number; daysPartial
 
 type KpiState = {
   period: Period;
+  /** Pressing a period is also the way home from a swipe: it always lands on
+   *  that period's today (back = 0). */
   setPeriod: (p: Period) => void;
+  /** Swipe-through-time. 0 = today's period (normal mode, drill-downs on);
+   *  n = n whole closed periods earlier (tiles only). Never persisted -- the
+   *  app always opens on today. */
+  back: number;
+  /** Only true once the current step's snapshot says so, so a fast double
+   *  swipe can't outrun the bounce. */
+  canGoBack: boolean;
+  /** The window the tiles are showing, from the seed. */
+  window: { start: string; end: string } | null;
+  /** Step one period earlier / later. false = bounced (nothing that way). */
+  stepBack: () => boolean;
+  stepForward: () => boolean;
   /** What the tiles are showing right now: loading (switching / first pull),
    *  ready, empty (no data for this period yet), error (last pull failed). */
   status: SnapshotStatus;
@@ -147,7 +168,7 @@ type KpiState = {
   detailError: string | null;
   refresh: () => Promise<void>;
   pullSnapshot: () => Promise<void>;
-  applySnapshot: (snap: KpiSnapshot, requested: Period) => void;
+  applySnapshot: (snap: KpiSnapshot, requested: Period, requestedBack?: number) => void;
   subscribeToSnapshots: () => () => void;
 };
 
@@ -186,16 +207,43 @@ const tilesWith = (status: string): Kpi[] => TILE_KEYS.map(([key, label]) => ({ 
 const placeholderTiles: Kpi[] = tilesWith("");
 let pullGeneration = 0;   // every pull gets a number; a reply from an older pull is ignored
 
+/** The tiles, blanked while the next window's numbers are in flight -- never
+ *  show one window's numbers under another's label. */
+const blankTiles = (p: Period) => ({
+  status: "loading" as SnapshotStatus, asOf: null, meta: null, window: null, canGoBack: false,
+  sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] },
+  net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null },
+  netDetail: null, tiles: tilesWith(""),
+});
+
 export const useKpiStore = create<KpiState>((set, get) => ({
   period: readPeriod(),
   setPeriod: (p) => {
-    if (p === get().period) return;
+    if (p === get().period && get().back === 0) return;
     try { localStorage.setItem(PERIOD_KEY, p); } catch { /* private mode */ }
     // The numbers on screen belong to the OLD period. Clear them until the
     // new period's numbers land -- never show one period under another's label.
-    set({ period: p, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith(""), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null, scheduleDetail: null, detailStatus: "loading", detailError: null });
+    set({ period: p, back: 0, window: null, canGoBack: false, status: "loading", asOf: null, meta: null, sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[p] }, net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[p], score: null }, netDetail: null, tiles: tilesWith(""), laborDetail: null, salesDetail: null, laborDetailRich: null, cogsDetail: null, scheduleDetail: null, detailStatus: "loading", detailError: null });
     void get().pullSnapshot();
     void get().refresh();
+  },
+  back: 0,
+  canGoBack: false,
+  window: null,
+  stepBack: () => {
+    const { back, canGoBack, period } = get();
+    if (!canGoBack) return false;           // at the wall -- or this step hasn't said yet
+    set({ back: back + 1, ...blankTiles(period) });
+    void get().pullSnapshot();
+    return true;
+  },
+  stepForward: () => {
+    const { back, period } = get();
+    if (back === 0) return false;           // already today: nothing ahead
+    set({ back: back - 1, ...blankTiles(period) });
+    void get().pullSnapshot();
+    if (back - 1 === 0) void get().refresh();   // home again: drill-downs come back
+    return true;
   },
   status: "loading",
   asOf: null,
@@ -221,8 +269,9 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   //   has_data false  -> empty: nothing for this period yet (before the first tick)
   //   sales 0         -> ready, but every ratio is "--" (nothing to divide by)
   //   otherwise       -> ready, scored
-  applySnapshot: (snap: KpiSnapshot, requested: Period) => {
+  applySnapshot: (snap: KpiSnapshot, requested: Period, requestedBack = 0) => {
     if (requested !== get().period) return;   // the selector moved while this was in flight
+    if (requestedBack !== get().back) return; // ...or the swipe did
     const period = requested;
     const periodWord = period === "day" ? "today" : period === "wtd" ? "this week" : "this month";
     const meta: PeriodMeta = {
@@ -231,7 +280,8 @@ export const useKpiStore = create<KpiState>((set, get) => ({
       openFraction: Number.isFinite(snap.open_fraction as number) ? (snap.open_fraction as number) : null,
     };
     const asOf = snap.as_of ?? snap.captured_at ?? null;
-    const common = { asOf, meta, lastSnapshotAt: snap.captured_at ?? null, lastRefresh: Date.now(), lastError: null };
+    const window = snap.period_start && snap.period_end ? { start: snap.period_start, end: snap.period_end } : null;
+    const common = { asOf, meta, window, canGoBack: snap.can_go_back === true, lastSnapshotAt: snap.captured_at ?? null, lastRefresh: Date.now(), lastError: null };
 
     if (snap.has_data === false) {
       set({ ...common, status: "empty", sales: { value: 0, label: "Sales", sub: PERIOD_LABEL[period] }, tiles: tilesWith(""), net: { value: "--", dollars: 0, label: "Net Profit", sub: PERIOD_LABEL[period], score: null }, netDetail: null });
@@ -292,19 +342,22 @@ export const useKpiStore = create<KpiState>((set, get) => ({
   // The heartbeat writes every 5 minutes; polling at 60s keeps the tiles as
   // fresh as the data is. No database access from the browser, no anon key.
   pullSnapshot: async () => {
-    const period = get().period;
+    const { period, back } = get();
     const gen = ++pullGeneration;
     try {
-      const r = await fetch(`/api/snapshot?period=${period}`, { cache: "no-store" });
+      const r = await fetch(`/api/snapshot?period=${period}${back > 0 ? `&back=${back}` : ""}`, { cache: "no-store" });
       if (gen !== pullGeneration) return;            // a newer pull is in flight
       // Session gone: the front door reopens (PinGate listens), and the tiles
       // say so rather than sitting on "loading" behind the lock screen.
       if (r.status === 401) { set({ status: "error", lastError: "session expired" }); window.dispatchEvent(new Event("owner-session-expired")); return; }
+      // The seed says this step is past the bounce (the day rolled over
+      // mid-swipe). Not a failure to report -- just go home to today.
+      if (r.status === 422 && back > 0) { set({ back: 0, ...blankTiles(period) }); void get().pullSnapshot(); void get().refresh(); return; }
       if (!r.ok) throw new Error(`snapshot ${r.status}`);
       const data = (await r.json()) as KpiSnapshot | null;
       if (gen !== pullGeneration) return;
       if (!data) throw new Error("snapshot: empty reply");
-      get().applySnapshot(data, period);
+      get().applySnapshot(data, period, back);
     } catch (e) {
       if (gen !== pullGeneration) return;
       const msg = e instanceof Error ? e.message : String(e);

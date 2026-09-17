@@ -78,12 +78,35 @@ async function fetchWeather(): Promise<WeatherData> {
 
 const PULL_THRESHOLD = 70; // px needed to trigger refresh
 
+// Swipe-through-time: a sideways drag this far, and clearly more sideways
+// than up/down, steps the tiles one period. Anything less is a tap, a
+// scroll, or the start of a pull-to-refresh.
+const SWIPE_MIN_PX = 60;
+
+/** The label for a window the swipe landed on: "Tue, Sep 15" / "Week of
+ *  Sep 7" / "August". Noon UTC + a UTC formatter prints the calendar date the
+ *  seed sent, whatever timezone the phone is in. */
+function pastWindowLabel(period: "day" | "wtd" | "mtd", start: string): string {
+  const d = new Date(`${start}T12:00:00Z`);
+  const fmt = (o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-US", { ...o, timeZone: "UTC" });
+  if (period === "day") return fmt({ weekday: "short", month: "short", day: "numeric" });
+  if (period === "wtd") return `Week of ${fmt({ month: "short", day: "numeric" })}`;
+  return fmt({ month: "long" });
+}
+
 export default function App() {
   const skin                  = useSkin();
   const businessName          = useAppStore((s) => s.businessName);
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
   const period                = useKpiStore((s) => s.period);
+  const back                  = useKpiStore((s) => s.back);
+  const shownWindow           = useKpiStore((s) => s.window);
+  const stepBack              = useKpiStore((s) => s.stepBack);
+  const stepForward           = useKpiStore((s) => s.stepForward);
+  // Swiped back to an earlier, closed period: tiles only -- no drill-downs,
+  // no live freshness stamp, no crisis pulse.
+  const isPast                = back > 0;
   const tiles                 = useKpiStore((s) => s.tiles);
   const snapStatus            = useKpiStore((s) => s.status);
   const asOf                  = useKpiStore((s) => s.asOf);
@@ -339,6 +362,37 @@ export default function App() {
     }
   };
 
+  // Swipe the tiles sideways to step through time: right = one period back,
+  // left = one forward. Blocked (at the wall, or already on today) = a
+  // short nudge and a buzz, so a bounce never feels like a missed swipe.
+  //
+  // Pointer events, not touch events, and the stack says touch-action: pan-y.
+  // That hands direction-sensing to the browser: the moment IT takes a
+  // vertical scroll or pull it sends pointercancel and the swipe is dropped,
+  // while a sideways drag stays ours. (Hand-rolled touch bookkeeping is what
+  // broke triple-tap on real phones -- let the browser discriminate.) Works
+  // the same for a finger, a mouse, or a pen.
+  const swipeStart = useRef<{ id: number; x: number; y: number } | null>(null);
+  const swipedAt = useRef(0);
+  const [bounceNudge, setBounceNudge] = useState(0);
+  const onStackPointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary) return;
+    swipeStart.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const onStackPointerUp = (e: React.PointerEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    swipedAt.current = Date.now();          // a mouse drag still fires click: that isn't a tap
+    const moved = dx > 0 ? stepBack() : stepForward();
+    if (moved) { haptic(8); return; }
+    setBounceNudge(dx > 0 ? 14 : -14);
+    haptic([6, 30, 6]);
+    window.setTimeout(() => setBounceNudge(0), 160);
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (scrollRef.current && scrollRef.current.scrollTop === 0) {
       touchStartY.current = e.touches[0].clientY;
@@ -436,8 +490,10 @@ export default function App() {
   // One freshness line for the whole screen, on the Sales bar: which period
   // these numbers are, and when they were captured. (It used to ride the
   // weather line up in the nameplate, where it read like a forecast.)
-  const stamp = asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : null;
-  const periodWord = { day: "Today", wtd: "Week", mtd: "Month" }[period];
+  const stamp = !isPast && asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : null;
+  const periodWord = isPast
+    ? (shownWindow ? pastWindowLabel(period, shownWindow.start) : "")
+    : { day: "Today", wtd: "Week", mtd: "Month" }[period];
   const salesSub =
     snapStatus === "loading" ? "loading…"
       // Keep the stamp precisely WHEN the numbers are ageing: "offline" with
@@ -447,7 +503,7 @@ export default function App() {
       : snapStatus === "error" ? (hasSnapshot
           ? ["offline · last known", stamp, coverage].filter(Boolean).join(" · ")
           : ["couldn't load", periodWord].join(" · "))
-      : snapStatus === "empty" ? ["no numbers yet", periodWord].join(" · ")
+      : snapStatus === "empty" ? [isPast ? "no data" : "no numbers yet", periodWord].filter(Boolean).join(" · ")
       : [periodWord, stamp, coverage].filter(Boolean).join(" · ");
 
   // The Net bar gets the same freshness, minus the period word the bar
@@ -455,7 +511,7 @@ export default function App() {
   const netSub =
     snapStatus === "loading" ? "loading…"
       : snapStatus === "error" ? (hasSnapshot ? ["offline", stamp].filter(Boolean).join(" · ") : "couldn't load")
-      : snapStatus === "empty" ? "no numbers yet"
+      : snapStatus === "empty" ? (isPast ? "no data" : "no numbers yet")
       : [stamp, coverage].filter(Boolean).join(" · ") || periodWord;
 
   // Net score comes from the store (bucketed thresholds in useKpiStore).
@@ -486,6 +542,7 @@ export default function App() {
   // ── Crisis-level pulse alerts ─────────────────────────────────────────────
   const alertingKeys = useMemo(() => {
     const keys = new Set<string>();
+    if (isPast) return keys;
     const T = ALERT_THRESHOLDS;
     const ready = snapStatus === "ready";              // nothing to alarm about while loading / empty
     const expected = meta?.expectedToDate ?? null;
@@ -506,7 +563,7 @@ export default function App() {
       if (t.key === "fixed" && v > T.fixed.above)  keys.add("fixed");
     });
     return keys;
-  }, [sales.value, netPctNum, tiles, snapStatus, meta]);
+  }, [sales.value, netPctNum, tiles, snapStatus, meta, isPast]);
 
   // Pull indicator progress 0→1
   // pullProgress used to drive the now-removed pull-to-refresh spinner.
@@ -731,9 +788,20 @@ export default function App() {
               tiles (see index.css @media (display-mode: standalone)). */}
           <div
             className="pwa-stack"
+            onPointerDown={onStackPointerDown}
+            onPointerUp={onStackPointerUp}
+            onPointerCancel={() => { swipeStart.current = null; }}
+            onClickCapture={(e) => { if (Date.now() - swipedAt.current < 400) { e.stopPropagation(); e.preventDefault(); } }}
             style={{
               filter: chromeFilter,
-              transition: "filter 1.2s ease",
+              // Sideways drags are ours (the swipe); up/down stays the
+              // browser's, so scrolling and pull-to-refresh are untouched.
+              touchAction: "pan-y",
+              // a mouse swipe shouldn't highlight tile labels as it drags
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              transform: bounceNudge ? `translateX(${bounceNudge}px)` : undefined,
+              transition: "filter 1.2s ease, transform 160ms ease-out",
               display: "flex",
               flexDirection: "column",
               // Removing the marquee left ~200px of dead space above the tab
@@ -754,9 +822,9 @@ export default function App() {
               alerting={alertingKeys.has("sales")}
               loading={isLoadingKpis}
               stale={isStaleKpis}
-              onClick={() => setDrillKey("sales" as KpiKey)}
+              onClick={isPast ? undefined : () => setDrillKey("sales" as KpiKey)}
             />
-            <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} stale={isStaleKpis} failed={isFailedKpis} />
+            <KpiGrid tiles={tiles} onTileClick={isPast ? undefined : setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} stale={isStaleKpis} failed={isFailedKpis} />
             <StatRow
               reviewsRating={reviewsRating}
               reviewsCount={reviewsCount}
@@ -775,8 +843,8 @@ export default function App() {
               debtState={agingState}
               debtAsOf={aging?.reportDate ?? null}
               debtAgeNote={debtAgeNote}
-              onOpenReviews={() => setOpenFeed("reviews")}
-              onOpenDebt={() => setOpenFeed("debt")}
+              onOpenReviews={isPast ? undefined : () => setOpenFeed("reviews")}
+              onOpenDebt={isPast ? undefined : () => setOpenFeed("debt")}
               onRetryReviews={retryReviews}
               onRetryDebt={retryAging}
             />
@@ -790,7 +858,7 @@ export default function App() {
               loading={isLoadingKpis}
               stale={isStaleKpis}
               alerting={alertingKeys.has("net")}
-              onClick={() => setDrillKey("net" as KpiKey)}
+              onClick={isPast ? undefined : () => setDrillKey("net" as KpiKey)}
             />
 
           </div>

@@ -154,8 +154,9 @@ type Props = {
    *  would read as current (see AGING_STALE_DAYS). Replaces the as-of line so
    *  the age is stated out loud; the score is unaffected. */
   debtAgeNote?: string | null;
-  onOpenReviews: () => void;
-  onOpenDebt: () => void;
+  /** Omitted on a swiped-back past period: the boxes aren't tappable then. */
+  onOpenReviews?: () => void;
+  onOpenDebt?: () => void;
   onRetryReviews: () => void;
   onRetryDebt: () => void;
 };
