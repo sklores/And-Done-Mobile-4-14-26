@@ -555,9 +555,35 @@ export function getActiveSkin(): Skin {
 /** Tile color for a 1–8 KPI score, from the ACTIVE skin's ramp. Existing
  *  call sites keep their bare tileForScore(score) signature — callers are
  *  components that also read useSkin(), so they re-render on skin change. */
-export function tileForScore(score: number): TileStop {
+export function tileForScore(score: number | null | undefined): TileStop {
+  if (score == null) return neutralTile();
   const idx = Math.min(8, Math.max(1, Math.round(score))) - 1;
   return getActiveSkin().spectrum[idx];
+}
+
+/** A tile with nothing to score. Derived from the skin's OWN page color,
+ *  fully desaturated: an empty tile must read as blank paper, never as a
+ *  score. (It used to be the spectrum's caution stop desaturated -- which on
+ *  a green-ish skin still looked like a pass.) */
+export function neutralTile(): TileStop {
+  const m = /^#?([0-9a-f]{6})$/i.exec(getActiveSkin().pageBg.trim());
+  const v = m ? parseInt(m[1], 16) : 0xe6ebea;
+  const l = 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255);
+  const at = (amt: number) => {
+    const c = Math.max(0, Math.min(255, Math.round(l + amt)));
+    const h = c.toString(16).padStart(2, "0");
+    return `#${h}${h}${h}`;
+  };
+  const light = l > 140;
+  const s = (lightAmt: number, darkAmt: number) => at(light ? lightAmt : darkAmt);
+  return {
+    bg: s(8, 16),                       // a hair off the page: a card with nothing in it
+    label: s(-125, 115),
+    value: s(-140, 135),
+    status: s(-118, 108),
+    statusText: s(-118, 108),
+    border: s(-24, 30),
+  };
 }
 
 /** Legacy export — Coastal's ramp (kept for compatibility). */

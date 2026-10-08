@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
-import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DrillDownModal, DrillRow, DrillNote, DrillRetry } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
-import { fetchAging, agingToDebtScore, type AgingSnapshot } from "../data/agingAdapter";
+import { fetchAgingResult, agingToDebtScore, type AgingSnapshot } from "../data/agingAdapter";
+import { money } from "../lib/money";
 
 type Props = { open: boolean; onClose: () => void };
-
-const fmt$ = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
 function SectionHeader({ title }: { title: string }) {
   const skin = useSkin();
@@ -22,15 +21,37 @@ function SectionHeader({ title }: { title: string }) {
 export function DebtDrillDown({ open, onClose }: Props) {
   const skin = useSkin();
   const [aging, setAging] = useState<AgingSnapshot | null>(null);
+  const [phase, setPhase] = useState<"loading" | "ready" | "empty" | "error">("loading");
+  const inFlight = useRef(false);
+
+  const load = useCallback(() => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    // setState only inside the promise chain — never synchronously in an effect.
+    void Promise.resolve()
+      .then(() => { setPhase("loading"); return fetchAgingResult(); })
+      // The adapter's three answers stay three: a snapshot, no A/P report on
+      // file yet (the seed answered "nothing"), and a read that failed. Only
+      // the first says what is owed, and the last two never render the same.
+      .then((r) => {
+        if (r.status === "ready") { setAging(r.data); setPhase("ready"); }
+        else if (r.status === "empty") { setPhase("empty"); }
+        else { setPhase("error"); }   // the read failed; it is not "$0 owed"
+      })
+      .catch(() => setPhase("error"))
+      .finally(() => { inFlight.current = false; });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    fetchAging().then((a) => { if (!cancelled) setAging(a); });
-    return () => { cancelled = true; };
-  }, [open]);
+    load();
+  }, [open, load]);
 
-  const score = agingToDebtScore(aging?.over90 ?? 0);
+  // Nothing read = nothing to score. A missing A/P snapshot used to score 8
+  // (over90 ?? 0) and paint this sheet's header the best colour on the ramp,
+  // so the SNAPSHOT goes in and `null` (neutral) comes back when there is no
+  // report. A report that DID read is scored however old it is.
+  const score = agingToDebtScore(aging);
 
   // Bucket rows, oldest-first so the worst money reads at the top of the list.
   const buckets = aging ? [
@@ -47,8 +68,11 @@ export function DebtDrillDown({ open, onClose }: Props) {
       onClose={onClose}
       score={score}
       label="Debt"
-      value={aging ? fmt$(aging.totalOpen) : "--"}
-      status={aging ? `A/P open · as of ${aging.reportDate}` : "Loading"}
+      value={aging ? money(aging.totalOpen) : "--"}
+      status={aging
+        ? `A/P open · ${aging.reportDate ? `as of ${aging.reportDate}` : "no report date on the row"}${phase === "error" ? " · couldn't refresh" : ""}`
+        : phase === "empty" ? "No A/P report yet"
+        : phase === "error" ? "Couldn't load" : "Loading"}
     >
       {aging ? (
         <>
@@ -57,7 +81,7 @@ export function DebtDrillDown({ open, onClose }: Props) {
             <DrillRow
               key={b.label}
               label={b.label}
-              value={fmt$(b.value)}
+              value={money(b.value)}
               sub={aging.totalOpen > 0 ? `${((b.value / aging.totalOpen) * 100).toFixed(0)}% of balance` : undefined}
               dimmed={b.value === 0}
             />
@@ -66,7 +90,7 @@ export function DebtDrillDown({ open, onClose }: Props) {
           <SectionHeader title="Past Due" />
           <DrillRow
             label="Total overdue"
-            value={fmt$(aging.overdue)}
+            value={money(aging.overdue)}
             sub={aging.totalOpen > 0 ? `${((aging.overdue / aging.totalOpen) * 100).toFixed(0)}% of balance` : undefined}
           />
 
@@ -77,8 +101,8 @@ export function DebtDrillDown({ open, onClose }: Props) {
               <DrillRow
                 key={v.vendor_name}
                 label={v.vendor_name}
-                value={fmt$(v.total)}
-                sub={late > 0 ? `${fmt$(late)} past 60d` : v.current > 0 && v.total === v.current ? "current" : undefined}
+                value={money(v.total)}
+                sub={late > 0 ? `${money(late)} past 60d` : v.current > 0 && v.total === v.current ? "current" : undefined}
               />
             );
           })}
@@ -90,10 +114,18 @@ export function DebtDrillDown({ open, onClose }: Props) {
             From the QuickBooks A/P aging summary{aging.source ? ` (via ${aging.source})` : ""}.
           </div>
         </>
+      ) : phase === "empty" ? (
+        <DrillNote>
+          No A/P aging report on file yet.
+          <br />
+          <span style={{ opacity: 0.65, fontSize: 10 }}>
+            The QuickBooks A/P aging summary lands by email; nothing has arrived here.
+          </span>
+        </DrillNote>
+      ) : phase === "error" ? (
+        <DrillRetry subject="the A/P aging summary" onRetry={load} />
       ) : (
-        <div style={{ padding: "24px 18px", color: "#8A9C9C", fontFamily: skin.fonts.body, fontSize: 12, textAlign: "center" }}>
-          Loading debt detail…
-        </div>
+        <DrillNote>Loading debt detail…</DrillNote>
       )}
     </DrillDownModal>
   );

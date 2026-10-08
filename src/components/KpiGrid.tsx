@@ -8,9 +8,13 @@ type Props = {
   onTileClick?: (key: KpiKey) => void;
   alertingKeys?: Set<string>;
   loading?: boolean;
+  /** Last pull failed and the tiles still hold the previous numbers. */
+  stale?: boolean;
+  /** Last pull failed with nothing behind it — the tiles are placeholders. */
+  failed?: boolean;
 };
 
-export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
+export function KpiGrid({ tiles, onTileClick, alertingKeys, loading, stale, failed }: Props) {
   const skin    = useSkin();
   const isNight = useIsNight();
   const isDusky = useIsDusky();
@@ -42,6 +46,8 @@ export function KpiGrid({ tiles, onTileClick, alertingKeys, loading }: Props) {
           kpi={k}
           alerting={alertingKeys?.has(k.key)}
           loading={loading}
+          stale={stale}
+          failed={failed}
           onClick={onTileClick ? () => onTileClick(k.key) : undefined}
         />
       ))}

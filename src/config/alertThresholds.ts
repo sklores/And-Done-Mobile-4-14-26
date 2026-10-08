@@ -3,7 +3,7 @@
 // Pulse = genuinely alarming, needs immediate operator attention.
 
 export const ALERT_THRESHOLDS = {
-  sales:  { below:  400  },   // < $400 dangerously slow
+  sales:  { belowFractionOfExpected: 0.5 },   // < half of what this period should have done by now
   cogs:   { above:   42  },   // > 42% of sales
   labor:  { above:   50  },   // > 50% of sales
   prime:  { above:   90  },   // > 90% of sales

@@ -5,38 +5,24 @@
 // The desktop app reads/writes the list; mobile is read-only for v1.
 // Cap of 10 mirrors desktop's TRACKED_ITEMS_CAP.
 
-import { supabase, supabaseReady } from "../lib/supabase";
 
-const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
-const TRACKED_ITEMS_CAP = 10;
 
-/** Returns the tracked item names for GCDC, deduped, capped at 10. */
+/** False while no surface owns the watchlist: the empty list below is "there
+ *  is nowhere to read this from", not "the operator tracks nothing".
+ *
+ *  A screen that shows tracked items must say which of the two it is looking
+ *  at. SalesDrillDown does not yet: it hides the whole section on
+ *  `tracked.length > 0`, so the absent source reads as an empty watchlist.
+ *  The one line it needs is to gate that section on TRACKED_ITEMS_AVAILABLE
+ *  and, when false, name the state instead of rendering nothing. */
+export const TRACKED_ITEMS_AVAILABLE = false;
+
+/** Returns the tracked item names for GCDC, deduped, capped at 10 — [] while
+ *  TRACKED_ITEMS_AVAILABLE is false, which is not an answer about what the
+ *  operator tracks. */
 export async function fetchTrackedItems(): Promise<string[]> {
-  if (!supabaseReady) return [];
-  try {
-    const { data, error } = await supabase
-      .from("org_settings")
-      .select("tracked_items_json")
-      .eq("org_id", GCDC_ORG_ID)
-      .single();
-    if (error || !data) return [];
-    const raw = (data as { tracked_items_json?: unknown }).tracked_items_json;
-    if (!Array.isArray(raw)) return [];
-
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const v of raw) {
-      if (typeof v !== "string") continue;
-      const trimmed = v.trim();
-      if (!trimmed) continue;
-      const lower = trimmed.toLowerCase();
-      if (seen.has(lower)) continue;
-      seen.add(lower);
-      out.push(trimmed);
-      if (out.length >= TRACKED_ITEMS_CAP) break;
-    }
-    return out;
-  } catch {
-    return [];
-  }
+  // The watchlist lived in a Desktop-era JSON blob the seed does not carry
+  // (D9: Desktop is frozen). Empty until a V2 surface owns it —
+  // see TRACKED_ITEMS_AVAILABLE above.
+  return [];
 }

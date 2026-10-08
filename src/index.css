@@ -5,23 +5,20 @@
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; min-height: 100%; }
+/* The canvas is ALWAYS the app's frame color -- html and body both, so
+   nothing black can show through anywhere the page doesn't cover: the
+   letterbox above/below in fullscreen, the overscroll gutter, the flash
+   before React mounts. App.tsx keeps this in step with the live skin.
+   (This used to default to black with an override for
+   `@media (display-mode: standalone)` -- which `display: fullscreen` does
+   not match, so the app came back letterboxed in black.) */
+html, body {
+  background: #C4B090;
+}
 body {
   font-family: 'Manrope', sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* Default to black for browser/URL mode so the bottom Android system nav
-     bar matches Chrome's dark chrome at the top — visual continuity for
-     people opening the URL in a regular tab. App.tsx overrides this in
-     standalone (PWA) mode to match the app's driftwood/navy frame. */
-  background: #000000;
   overscroll-behavior: none;
-}
-
-/* In PWA / installed mode the app fills the whole viewport, so we want
-   the body to match the app's bottom tab strip (driftwood by day, deep
-   navy at night). App.tsx updates this dynamically — this rule just sets
-   a sane pre-mount default for the PWA case. */
-@media (display-mode: standalone) {
-  body { background: #C4B090; }
 }
 button { font-family: inherit; }
 
@@ -63,10 +60,10 @@ button { font-family: inherit; }
    for slightly larger gaps between the Sales bar → KPI grid → Net bar →
    marquee, so the layout doesn't leave a cream gap above the bottom tabs.
 
-   The (display-mode: standalone) media query is ONLY true in PWA /
-   home-screen / fullscreen contexts. Browser tabs never match it, so the
-   URL version is unaffected by this block. */
-@media (display-mode: standalone) {
+   Both installed display modes are listed: the manifest asks for
+   `fullscreen`, which does NOT match (display-mode: standalone). Browser
+   tabs match neither, so the URL version is unaffected by this block. */
+@media (display-mode: standalone), (display-mode: fullscreen) {
   .pwa-stack {
     gap: 14px;
     padding-bottom: 6px;

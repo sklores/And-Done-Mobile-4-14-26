@@ -1,116 +1,55 @@
-// Fixed-cost line items, hydrated from org_settings.pro_forma_json.fixed.projected.
-// Desktop's "expenses > breakdown" is the source of truth.
-//
-// Four line items are computed live elsewhere and excluded from the
-// amortized monthly total (to avoid double-counting them in the Fixed
-// Cost tile):
-//   - Rent          → computed as RENT_PCT × today's sales
-//   - Labor         → computed from Toast time entries + schedule salary
-//   - Payroll Tax   → computed as 11% of labor
-//   - M&R           → today's entries from `maintenance_entries` table
-//
-// We still keep those four in the line-item list (tagged liveComputed=true)
-// so the drill-down can surface them with their own live values.
+// The restaurant's fixed-cost list (label + monthly amount) and how rent is
+// shaped -- from the seed's effective-dated fixed_costs / org_rates rows, the
+// same ones the Pro Forma room edits and the heartbeat amortizes. No
+// fallback numbers: until it loads, the list is empty and says so.
 
 import { create } from "zustand";
-import { supabase, supabaseReady } from "../lib/supabase";
+import { ownerRead } from "../data/ownerFetch";
+import type { FetchStatus } from "../data/ownerFetch";
 
-const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
-
-const LIVE_COMPUTED_LABELS = new Set([
-  "rent",
-  "labor",
-  "payroll tax",
-  "m&r",
-  "mr",
-]);
-
-export type FixedLineItem = {
-  label: string;
-  monthlyAmount: number;
-  liveComputed: boolean;
-};
+export type FixedLineItem = { label: string; monthlyAmount: number };
+export type RentShape = { kind: "pct_of_sales"; pct: number } | { kind: "flat"; monthly: number };
 
 type State = {
-  lineItems: FixedLineItem[];      // all items, including live-computed ones
-  monthlyTotal: number;            // sum of NON-live items, for amortization
+  lineItems: FixedLineItem[];
+  monthlyTotal: number;
+  rent: RentShape | null;
   hydrated: boolean;
+  /** The hydrate phase: idle -> loading -> ready | error. "error" means the
+   *  empty list below is a failed read, not a restaurant with no fixed costs. */
+  status: FetchStatus;
+  error: string | null;
   hydrate: () => Promise<void>;
 };
 
-// Fallback values matched to the values committed in pro_forma_json on
-// 2026-05-15 (in case Supabase fetch fails on cold start). When the hydrate
-// completes, real numbers replace these.
-const FALLBACK_LINE_ITEMS: FixedLineItem[] = [
-  { label: "Rent",           monthlyAmount: 0,    liveComputed: true  },
-  { label: "Pest",           monthlyAmount: 220,  liveComputed: false },
-  { label: "Insurance",      monthlyAmount: 1500, liveComputed: false },
-  { label: "Equipment",      monthlyAmount: 220,  liveComputed: false },
-  { label: "Knives",         monthlyAmount: 70,   liveComputed: false },
-  { label: "Chemical",       monthlyAmount: 250,  liveComputed: false },
-  { label: "Internet",       monthlyAmount: 120,  liveComputed: false },
-  { label: "Utilities",      monthlyAmount: 2500, liveComputed: false },
-  { label: "Book Keeper",    monthlyAmount: 500,  liveComputed: false },
-  { label: "Payroll Tax",    monthlyAmount: 0,    liveComputed: true  },
-  { label: "SBA Loans",      monthlyAmount: 770,  liveComputed: false },
-  { label: "M&R",            monthlyAmount: 600,  liveComputed: true  },
-  { label: "CPA",            monthlyAmount: 400,  liveComputed: false },
-  { label: "Linen",          monthlyAmount: 700,  liveComputed: false },
-  { label: "POS",            monthlyAmount: 700,  liveComputed: false },
-  { label: "And Done",       monthlyAmount: 500,  liveComputed: false },
-  { label: "STK Loan",       monthlyAmount: 2000, liveComputed: false },
-  { label: "Marketing",      monthlyAmount: 0,    liveComputed: false },
-  { label: "Labor",          monthlyAmount: 13000,liveComputed: true  },
-  { label: "DC Biz",         monthlyAmount: 200,  liveComputed: false },
-  { label: "Liquor License", monthlyAmount: 100,  liveComputed: false },
-];
-
-function sumNonLive(items: FixedLineItem[]): number {
-  return items.filter((i) => !i.liveComputed).reduce((s, i) => s + i.monthlyAmount, 0);
-}
-
 export const useFixedCostStore = create<State>((set) => ({
-  lineItems: FALLBACK_LINE_ITEMS,
-  monthlyTotal: sumNonLive(FALLBACK_LINE_ITEMS),
+  lineItems: [],
+  monthlyTotal: 0,
+  rent: null,
   hydrated: false,
+  status: "idle",
+  error: null,
   hydrate: async () => {
-    if (!supabaseReady) {
-      set({ hydrated: true });
+    set((s) => ({ status: s.status === "ready" ? s.status : "loading", error: null }));
+    const read = await ownerRead<{ projected?: Array<{ label: string; amount: number }>; rent?: RentShape | null; monthlyFixed?: number | null }>("/api/seed?view=fixed-costs");
+    if (read.status !== "ready") {
+      const message = read.status === "error" ? read.error : "fixed costs came back empty";
+      console.warn("[fixed-cost] hydrate failed:", message);
+      // hydrated stays false: nothing here has been read, so nothing here is
+      // a fact about this restaurant's overhead.
+      set({ status: "error", error: message });
       return;
     }
-    try {
-      const { data, error } = await supabase
-        .from("org_settings")
-        .select("pro_forma_json")
-        .eq("org_id", GCDC_ORG_ID)
-        .single();
-      if (error || !data) {
-        console.warn("[fixed-cost] hydrate error:", error?.message);
-        set({ hydrated: true });
-        return;
-      }
-      const raw = (data as { pro_forma_json?: { fixed?: { projected?: Array<{ label: string; amount: number }> } } })
-        .pro_forma_json?.fixed?.projected;
-      if (!Array.isArray(raw)) {
-        set({ hydrated: true });
-        return;
-      }
-      const items: FixedLineItem[] = raw.map((r) => {
-        const cleanLabel = String(r.label ?? "").trim();
-        return {
-          label: cleanLabel,
-          monthlyAmount: Number(r.amount) || 0,
-          liveComputed: LIVE_COMPUTED_LABELS.has(cleanLabel.toLowerCase()),
-        };
-      });
-      set({
-        lineItems: items,
-        monthlyTotal: sumNonLive(items),
-        hydrated: true,
-      });
-    } catch (err) {
-      console.warn("[fixed-cost] hydrate threw:", (err as Error).message);
-      set({ hydrated: true });
-    }
+    const data = read.data;
+    const items: FixedLineItem[] = (data.projected ?? []).map((x) => ({ label: String(x.label ?? "").trim(), monthlyAmount: Number(x.amount) || 0 }));
+    // org_rates.monthly_fixed as the seed sent it -- this is the number the
+    // heartbeat amortizes, and the screen compares it against the line items
+    // to surface the drift between the two. Reinterpreting a 0 here would hide
+    // that comparison; only an absent number falls back to the list's own sum.
+    const monthlyFixed = data.monthlyFixed == null ? NaN : Number(data.monthlyFixed);
+    const monthlyTotal = Number.isFinite(monthlyFixed)
+      ? monthlyFixed
+      : items.reduce((s, i) => s + i.monthlyAmount, 0);
+    set({ lineItems: items, monthlyTotal, rent: data.rent ?? null, hydrated: true, status: "ready", error: null });
   },
 }));

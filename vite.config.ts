@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import react from "@vitejs/plugin-react";
 import type { ServerResponse } from "node:http";
 
@@ -19,79 +21,19 @@ export default defineConfig(({ mode }) => {
       {
         name: "toast-api-dev",
         configureServer(server) {
-          server.middlewares.use("/api/toast-sales", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodaySales } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodaySales(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-labor", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayLabor } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayLabor(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-labor-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayLaborDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayLaborDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-sales-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodaySalesDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodaySalesDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/toast-cogs-detail", async (_req, res) => {
-            try {
-              const { credsFromEnv, getTodayCOGSDetail } = await import(
-                "./api/_toast.mjs"
-              );
-              respond(res, 200, await getTodayCOGSDetail(credsFromEnv(env)));
-            } catch (e) {
-              respond(res, 500, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            }
-          });
-
-          server.middlewares.use("/api/weather", async (_req, res) => {
-            try {
-              const { default: handler } = await import("./api/weather.mjs" as string);
-              await handler(_req, res);
-            } catch (e) {
-              respond(res, 200, { condition: "clear", error: e instanceof Error ? e.message : String(e) });
-            }
-          });
+          // Dev runs the SAME handler modules Vercel runs (api/*.mjs), with the
+          // .env.local values passed in -- so local == prod, auth included.
+          const HANDLERS = ["snapshot", "seed", "toast-sales", "toast-labor", "toast-labor-detail", "toast-sales-detail", "toast-cogs-detail", "weather", "login", "session", "logout"];
+          for (const name of HANDLERS) {
+            server.middlewares.use(`/api/${name}`, async (req, res) => {
+              try {
+                const { default: handler } = await import(pathToFileURL(path.resolve(process.cwd(), "api", `${name}.mjs`)).href);
+                await handler(req, res, { ...process.env, ...env });
+              } catch (e) {
+                respond(res, 500, { error: e instanceof Error ? e.message : String(e) });
+              }
+            });
+          }
         },
       },
     ],

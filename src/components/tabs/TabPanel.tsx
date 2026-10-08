@@ -59,16 +59,16 @@ export function TabPanel({ open, onClose, title, accent = "#1A2E28", children }:
             <div style={{ color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: skin.fonts.display, letterSpacing: ".04em" }}>
               {title}
             </div>
-            <div
+            <button type="button" aria-label="Close"
               onClick={onClose}
               style={{
-                width: 28, height: 28,
+                width: 44, height: 44, border: "none", padding: 0,
                 background: "rgba(255,255,255,0.15)",
                 borderRadius: "50%",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "pointer", fontSize: 16, color: "#fff", fontWeight: 700,
               }}
-            >×</div>
+            >×</button>
           </div>
         </div>
 

@@ -1,196 +1,106 @@
-// Maintenance & Repair log — backed by the Supabase `maintenance_entries`
-// table. Local Zustand state is a hydrated mirror so the existing
-// synchronous helpers (getTodayMRTotal, getTodayEntries) keep working
-// for callers like applySnapshot. Writes go to Supabase + local state in
-// parallel; reads come from the local mirror.
-//
-// One-time migration: any entries previously written to localStorage
-// (under STORAGE_KEY) are pushed up to Supabase on first hydrate when the
-// table is empty for that org. Then the localStorage cache is cleared.
-
 import { create } from "zustand";
-import { supabase, supabaseReady } from "../lib/supabase";
+import { ownerFetch, ownerRead } from "../data/ownerFetch";
+import type { FetchStatus } from "../data/ownerFetch";
+import type { Period } from "./useKpiStore";
 
-const GCDC_ORG_ID = "dd261210-9748-436e-899b-a8d3f154bcff";
-const STORAGE_KEY = "anddone:maintenance";
+// Maintenance & repair the owner logs from the phone. Lives on the seed
+// (mr_entries) -- the same rows the tiles and the P&L count as fixed cost.
+// The list follows the selected period.
+//
+// Like useKpiStore's tiles, the list is cleared the moment the period changes:
+// last month's entries and last month's total must never sit under this week's
+// label, least of all with a delete button next to each row.
 
 export type MaintenanceEntry = {
   id: string;
-  date: string;        // YYYY-MM-DD (entry_date)
+  date: string;        // YYYY-MM-DD
   amount: number;
   description: string;
-  flagged?: boolean;   // reserved: bank transaction match
 };
 
-type DBRow = {
-  id: string;
-  org_id: string | null;
-  entry_date: string;
-  amount: number | string;
-  description: string | null;
-  created_at: string;
-};
-
-function rowToEntry(r: DBRow): MaintenanceEntry {
-  return {
-    id: r.id,
-    date: r.entry_date,
-    amount: Number(r.amount),
-    description: r.description ?? "",
-  };
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-// ── Local-only helpers (read from hydrated state, called sync) ─────────────
-export function getTodayEntries(): MaintenanceEntry[] {
-  const today = todayStr();
-  return useMaintenanceStore.getState().entries.filter((e) => e.date === today);
-}
-export function getTodayMRTotal(): number {
-  return getTodayEntries().reduce((s, e) => s + e.amount, 0);
-}
-
-// ── Legacy localStorage helpers (used only for the one-time migration) ────
-function loadLocal(): MaintenanceEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-function clearLocal() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-}
-
-// ── Store ─────────────────────────────────────────────────────────────────
 type MaintenanceState = {
   entries: MaintenanceEntry[];
-  hydrated: boolean;
-  hydrate: () => Promise<void>;
+  period: Period | null;
+  total: number;
+  /** True only while `entries` are this period's rows, as the seed sent them.
+   *  A failed read leaves it false: there is nothing here to call this
+   *  period's M&R, and the screen offers a retry instead of a total. */
+  loaded: boolean;
+  /** The hydrate phase for `period`: idle -> loading -> ready | error. */
+  status: FetchStatus;
+  /** Why the last read or write failed, in words the screen can print. */
+  error: string | null;
+  hydrate: (period: Period) => Promise<void>;
   addEntry: (amount: number, description: string) => Promise<void>;
   removeEntry: (id: string) => Promise<void>;
 };
 
-export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
-  // Seed with localStorage so synchronous reads work before hydrate finishes.
-  entries: loadLocal(),
-  hydrated: false,
+let pending: Period | null = null;   // the period of the most recent hydrate call
 
-  hydrate: async () => {
-    if (!supabaseReady) {
-      // No Supabase — fall back to localStorage only (dev mode, env not set).
-      set({ hydrated: true });
+const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : String(e ?? "")) || fallback;
+
+export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
+  entries: [],
+  period: null,
+  total: 0,
+  loaded: false,
+  status: "idle",
+  error: null,
+
+  hydrate: async (period) => {
+    pending = period;
+    if (get().period !== period) {
+      // The rows on screen belong to the OLD period. Clear them, and go back to
+      // "loading" with them: an emptied list still labelled "ready" is this
+      // period positively reporting no M&R, which nothing has told us yet.
+      set({ entries: [], total: 0, period, loaded: false, status: "loading", error: null });
+    } else {
+      // Same period, refetch: the rows already on screen stay, so the status
+      // stays "ready" -- there is nothing unknown on the screen to announce.
+      set((s) => ({ status: s.status === "ready" ? s.status : "loading", error: null }));
+    }
+    const read = await ownerRead<{ entries: MaintenanceEntry[]; total: number }>(`/api/seed?view=mr&period=${period}`);
+    if (pending !== period) return;   // the selector moved on while this was in flight
+    if (read.status !== "ready") {
+      const message = read.status === "error" ? read.error : "M&R came back empty";
+      console.warn("[mr] hydrate failed", message);
+      // `loaded` stays false on purpose: it means "these rows are this period's
+      // M&R", and after a failed read there are no such rows. The screen keys
+      // its "couldn't load -- tap to retry" off exactly that, and flipping it
+      // true here would print "no M&R logged" over a read that never landed.
+      set({ status: "error", error: message });
       return;
     }
-    try {
-      const { data, error } = await supabase
-        .from("maintenance_entries")
-        .select("id, org_id, entry_date, amount, description, created_at")
-        .eq("org_id", GCDC_ORG_ID)
-        .order("entry_date", { ascending: false });
-
-      if (error) {
-        console.warn("[maintenance] hydrate failed:", error.message);
-        set({ hydrated: true });
-        return;
-      }
-
-      const remote = (data as DBRow[]).map(rowToEntry);
-
-      // One-time migration: if the table is empty for this org and we have
-      // legacy localStorage entries, push them up.
-      const local = loadLocal();
-      if (remote.length === 0 && local.length > 0) {
-        console.log(`[maintenance] migrating ${local.length} legacy localStorage entries to Supabase`);
-        const inserts = local.map((e) => ({
-          org_id: GCDC_ORG_ID,
-          entry_date: e.date,
-          amount: e.amount,
-          description: e.description,
-        }));
-        const { data: inserted, error: insertErr } = await supabase
-          .from("maintenance_entries")
-          .insert(inserts)
-          .select("id, org_id, entry_date, amount, description, created_at");
-        if (insertErr) {
-          console.warn("[maintenance] migration failed:", insertErr.message);
-          set({ entries: local, hydrated: true });
-          return;
-        }
-        clearLocal();
-        const migrated = (inserted as DBRow[]).map(rowToEntry);
-        set({ entries: migrated, hydrated: true });
-        return;
-      }
-
-      set({ entries: remote, hydrated: true });
-    } catch (err) {
-      console.warn("[maintenance] hydrate threw:", (err as Error).message);
-      set({ hydrated: true });
-    }
+    set({ entries: read.data.entries ?? [], total: Number(read.data.total) || 0, period, loaded: true, status: "ready", error: null });
   },
 
   addEntry: async (amount, description) => {
-    const optimistic: MaintenanceEntry = {
-      id: `pending-${Date.now()}`,
-      date: todayStr(),
-      amount,
-      description: description.trim(),
-    };
-    set((s) => ({ entries: [optimistic, ...s.entries] }));
-
-    if (!supabaseReady) return;
-
     try {
-      const { data, error } = await supabase
-        .from("maintenance_entries")
-        .insert({
-          org_id: GCDC_ORG_ID,
-          entry_date: optimistic.date,
-          amount,
-          description: optimistic.description,
-        })
-        .select("id, org_id, entry_date, amount, description, created_at")
-        .single();
-
-      if (error || !data) {
-        console.warn("[maintenance] insert failed:", error?.message);
-        // Roll back the optimistic insert
-        set((s) => ({ entries: s.entries.filter((e) => e.id !== optimistic.id) }));
-        return;
-      }
-
-      const real = rowToEntry(data as DBRow);
-      set((s) => ({
-        entries: s.entries.map((e) => (e.id === optimistic.id ? real : e)),
-      }));
-    } catch (err) {
-      console.warn("[maintenance] insert threw:", (err as Error).message);
-      set((s) => ({ entries: s.entries.filter((e) => e.id !== optimistic.id) }));
+      const r = await ownerFetch("/api/seed?view=mr-add", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ amount, description }) });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `could not save (HTTP ${r.status})`);
+      const e = (await r.json()) as MaintenanceEntry;
+      set((s) => ({ entries: [e, ...s.entries], total: s.total + e.amount, error: null }));
+    } catch (e) {
+      // Nothing was written. The form keeps what the owner typed and shows this.
+      const message = errText(e, "could not save");
+      set({ error: message });
+      throw new Error(message);
     }
   },
 
   removeEntry: async (id) => {
-    const previous = get().entries;
-    set((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
-
-    if (!supabaseReady || id.startsWith("pending-")) return;
-
+    const prev = get().entries;
+    const gone = prev.find((e) => e.id === id);
+    set((s) => ({ entries: s.entries.filter((e) => e.id !== id), total: s.total - (gone?.amount ?? 0) }));
     try {
-      const { error } = await supabase
-        .from("maintenance_entries")
-        .delete()
-        .eq("id", id);
-      if (error) {
-        console.warn("[maintenance] delete failed:", error.message);
-        set({ entries: previous }); // restore
-      }
-    } catch (err) {
-      console.warn("[maintenance] delete threw:", (err as Error).message);
-      set({ entries: previous });
+      const r = await ownerFetch("/api/seed?view=mr-delete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `could not delete (HTTP ${r.status})`);
+      set({ error: null });
+    } catch (e) {
+      // Still on the seed -- and still fixed cost. Put it back and say so.
+      const message = errText(e, "could not delete");
+      set({ entries: prev, total: prev.reduce((a, e) => a + e.amount, 0), error: message });
+      throw new Error(message);
     }
   },
 }));

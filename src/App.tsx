@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSkin } from "./theme/skins";
 import { money } from "./lib/money";
 import { ALERT_THRESHOLDS } from "./config/alertThresholds";
-import { computeSalesState, getDailyTarget } from "./config/salesTargetConfig";
+import { scoreAgainstExpected } from "./config/salesTargetConfig";
 import { fetchReviewsBundle, ratingToReviewScore } from "./data/reviewsAdapter";
-import { fetchAging, agingToDebtScore, type AgingSnapshot } from "./data/agingAdapter";
+import { fetchAgingResult, agingToDebtScore, agingAgeDays, AGING_STALE_DAYS, type AgingSnapshot } from "./data/agingAdapter";
 import { useAppStore } from "./stores/useAppStore";
 import { useKpiStore } from "./stores/useKpiStore";
 import { useLogStore } from "./stores/useLogStore";
@@ -16,6 +16,7 @@ import { KpiGrid } from "./components/KpiGrid";
 import { Scene } from "./components/Scene";
 import type { WeatherCondition } from "./components/CoastalScene";
 import { StatRow } from "./components/StatRow";
+import type { FeedState } from "./components/StatRow";
 import { BottomTabs } from "./components/BottomTabs";
 import type { TabKey } from "./components/BottomTabs";
 import { LaborDrillDown } from "./components/LaborDrillDown";
@@ -33,32 +34,84 @@ import { SkinPicker } from "./components/SkinPicker";
 import { FullscreenScene } from "./components/FullscreenScene";
 import { useIsDusky, useIsNight } from "./hooks/useTimeOfDay";
 
-type WeatherData = { condition: WeatherCondition; tempF: number | null };
+// Three states, and "we haven't looked yet" is not one of the other two:
+//   loading      the first read is still in flight -- the nameplate says
+//                NOTHING about the weather rather than announcing an absence
+//                it hasn't established
+//   ready        we have a reading
+//   unavailable  a read came back failed or empty; the nameplate prints the
+//                absence instead of a fabricated sunny day
+// The vista still needs SOME sky to paint, so `condition` keeps its fallback
+// for the scene in every state -- it is the nameplate that makes the claim.
+type WeatherState = "loading" | "ready" | "unavailable";
+type WeatherData = { condition: WeatherCondition; tempF: number | null; state: WeatherState };
+
+const WEATHER_LOADING: WeatherData = { condition: "clear", tempF: null, state: "loading" };
+const NO_WEATHER: WeatherData = { condition: "clear", tempF: null, state: "unavailable" };
+
+// Same bargain as `condition` above, for the same reason. The vista tints one
+// decorative element (Coastal's balloon / beam) from the Reviews score, and
+// an SVG fill cannot be "unknown" -- it has to be SOME colour. So when there
+// is no score, the scenery takes this tint and says nothing: the vista makes
+// no claim about the rating, carries no number, and is not a surface the
+// owner reads a review score off. The claim lives on the Reviews box, which
+// goes neutral and unscored (StatRow) whenever this is in play.
+const SCENE_TINT_WITHOUT_SCORE = 5;
 
 async function fetchWeather(): Promise<WeatherData> {
   try {
     const res = await fetch("/api/weather", { cache: "no-store" });
-    if (!res.ok) return { condition: "clear", tempF: null };
+    if (!res.ok) return NO_WEATHER;
     const data = await res.json();
+    // /api/weather answers an upstream failure with 502 (handled above); this
+    // guard only covers a 200 whose body is not a reading.
+    if (data?.error || typeof data?.condition !== "string") return NO_WEATHER;
     return {
-      condition: (data.condition as WeatherCondition) ?? "clear",
+      condition: data.condition as WeatherCondition,
       tempF: typeof data.tempF === "number" ? Math.round(data.tempF) : null,
+      state: "ready",
     };
   } catch {
-    return { condition: "clear", tempF: null };
+    return NO_WEATHER;
   }
 }
 
 const PULL_THRESHOLD = 70; // px needed to trigger refresh
+
+// Swipe-through-time: a sideways drag this far, and clearly more sideways
+// than up/down, steps the tiles one period. Anything less is a tap, a
+// scroll, or the start of a pull-to-refresh.
+const SWIPE_MIN_PX = 60;
+
+/** The label for a window the swipe landed on: "Tue, Sep 15" / "Week of
+ *  Sep 7" / "August". Noon UTC + a UTC formatter prints the calendar date the
+ *  seed sent, whatever timezone the phone is in. */
+function pastWindowLabel(period: "day" | "wtd" | "mtd", start: string): string {
+  const d = new Date(`${start}T12:00:00Z`);
+  const fmt = (o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-US", { ...o, timeZone: "UTC" });
+  if (period === "day") return fmt({ weekday: "short", month: "short", day: "numeric" });
+  if (period === "wtd") return `Week of ${fmt({ month: "short", day: "numeric" })}`;
+  return fmt({ month: "long" });
+}
 
 export default function App() {
   const skin                  = useSkin();
   const businessName          = useAppStore((s) => s.businessName);
   const sales                 = useKpiStore((s) => s.sales);
   const net                   = useKpiStore((s) => s.net);
+  const period                = useKpiStore((s) => s.period);
+  const back                  = useKpiStore((s) => s.back);
+  const shownWindow           = useKpiStore((s) => s.window);
+  const stepBack              = useKpiStore((s) => s.stepBack);
+  const stepForward           = useKpiStore((s) => s.stepForward);
+  // Swiped back to an earlier, closed period: tiles only -- no drill-downs,
+  // no live freshness stamp, no crisis pulse.
+  const isPast                = back > 0;
   const tiles                 = useKpiStore((s) => s.tiles);
-  const lastRefresh           = useKpiStore((s) => s.lastRefresh);
-  const lastSnapshotAt        = useKpiStore((s) => s.lastSnapshotAt);
+  const snapStatus            = useKpiStore((s) => s.status);
+  const asOf                  = useKpiStore((s) => s.asOf);
+  const meta                  = useKpiStore((s) => s.meta);
+  const pullSnapshot          = useKpiStore((s) => s.pullSnapshot);
   const refresh               = useKpiStore((s) => s.refresh);
   const subscribeToSnapshots  = useKpiStore((s) => s.subscribeToSnapshots);
   const hydrateLog            = useLogStore((s) => s.hydrate);
@@ -66,7 +119,7 @@ export default function App() {
   const hydrateFixedCost      = useFixedCostStore((s) => s.hydrate);
 
   const [openTab, setOpenTab]       = useState<TabKey | null>(null);
-  const [weatherData, setWeatherData] = useState<WeatherData>({ condition: "clear", tempF: null });
+  const [weatherData, setWeatherData] = useState<WeatherData>(WEATHER_LOADING);
   const [drillKey, setDrillKey]     = useState<KpiKey | null>(null);
   const [openFeed, setOpenFeed]     = useState<"reviews" | "debt" | null>(null);
 
@@ -197,47 +250,87 @@ export default function App() {
     return unsubscribe;
   }, [subscribeToSnapshots]);
 
-  // ── Activity log: load from Supabase + subscribe for realtime inserts ────
+  // ── Activity log (seed) ───────────────────────────────────────────────────
   useEffect(() => {
     hydrateLog();
   }, [hydrateLog]);
 
-  // ── Maintenance & Repair: hydrate from Supabase ──────────────────────────
+  // ── Maintenance & Repair (seed): the list follows the selected period ────
   useEffect(() => {
-    hydrateMaintenance();
-  }, [hydrateMaintenance]);
+    hydrateMaintenance(period);
+  }, [hydrateMaintenance, period]);
 
   // ── Fixed-cost line items: hydrate from org_settings.pro_forma_json ──────
   useEffect(() => {
     hydrateFixedCost();
   }, [hydrateFixedCost]);
 
-  // ── Reviews chip: live score from Supabase reviews aggregate ─────────────
+  // ── Reviews + A/P aging (the two StatRow boxes) ──────────────────────────
+  // Both feeds carry their own state word. A read that fails is never
+  // laundered into a value: with an earlier read on screen it goes "stale"
+  // (last known, dimmed, labelled), with nothing behind it "unavailable"
+  // (neutral tile, no score, tap to retry) -- never a green tile, a zero,
+  // or a skeleton that shimmers for the rest of the session.
   const [reviewsScore, setReviewsScore] = useState<number | null>(null);
   const [reviewsRating, setReviewsRating] = useState<number | null>(null);
   const [reviewsCount, setReviewsCount] = useState(0);
+  const [reviewsAsOf, setReviewsAsOf] = useState<string | null>(null);
+  const [reviewsState, setReviewsState] = useState<FeedState>("loading");
   const [aging, setAging] = useState<AgingSnapshot | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetchReviewsBundle().then((b) => {
-      if (cancelled) return;
-      if (b && b.overallRating != null) {
-        setReviewsScore(ratingToReviewScore(b.overallRating));
-        setReviewsRating(b.overallRating);
-        setReviewsCount(b.totalRatedReviews);
-      }
-    });
-    return () => { cancelled = true; };
+  const [agingState, setAgingState] = useState<FeedState>("loading");
+
+  const loadReviews = useCallback(async () => {
+    const b = await fetchReviewsBundle();
+    if (!b) { setReviewsState((s) => (s === "ready" || s === "stale" ? "stale" : "unavailable")); return; }
+    // A bundle with nothing rated is a real answer ("no reviews yet"), and
+    // it scores nothing -- an empty feed is not a middling restaurant.
+    setReviewsRating(b.overallRating);
+    setReviewsScore(b.overallRating != null ? ratingToReviewScore(b.overallRating) : null);
+    setReviewsCount(b.totalReviews);
+    // NOT b.fetchedAt: that is minted client-side when THIS browser called the
+    // API, so it is always within minutes of now -- a stamp that can never go
+    // stale, which is worse than none. The only real age we have is when the
+    // sync job last wrote a row, so take the newest of those (the bundle's
+    // `recent` rows are the newest reviews it holds). No rows, no stamp.
+    setReviewsAsOf(b.recent.reduce<string | null>(
+      (newest, r) => (r.fetched_at && (newest == null || r.fetched_at > newest) ? r.fetched_at : newest),
+      null,
+    ));
+    setReviewsState("ready");
   }, []);
 
-  // ── A/P aging (Debt box) — refreshed with the KPI cadence ────────────────
+  const loadAging = useCallback(async () => {
+    // Three answers, kept apart: a snapshot, "no A/P report on file yet"
+    // (a real answer about a new tenant or a feed that hasn't landed its
+    // first report), and a read that failed. Collapsing the middle one into
+    // the last showed a legitimate empty state as a broken feed, with a
+    // retry that could never succeed.
+    const a = await fetchAgingResult();
+    if (a.status === "ready") { setAging(a.data); setAgingState("ready"); return; }
+    if (a.status === "empty") { setAging(null); setAgingState("empty"); return; }
+    // A failed re-read must not overwrite a good snapshot with null.
+    setAgingState((s) => (s === "ready" || s === "stale" ? "stale" : "unavailable"));
+  }, []);
+
+  const retryReviews = useCallback(() => { setReviewsState("loading"); void loadReviews(); }, [loadReviews]);
+  const retryAging   = useCallback(() => { setAgingState("loading");   void loadAging();   }, [loadAging]);
+
+  // Same cadence as the KPI poll, and again the moment the app is looked at:
+  // the installed PWA suspends timers in the background and is resumed, not
+  // reloaded, so a mount-only fetch would freeze both boxes for the session.
   useEffect(() => {
-    let cancelled = false;
-    const load = () => fetchAging().then((a) => { if (!cancelled) setAging(a); });
+    const load = () => { void loadReviews(); void loadAging(); };
     load();
     const id = setInterval(load, 5 * 60 * 1000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, []);
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+  }, [loadReviews, loadAging]);
 
   // ── Toast direct poll (fallback + sales/labor detail) ─────────────────────
   useEffect(() => {
@@ -267,6 +360,37 @@ export default function App() {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       try { navigator.vibrate(pattern); } catch { /* ignore */ }
     }
+  };
+
+  // Swipe the tiles sideways to step through time: right = one period back,
+  // left = one forward. Blocked (at the wall, or already on today) = a
+  // short nudge and a buzz, so a bounce never feels like a missed swipe.
+  //
+  // Pointer events, not touch events, and the stack says touch-action: pan-y.
+  // That hands direction-sensing to the browser: the moment IT takes a
+  // vertical scroll or pull it sends pointercancel and the swipe is dropped,
+  // while a sideways drag stays ours. (Hand-rolled touch bookkeeping is what
+  // broke triple-tap on real phones -- let the browser discriminate.) Works
+  // the same for a finger, a mouse, or a pen.
+  const swipeStart = useRef<{ id: number; x: number; y: number } | null>(null);
+  const swipedAt = useRef(0);
+  const [bounceNudge, setBounceNudge] = useState(0);
+  const onStackPointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary) return;
+    swipeStart.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const onStackPointerUp = (e: React.PointerEvent) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    swipedAt.current = Date.now();          // a mouse drag still fires click: that isn't a tap
+    const moved = dx > 0 ? stepBack() : stepForward();
+    if (moved) { haptic(8); return; }
+    setBounceNudge(dx > 0 ? 14 : -14);
+    haptic([6, 30, 6]);
+    window.setTimeout(() => setBounceNudge(0), 160);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -299,8 +423,11 @@ export default function App() {
       setPullY(0);
       setBeamPulseKey((k) => k + 1);
       await Promise.all([
-        refresh(),
-        fetchWeather().then(setWeatherData),
+        pullSnapshot(),                       // the tiles
+        refresh().catch(() => undefined),     // the drill-downs; a failure there must not strand the gesture
+        loadReviews().catch(() => undefined),  // the two StatRow boxes: a pull
+        loadAging().catch(() => undefined),    // must refresh what it looks like it refreshes
+        fetchWeather().then(setWeatherData).catch(() => undefined),
         new Promise((r) => setTimeout(r, 600)), // minimum spinner time
       ]);
       setIsRefreshing(false);
@@ -314,12 +441,78 @@ export default function App() {
     thresholdHapticFired.current = false;
   };
 
-  const salesDisplay = `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  // Has a snapshot that actually CARRIED NUMBERS landed for this period?
+  //
+  // `asOf` cannot answer that. applySnapshot stamps it on the "no data for
+  // this period yet" reply as well, so the ordinary morning sequence -- empty
+  // at 8am, then a re-poll that fails -- would read as "we have last known
+  // numbers", flipping the bar from "--" / "no numbers yet" to "$0 · offline ·
+  // last known · as of 8:00 AM" and dimming every tile as though it once held
+  // a figure. A read that failed is not a zero, and it is not a last known
+  // value it never had.
+  //
+  // So watch the store for a snapshot that reached `ready` -- the only status
+  // that means numbers -- and forget it the moment the period changes, since
+  // setPeriod clears the numbers on screen with it. (Kept in state, not a ref:
+  // this decides what the bar renders, and refs can't be read during render.)
+  const [hasSnapshot, setHasSnapshot] = useState(() => useKpiStore.getState().status === "ready");
+  useEffect(() => useKpiStore.subscribe((s, prev) => {
+    if (s.period !== prev.period) setHasSnapshot(s.status === "ready");
+    else if (s.status === "ready") setHasSnapshot(true);
+  }), []);
 
-  // ── Sales score: projection-based (see salesTargetConfig.ts) ─────────────
-  // Tile shows ONLY "Sales" + dollar amount. No sub-line.
-  const salesState = computeSalesState(sales.value, getDailyTarget());
-  const salesScore = salesState.score;
+  // Before this period's first snapshot lands there is no total to show, only
+  // a named absence -- including when a failed read is what stopped it
+  // landing. Only a snapshot that arrived puts a dollar figure on the bar.
+  const salesKnown = snapStatus === "ready" || (snapStatus === "error" && hasSnapshot);
+  const salesDisplay = salesKnown
+    ? `$${sales.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+    : "--";
+
+  // ── Sales score: actual vs the seed's expected-to-date for THIS period ────
+  // (same-weekday 4-week baseline, today prorated by open hours). No score
+  // until there is a baseline and data. One formula, shared with the Sales
+  // drill-down and the crisis alarm, so the same dollars can never be graded
+  // two ways on two surfaces; where the period has days the heartbeat never
+  // reported, the coverage line below names the gap rather than the score
+  // quietly grading against a smaller target.
+  const salesScore = scoreAgainstExpected(sales.value, meta?.expectedToDate ?? null, snapStatus);
+
+  // What the seed says it left out. `periodWindow` sums only the days that
+  // produced a close and reports the gap as days_missing / days_partial; a
+  // month built from 19 of its 28 days must not be presented as the month.
+  const coverage =
+    meta == null ? null
+      : meta.daysMissing > 0 ? `built from ${Math.max(0, meta.daysExpected - meta.daysMissing)} of ${meta.daysExpected} days`
+      : meta.daysPartial > 0 ? `${meta.daysPartial} partial day${meta.daysPartial === 1 ? "" : "s"}`
+      : null;
+
+  // One freshness line for the whole screen, on the Sales bar: which period
+  // these numbers are, and when they were captured. (It used to ride the
+  // weather line up in the nameplate, where it read like a forecast.)
+  const stamp = !isPast && asOf ? `as of ${new Date(asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : null;
+  const periodWord = isPast
+    ? (shownWindow ? pastWindowLabel(period, shownWindow.start) : "")
+    : { day: "Today", wtd: "Week", mtd: "Month" }[period];
+  const salesSub =
+    snapStatus === "loading" ? "loading…"
+      // Keep the stamp precisely WHEN the numbers are ageing: "offline" with
+      // no as-of is the least honest line the screen could print. And with
+      // nothing behind the failure there is no "last known" to claim -- the
+      // read simply did not happen.
+      : snapStatus === "error" ? (hasSnapshot
+          ? ["offline · last known", stamp, coverage].filter(Boolean).join(" · ")
+          : ["couldn't load", periodWord].join(" · "))
+      : snapStatus === "empty" ? [isPast ? "no data" : "no numbers yet", periodWord].filter(Boolean).join(" · ")
+      : [periodWord, stamp, coverage].filter(Boolean).join(" · ");
+
+  // The Net bar gets the same freshness, minus the period word the bar
+  // above it already prints (it has a dollar figure to fit alongside).
+  const netSub =
+    snapStatus === "loading" ? "loading…"
+      : snapStatus === "error" ? (hasSnapshot ? ["offline", stamp].filter(Boolean).join(" · ") : "couldn't load")
+      : snapStatus === "empty" ? (isPast ? "no data" : "no numbers yet")
+      : [stamp, coverage].filter(Boolean).join(" · ") || periodWord;
 
   // Net score comes from the store (bucketed thresholds in useKpiStore).
   // Avoids the prior divergence where the home tile used a different scale
@@ -327,17 +520,41 @@ export default function App() {
   const netPctNum  = typeof net.value === "string" ? parseFloat(net.value) : NaN;
   const netScore   = net.score;
 
-  // Loading state for skeletons — true until we have any real data
-  // (either a snapshot or a Toast refresh has completed).
-  const isLoadingKpis = lastRefresh === null && lastSnapshotAt === null;
+  // Skeletons while the selected period's numbers are in flight.
+  const isLoadingKpis = snapStatus === "loading";
+  // The pull failed and the store kept the previous numbers: they are still
+  // true as of `asOf`, but they are not this minute's. Dim them and let each
+  // surface say so -- the dimming the store's own comment promises.
+  const isStaleKpis  = snapStatus === "error" && hasSnapshot;
+  // The pull failed with nothing behind it (first load, or straight after a
+  // period switch): the tiles are "--" placeholders and must say the read
+  // failed, not that they are the last known numbers.
+  const isFailedKpis = snapStatus === "error" && !hasSnapshot;
+
+  // The A/P aging report arrives by email, so the tile's as-of can be weeks
+  // behind. Past AGING_STALE_DAYS say how OLD it is instead of printing a
+  // bare "as of 7/1" that reads as current. The score is untouched: the
+  // balance on file is known, and age is a caveat to state, not grounds to
+  // withhold a colour on a threshold nobody decided.
+  const agingAge = aging ? agingAgeDays(aging.reportDate) : null;
+  const debtAgeNote = agingAge != null && agingAge > AGING_STALE_DAYS ? `report ${agingAge} days old` : null;
 
   // ── Crisis-level pulse alerts ─────────────────────────────────────────────
   const alertingKeys = useMemo(() => {
     const keys = new Set<string>();
+    if (isPast) return keys;
     const T = ALERT_THRESHOLDS;
-    if (sales.value < T.sales.below) keys.add("sales");
-    if (netPctNum   < T.net.below)   keys.add("net");
-    tiles.forEach((t) => {
+    const ready = snapStatus === "ready";              // nothing to alarm about while loading / empty
+    const expected = meta?.expectedToDate ?? null;
+    // A "dangerously slow" day is judged against expectation for the period,
+    // not a single-day dollar floor -- a week can't be "below $400". No floor
+    // on the actual, either: $0 at 9pm against a $4,000 expectation is a dead
+    // POS or a dead service, the single worst state this screen can be in, and
+    // it is exactly when the alarm must be loudest. (Declining to SCORE an
+    // empty till is a different question from declining to alarm on one.)
+    if (ready && expected != null && expected > 0 && sales.value < expected * T.sales.belowFractionOfExpected) keys.add("sales");
+    if (ready && netPctNum < T.net.below) keys.add("net");
+    if (ready) tiles.forEach((t) => {
       const v = parseFloat(t.value);
       if (!Number.isFinite(v)) return;
       if (t.key === "cogs"  && v > T.cogs.above)  keys.add("cogs");
@@ -346,7 +563,7 @@ export default function App() {
       if (t.key === "fixed" && v > T.fixed.above)  keys.add("fixed");
     });
     return keys;
-  }, [sales.value, netPctNum, tiles]);
+  }, [sales.value, netPctNum, tiles, snapStatus, meta, isPast]);
 
   // Pull indicator progress 0→1
   // pullProgress used to drive the now-removed pull-to-refresh spinner.
@@ -384,21 +601,28 @@ export default function App() {
   const frameSeamColor = isDusky ? skin.chrome.frameSeamDusk : skin.chrome.frameSeam;
   const namePlateText  = isDusky ? skin.chrome.namePlateTextDusk : skin.chrome.namePlateText;
 
-  // Sync body background + <meta name="theme-color"> so the Android system
-  // nav bar (bottom: three lines / square / <) tints sensibly:
-  //   - PWA / installed: match frameColor (driftwood by day, navy at night)
-  //     so the system nav bar feels continuous with the app's bottom tabs.
-  //   - Browser / URL: match Chrome's dark chrome (#000000) so the bottom
-  //     bar matches the URL bar's color, since in browser mode the app
-  //     doesn't visually own the top of the screen anyway.
+  // Fullscreen hides the phone's own clock, so the nameplate carries one.
+  // Ticks every 20s (minutes only) and again the moment the app is looked
+  // at, so it is never showing a stale minute after a night on the counter.
+  const [clock, setClock] = useState<Date>(() => new Date());
   useEffect(() => {
-    const isStandalone =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
-    const targetColor = isStandalone ? frameColor : "#000000";
-    document.body.style.background = targetColor;
+    const tick = () => setClock(new Date());
+    const id = setInterval(tick, 20_000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("pageshow", tick);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); window.removeEventListener("pageshow", tick); };
+  }, []);
+  const clockLabel = clock.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  // The canvas -- html AND body -- is always the skin's frame color, so no
+  // black can appear anywhere the app itself doesn't paint (the fullscreen
+  // letterbox, the overscroll gutter). theme-color follows it too, for the
+  // status bar in the modes that still have one.
+  useEffect(() => {
+    document.documentElement.style.background = frameColor;
+    document.body.style.background = frameColor;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", targetColor);
+    if (meta) meta.setAttribute("content", frameColor);
   }, [frameColor]);
 
   return (
@@ -422,17 +646,27 @@ export default function App() {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          // iOS notched-device safe area: push the framed scene below the
-          // status bar / Dynamic Island so the clock no longer overlaps it.
-          // No-op on Android (inset reports 0). The global box-sizing:border-box
-          // keeps this padding *inside* the 100dvh, so it doesn't add scroll.
-          // NOTE (staged): pairs with the status-bar-style decision in
-          // index.html — verify legibility of the status text over the notch
-          // band on a real iPhone before merging.
-          paddingTop: "env(safe-area-inset-top)",
           transition: "background 1.2s ease",
         }}
       >
+        {/* Top rail -- the frame color, mirroring the bottom bar.
+            Fullscreen hides the status bar and Android letterboxes its strip
+            black; that strip is outside the page, so we cannot paint it. What
+            we CAN do is give it something deliberate to meet: the app is
+            framed in driftwood top and bottom, and the black reads as the
+            phone rather than as a seam we forgot. On a notched iPhone the
+            safe-area inset makes this rail exactly the notch band, which is
+            the same job it did as padding before. */}
+        <div
+          aria-hidden
+          style={{
+            height: "max(env(safe-area-inset-top), 14px)",
+            flexShrink: 0,
+            background: frameColor,
+            borderBottom: `1px solid ${frameSeamColor}`,
+            transition: "background 1.2s ease",
+          }}
+        />
         {/* Scrollable content */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
 
@@ -485,7 +719,8 @@ export default function App() {
               flexShrink: 0,
             }}
           >
-            <Scene weather={weatherData.condition} beamPulseKey={beamPulseKey} reviewsScore={reviewsScore ?? 5} />
+            {/* Scenery tint, not a score — see SCENE_TINT_WITHOUT_SCORE. */}
+            <Scene weather={weatherData.condition} beamPulseKey={beamPulseKey} reviewsScore={reviewsScore ?? SCENE_TINT_WITHOUT_SCORE} />
             <div
               style={isDusky ? {
                 // Hot-pink diagnostic confirmed this is the nameplate row.
@@ -525,17 +760,25 @@ export default function App() {
             >
               <span>{businessName}</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ opacity: 0.9 }}>
-                  {weatherData.condition === "clear"  && "☀️"}
-                  {weatherData.condition === "cloudy" && "⛅"}
-                  {weatherData.condition === "rain"   && "🌧️"}
-                  {weatherData.condition === "snow"   && "❄️"}
-                  {weatherData.condition === "wind"   && "💨"}
-                  {weatherData.tempF != null && ` ${weatherData.tempF}°`}
-                </span>
-                <span>
-                  {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
+                {/* While the first read is in flight the nameplate says
+                    nothing about the weather -- "no weather" is a finding, and
+                    we haven't looked yet. The clock stands alone until a read
+                    comes back. */}
+                {weatherData.state !== "loading" && (
+                  <>
+                    <span style={{ opacity: weatherData.state === "ready" ? 0.9 : 0.55 }}>
+                      {weatherData.state === "unavailable" && "no weather"}
+                      {weatherData.state === "ready" && weatherData.condition === "clear"  && "☀️"}
+                      {weatherData.state === "ready" && weatherData.condition === "cloudy" && "⛅"}
+                      {weatherData.state === "ready" && weatherData.condition === "rain"   && "🌧️"}
+                      {weatherData.state === "ready" && weatherData.condition === "snow"   && "❄️"}
+                      {weatherData.state === "ready" && weatherData.condition === "wind"   && "💨"}
+                      {weatherData.state === "ready" && weatherData.tempF != null && ` ${weatherData.tempF}°`}
+                    </span>
+                    <span style={{ opacity: 0.55 }}>·</span>
+                  </>
+                )}
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{clockLabel}</span>
               </span>
             </div>
           </div>
@@ -545,9 +788,20 @@ export default function App() {
               tiles (see index.css @media (display-mode: standalone)). */}
           <div
             className="pwa-stack"
+            onPointerDown={onStackPointerDown}
+            onPointerUp={onStackPointerUp}
+            onPointerCancel={() => { swipeStart.current = null; }}
+            onClickCapture={(e) => { if (Date.now() - swipedAt.current < 400) { e.stopPropagation(); e.preventDefault(); } }}
             style={{
               filter: chromeFilter,
-              transition: "filter 1.2s ease",
+              // Sideways drags are ours (the swipe); up/down stays the
+              // browser's, so scrolling and pull-to-refresh are untouched.
+              touchAction: "pan-y",
+              // a mouse swipe shouldn't highlight tile labels as it drags
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              transform: bounceNudge ? `translateX(${bounceNudge}px)` : undefined,
+              transition: "filter 1.2s ease, transform 160ms ease-out",
               display: "flex",
               flexDirection: "column",
               // Removing the marquee left ~200px of dead space above the tab
@@ -563,34 +817,48 @@ export default function App() {
               kind="sales"
               label={sales.label}
               value={salesDisplay}
-              sub=""
+              sub={salesSub}
               score={salesScore}
               alerting={alertingKeys.has("sales")}
               loading={isLoadingKpis}
-              onClick={() => setDrillKey("sales" as KpiKey)}
+              stale={isStaleKpis}
+              onClick={isPast ? undefined : () => setDrillKey("sales" as KpiKey)}
             />
-            <KpiGrid tiles={tiles} onTileClick={setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} />
+            <KpiGrid tiles={tiles} onTileClick={isPast ? undefined : setDrillKey} alertingKeys={alertingKeys} loading={isLoadingKpis} stale={isStaleKpis} failed={isFailedKpis} />
             <StatRow
               reviewsRating={reviewsRating}
               reviewsCount={reviewsCount}
-              reviewsScore={reviewsScore ?? 5}
+              reviewsScore={reviewsScore}
+              reviewsState={reviewsState}
+              reviewsAsOf={reviewsAsOf}
               debtTotal={aging?.totalOpen ?? null}
               debtOver90={aging?.over90 ?? 0}
-              debtScore={agingToDebtScore(aging?.over90 ?? 0)}
-              loading={isLoadingKpis}
-              onOpenReviews={() => setOpenFeed("reviews")}
-              onOpenDebt={() => setOpenFeed("debt")}
+              // The whole snapshot, not a bare bucket: agingToDebtScore
+              // returns null when there is no report at all, which lands on
+              // the neutral tile. A bare `over90` defaulted to 0, so the
+              // ABSENCE of an A/P report scored 8 -- the greenest stop on the
+              // scale -- on a read that never happened. An old-but-real report
+              // still scores; `debtAgeNote` says how old it is.
+              debtScore={agingToDebtScore(aging)}
+              debtState={agingState}
+              debtAsOf={aging?.reportDate ?? null}
+              debtAgeNote={debtAgeNote}
+              onOpenReviews={isPast ? undefined : () => setOpenFeed("reviews")}
+              onOpenDebt={isPast ? undefined : () => setOpenFeed("debt")}
+              onRetryReviews={retryReviews}
+              onRetryDebt={retryAging}
             />
             <KpiBar
               kind="net"
               label={net.label}
               value={net.value}
               valueSub={net.dollars !== 0 ? money(net.dollars) : undefined}
-              sub="today"
+              sub={netSub}
               score={netScore}
               loading={isLoadingKpis}
+              stale={isStaleKpis}
               alerting={alertingKeys.has("net")}
-              onClick={() => setDrillKey("net" as KpiKey)}
+              onClick={isPast ? undefined : () => setDrillKey("net" as KpiKey)}
             />
 
           </div>
@@ -619,13 +887,14 @@ export default function App() {
         onClose={() => setFullscreenOpen(false)}
         weather={weatherData.condition}
         beamPulseKey={beamPulseKey}
-        reviewsScore={reviewsScore ?? 5}
+        /* Scenery tint, not a score — see SCENE_TINT_WITHOUT_SCORE. */
+        reviewsScore={reviewsScore ?? SCENE_TINT_WITHOUT_SCORE}
       />
 
       {/* ── Bottom tab panels ───────────────────────── */}
       <InvoicesTab open={openTab === "invoices"} onClose={() => setOpenTab(null)} />
       <LogTab      open={openTab === "log"}      onClose={() => setOpenTab(null)} />
-      <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} />
+      <GizmoTab    open={openTab === "gizmo"}    onClose={() => setOpenTab(null)} onOpenTab={setOpenTab} />
 
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TabPanel } from "./TabPanel";
 import { useSkin } from "../../theme/skins";
-import { supabase, supabaseReady } from "../../lib/supabase";
+import { ownerFetch, ownerRead } from "../../data/ownerFetch";
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -62,7 +62,7 @@ function todayLabel() {
   return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function fmtDate(iso: string | null) {
-  if (!iso) return todayLabel();
+  if (!iso) return "no date";   // an unread date is not today's date
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -134,9 +134,13 @@ export function InvoicesTab({ open, onClose }: Props) {
   const skin = useSkin();
   const inputRef = useRef<HTMLInputElement>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   // Form state
@@ -144,46 +148,34 @@ export function InvoicesTab({ open, onClose }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [amount, setAmount] = useState("");
 
-  // ── Load invoices from Supabase ────────────────────────────────────────────
+  // ── Load invoices from the seed (on open, and after every write) ─────────
+  // A failed read is a named state, never an empty list: the tab must not read
+  // "no invoices" (or "nothing pending") when the feed is simply down.
+  async function load() {
+    setStatus((prev) => (prev === "ready" ? prev : "loading"));
+    const read = await ownerRead<InvoiceRow[]>("/api/seed?view=invoices");
+    if (read.status === "empty") {
+      // The seed answered, and the answer is "nothing filed yet". That is a
+      // read that landed -- the calm empty list, not a failure.
+      setInvoices([]);
+      setLoadError(null);
+      setStatus("ready");
+      return;
+    }
+    if (read.status === "error" || !Array.isArray(read.data)) {
+      // Either we couldn't read, or what came back isn't a list of invoices.
+      // Both are "we don't know" -- named, and never rendered as "no invoices".
+      setLoadError(read.status === "error" ? read.error : "invoices came back in an unexpected shape");
+      setStatus("error");
+      return;
+    }
+    setInvoices(read.data);
+    setLoadError(null);
+    setStatus("ready");
+  }
   useEffect(() => {
-    if (!open || !supabaseReady) return;
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (!cancelled && !error && data) setInvoices(data as InvoiceRow[]);
-    })();
-    // Live updates
-    const channel = supabase
-      .channel("invoices-tab")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "invoices" },
-        (payload) => {
-          setInvoices((cur) => {
-            if (payload.eventType === "INSERT") {
-              return [payload.new as InvoiceRow, ...cur];
-            }
-            if (payload.eventType === "UPDATE") {
-              return cur.map((r) =>
-                r.id === (payload.new as InvoiceRow).id ? (payload.new as InvoiceRow) : r,
-              );
-            }
-            if (payload.eventType === "DELETE") {
-              return cur.filter((r) => r.id !== (payload.old as InvoiceRow).id);
-            }
-            return cur;
-          });
-        },
-      )
-      .subscribe();
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
+    if (!open) return;
+    void load();
   }, [open]);
 
   // ── Scan flow ──────────────────────────────────────────────────────────────
@@ -198,37 +190,11 @@ export function InvoicesTab({ open, onClose }: Props) {
 
     try {
       const { base64, mime } = await fileToBase64(file);
-      // Direct fetch instead of supabase.functions.invoke so we can read
-      // the actual error body on non-2xx (invoke masks it as "non-2xx status code").
-      const url = import.meta.env.VITE_SUPABASE_URL as string;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-      const res = await fetch(`${url}/functions/v1/parse-invoice`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-          apikey: key,
-        },
-        body: JSON.stringify({ image_base64: base64, mime_type: mime }),
-      });
-      const text = await res.text();
-      let data: { ok?: boolean; error?: string; invoice?: InvoiceRow } = {};
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(`bad response (${res.status}): ${text.slice(0, 200)}`);
-      }
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
-      }
-      // Row will stream in via realtime, but also prepend optimistically
-      const newRow = data.invoice;
-      if (newRow) {
-        setInvoices((cur) => {
-          if (cur.some((r) => r.id === newRow.id)) return cur;
-          return [newRow, ...cur];
-        });
-      }
+      // The seed's own classifier + persist (the same pipeline a bill takes by email).
+      const res = await ownerFetch("/api/seed?view=invoice-scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image_base64: base64, mime_type: mime }) });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; summary?: string };
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      await load();
     } catch (err) {
       setScanError((err as Error).message || "scan failed");
     } finally {
@@ -236,48 +202,36 @@ export function InvoicesTab({ open, onClose }: Props) {
     }
   }
 
-  // ── Manual save ────────────────────────────────────────────────────────────
+  // ── Manual save (a bill by hand, on the seed) ─────────────────────────────
   async function handleSave() {
     const parsed = parseFloat(amount.replace(/[^0-9.]/g, ""));
-    if (!parsed || parsed <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const row = {
-      vendor_name: vendor,
-      invoice_date: today,
-      category,
-      amount: parsed,
-      total_amount: parsed,
-      status: "pending",
-      source: "manual",
-    };
-    if (supabaseReady) {
-      const { error } = await supabase.from("invoices").insert(row);
-      if (error) {
-        setScanError(error.message);
-        return;
+    if (!parsed || parsed <= 0 || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const r = await ownerFetch("/api/seed?view=invoice-add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vendor_name: vendor, amount: parsed, category }) });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${r.status}`);
       }
-    } else {
-      // Offline fallback — prepend locally
-      setInvoices((cur) => [
-        {
-          id: `local-${Date.now()}`,
-          ...row,
-          line_items: [],
-          raw_image_url: null,
-          created_at: new Date().toISOString(),
-        } as InvoiceRow,
-        ...cur,
-      ]);
+      // Only now is the bill really on the seed -- clear the form.
+      setAmount("");
+      setVendor(VENDORS[0]);
+      setCategory(CATEGORIES[0]);
+      setShowForm(false);
+      await load();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "could not save");
+    } finally {
+      setSaving(false);
     }
-    setAmount("");
-    setVendor(VENDORS[0]);
-    setCategory(CATEGORIES[0]);
-    setShowForm(false);
   }
 
-  const totalPending = invoices
-    .filter((i) => i.status === "pending")
-    .reduce((s, i) => s + (Number(i.total_amount ?? i.amount) || 0), 0);
+  // The pending total is exactly what it says: the bills the rows themselves
+  // mark "pending". Nothing else gets counted into it.
+  const amountOf = (i: InvoiceRow) => Number(i.total_amount ?? i.amount) || 0;
+  const statusOf = (i: InvoiceRow) => (typeof i.status === "string" ? i.status.trim() : "");
+  const totalPending = invoices.filter((i) => statusOf(i) === "pending").reduce((s, i) => s + amountOf(i), 0);
 
   return (
     <TabPanel open={open} onClose={onClose} title="Invoices" accent={ACCENT}>
@@ -423,9 +377,15 @@ export function InvoicesTab({ open, onClose }: Props) {
             />
           </div>
 
+          {saveError && (
+            <div style={{ fontSize: 11, color: "#B94A4A", fontFamily: skin.fonts.body, fontWeight: 700 }}>
+              ⚠ Not saved — {saveError}
+            </div>
+          )}
+
           <button
-            onClick={handleSave}
-            disabled={!amount || parseFloat(amount) <= 0}
+            onClick={() => void handleSave()}
+            disabled={!amount || parseFloat(amount) <= 0 || saving}
             style={{
               width: "100%",
               background: !amount || parseFloat(amount) <= 0 ? "#E8EDEC" : "#4EC89A",
@@ -441,7 +401,7 @@ export function InvoicesTab({ open, onClose }: Props) {
               transition: "background 0.15s ease",
             }}
           >
-            ADD INVOICE
+            {saving ? "SAVING…" : "ADD INVOICE"}
           </button>
         </div>
       )}
@@ -471,8 +431,8 @@ export function InvoicesTab({ open, onClose }: Props) {
         </div>
       )}
 
-      {/* ── Pending summary ───────────────────────────── */}
-      {totalPending > 0 && (
+      {/* ── Summary ───────────────────────────────────── */}
+      {status === "ready" && totalPending > 0 && (
         <div
           style={{
             margin: "12px 18px 0",
@@ -483,6 +443,7 @@ export function InvoicesTab({ open, onClose }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: 10,
           }}
         >
           <div style={{ fontFamily: skin.fonts.body, fontSize: 12, fontWeight: 700, color: "#6A4800" }}>
@@ -507,24 +468,61 @@ export function InvoicesTab({ open, onClose }: Props) {
             marginBottom: 2,
           }}
         >
-          Recent Invoices
+          {/* Nothing here knows what the seed caps this list at, so the header
+              counts what is on the screen instead of naming a window. */}
+          Recent Invoices{invoices.length > 0 ? ` · ${invoices.length}` : ""}
         </div>
         {invoices.length === 0 && (
           <div
             style={{
               textAlign: "center",
               padding: "24px 0",
-              color: "#8A9C9C",
+              color: status === "error" ? "#B94A4A" : "#8A9C9C",
               fontFamily: skin.fonts.body,
               fontSize: 12,
             }}
           >
-            No invoices yet. Scan or add one above.
+            {status === "error" ? (
+              <>
+                <div style={{ fontWeight: 700 }}>Couldn't load invoices.</div>
+                {loadError && <div style={{ fontSize: 11, marginTop: 3, opacity: 0.8 }}>{loadError}</div>}
+                <button
+                  type="button"
+                  onClick={() => void load()}
+                  style={{
+                    marginTop: 10,
+                    background: ACCENT, color: "#fff", border: "none",
+                    borderRadius: 10, padding: "8px 16px",
+                    fontFamily: skin.fonts.body, fontWeight: 800, fontSize: 11,
+                    letterSpacing: ".04em", cursor: "pointer",
+                  }}
+                >
+                  RETRY
+                </button>
+              </>
+            ) : status === "ready" ? (
+              "No invoices yet. Scan or add one above."
+            ) : (
+              "Loading invoices…"
+            )}
           </div>
         )}
+        {invoices.length > 0 && status === "error" && (
+          <button
+            type="button"
+            onClick={() => void load()}
+            style={{
+              background: "none", border: "none", padding: 0, textAlign: "left",
+              fontFamily: skin.fonts.body, fontSize: 11, fontWeight: 700,
+              color: "#B94A4A", cursor: "pointer",
+            }}
+          >
+            Couldn't refresh — tap to retry
+          </button>
+        )}
         {invoices.map((inv) => {
-          const amt = Number(inv.total_amount ?? inv.amount) || 0;
-          const status = (inv.status as string) || "pending";
+          const amt = amountOf(inv);
+          const rowStatus = statusOf(inv);   // whatever the row carries, verbatim
           return (
             <div
               key={inv.id}
@@ -548,27 +546,33 @@ export function InvoicesTab({ open, onClose }: Props) {
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                {amt > 0 && (
+                {amt > 0 ? (
                   <div style={{ fontFamily: skin.fonts.display, fontSize: 16, fontWeight: 700, color: "#1A2E28" }}>
                     ${amt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
+                ) : (
+                  <div style={{ fontFamily: skin.fonts.body, fontSize: 11, fontWeight: 700, color: "#8A9C9C" }}>
+                    no amount read
+                  </div>
                 )}
+                {/* The row's own status, always shown -- a status this screen
+                    doesn't have a colour for stays neutral grey. */}
                 <div
                   style={{
                     display: "inline-block",
                     marginTop: 2,
                     padding: "2px 8px",
                     borderRadius: 6,
-                    background: STATUS_COLOR[status] || "#E8EDEC",
+                    background: STATUS_COLOR[rowStatus] || "#E8EDEC",
                     fontSize: 9,
                     fontWeight: 800,
-                    color: STATUS_TEXT[status] || "#2A3C48",
+                    color: STATUS_TEXT[rowStatus] || "#2A3C48",
                     letterSpacing: ".06em",
                     textTransform: "uppercase",
                     fontFamily: skin.fonts.body,
                   }}
                 >
-                  {status}
+                  {rowStatus || "no status"}
                 </div>
               </div>
             </div>

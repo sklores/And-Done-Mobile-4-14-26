@@ -1,11 +1,12 @@
-// Reads scheduled-labor data from the shift scheduling tables
-// (shift_shifts + shift_employees + shift_settings). Those tables moved to
-// the DashVue core on 2026-08-13 — reads go through supabaseShift (a
-// read-only client for that project, falling back to the main client when
-// unconfigured). Read-only — never writes back.
+import { ownerRead } from "./ownerFetch";
+import type { ReadResult } from "./ownerFetch";
+// Reads the week's scheduled labor from the seed (shift_shifts + shift_employees
+// + shift_settings via /api/seed?view=schedule). Read-only; Day only.
+//
+// A failed read comes back as status "error" with the message: the schedule is
+// then unknown, which is not the same as a day with nothing scheduled (0 hours,
+// 0 cost, 0 employees) and must never be shown as one.
 
-import { supabaseReady } from "../lib/supabase";
-import { supabaseShift } from "../lib/supabaseShift";
 
 export type ScheduledLaborResult = {
   // Today's schedule
@@ -66,44 +67,29 @@ function mondayOf(iso: string): string {
   return addDays(iso, -offsetToMon);
 }
 
-export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null> {
-  if (!supabaseReady) return null;
-
+export async function fetchTodayScheduled(): Promise<ReadResult<ScheduledLaborResult>> {
   const today = todayET();
   const monday = mondayOf(today);
   const sunday = addDays(monday, 6);
 
   // Pull the whole current week's shifts (need it for weekly window sum)
   // plus the joined employee for hourly-cost / active filter.
-  const [{ data: shiftRows, error: shiftErr }, { data: settingRows, error: settingErr }] = await Promise.all([
-    supabaseShift
-      .from("shift_shifts")
-      .select(`
-        shift_date,
-        start_time,
-        end_time,
-        employee_id,
-        shift_employees!inner ( id, is_active, hourly_rate )
-      `)
-      .gte("shift_date", monday)
-      .lte("shift_date", sunday),
-    supabaseShift
-      .from("shift_settings")
-      .select("value")
-      .eq("key", "weekly_salary")
-      .maybeSingle(),
-  ]);
-
-  if (shiftErr) {
-    console.warn("[scheduleAdapter] shifts query error:", shiftErr.message);
-    return null;
+  // From the seed (D15): the week's shifts with their employee, plus weekly_salary.
+  type ShiftRow = { shift_date: string; start_time: string; end_time: string; employee_id?: string; shift_employees: { id: string; is_active?: boolean; hourly_rate: number | null } | null };
+  // Like every other adapter: a network failure is a reported error, not an
+  // exception that strands refresh() and the pull-to-refresh gesture.
+  const read = await ownerRead<{ shifts: ShiftRow[]; weeklySalary: string | null }>(
+    `/api/seed?view=schedule&from=${monday}&to=${sunday}`,
+  );
+  if (read.status === "error") {
+    console.warn("[scheduleAdapter] shifts query error:", read.error);
+    return read;
   }
-  if (settingErr) {
-    // Not fatal — fall through with weeklySalary=0
-    console.warn("[scheduleAdapter] settings query error:", settingErr.message);
-  }
+  if (read.status === "empty") return read;
+  const payload = read.data;
+  const shiftRows = payload.shifts ?? null;
 
-  const weeklySalary = Number(settingRows?.value ?? 0) || 0;
+  const weeklySalary = Number(payload.weeklySalary ?? 0) || 0;
 
   // ── Today's scheduled totals + daily window map ──────────────────────
   let todayHours = 0;
@@ -180,7 +166,7 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
 
   const salaryTodayCap = todayWindowHours * salaryHourlyRate;
 
-  return {
+  const result: ScheduledLaborResult = {
     hours:              round2(todayHours),
     hoursScheduledSoFar: round2(todayHoursSoFar),
     cost:               round2(todayCost),
@@ -195,6 +181,7 @@ export async function fetchTodayScheduled(): Promise<ScheduledLaborResult | null
     salaryTodayCap:     round2(salaryTodayCap),
     fetchedAt:          new Date().toISOString(),
   };
+  return { status: "ready", data: result, error: null };
 }
 
 function round2(n: number): number {

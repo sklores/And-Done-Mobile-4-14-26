@@ -2,21 +2,35 @@ import { useEffect, useState } from "react";
 import { useSkin, tileForScore } from "../theme/skins";
 import type { Kpi } from "../stores/useKpiStore";
 
-type Props = { kpi: Kpi; onClick?: () => void; alerting?: boolean; loading?: boolean };
+type Props = {
+  kpi: Kpi;
+  onClick?: () => void;
+  alerting?: boolean;
+  loading?: boolean;
+  /** The last snapshot pull failed AND an earlier one is still on screen:
+   *  this number is the previous one, still true as of whenever it landed but
+   *  no longer live. Dim it and say so rather than let it keep reading as
+   *  this minute's number. */
+  stale?: boolean;
+  /** The pull failed with nothing behind it -- this period never landed, so
+   *  the tile is a "--" placeholder. It must not claim to be a last known
+   *  number; it is a read that did not happen. */
+  failed?: boolean;
+};
 
-export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
+export function KpiTile({ kpi, onClick, alerting, loading, stale, failed }: Props) {
   const skin = useSkin();
   const palette = tileForScore(kpi.score);
   const [flash, setFlash] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || stale || failed) return;
     if (kpi.score === 7) {
       setFlash(true);
       const t = setTimeout(() => setFlash(false), 900);
       return () => clearTimeout(t);
     }
-  }, [kpi.score, kpi.value, loading]);
+  }, [kpi.score, kpi.value, loading, stale, failed]);
 
   return (
     <div
@@ -31,6 +45,7 @@ export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
         justifyContent: "space-between",
         minHeight: 78,
         fontFamily: skin.fonts.body,
+        opacity: stale || failed ? 0.62 : undefined,
         animation: alerting
           ? "kpiPulse 2s ease-in-out infinite"
           : flash ? "kpiFlash 0.9s ease-out" : undefined,
@@ -95,7 +110,7 @@ export function KpiTile({ kpi, onClick, alerting, loading }: Props) {
             textTransform: "uppercase",
           }}
         >
-          {kpi.status}
+          {stale ? "offline · last known" : failed ? "couldn't load" : kpi.status}
         </div>
       )}
     </div>

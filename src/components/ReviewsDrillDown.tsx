@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { DrillDownModal, DrillRow } from "./DrillDownModal";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { DrillDownModal, DrillRow, DrillNote, DrillRetry } from "./DrillDownModal";
 import { useSkin } from "../theme/skins";
 import {
   fetchReviewsBundle,
@@ -153,31 +153,42 @@ function truncate(s: string, n: number): string {
 }
 
 export function ReviewsDrillDown({ open, onClose }: Props) {
-  const skin = useSkin();
   const [bundle, setBundle] = useState<ReviewsBundle | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
+  const inFlight = useRef(false);
+
+  const load = useCallback(() => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    // setState only inside the promise chain — never synchronously in an effect.
+    void Promise.resolve()
+      .then(() => { setPhase("loading"); return fetchReviewsBundle(); })
+      .then((b) => {
+        if (b) { setBundle(b); setPhase("ready"); }
+        else { setPhase("error"); }   // a failed read is not "no reviews"
+      })
+      .catch(() => setPhase("error"))
+      .finally(() => { inFlight.current = false; });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchReviewsBundle()
-      .then((b) => {
-        if (!cancelled) {
-          setBundle(b);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBundle(null);
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+    load();
+  }, [open, load]);
+
+  const loading = phase === "loading" && !bundle;
+  const failed  = phase === "error"   && !bundle;
+
+  // bundle.fetchedAt is when THIS browser rolled the rows up, so it always
+  // reads as "just now" -- it is not when the review sync last landed. The
+  // rows carry that: the newest fetched_at among them. Null when there are no
+  // rows, and then the header claims no freshness at all.
+  const syncedAt = bundle
+    ? bundle.recent.reduce<string | null>(
+        (newest, r) => (r.fetched_at && (newest == null || r.fetched_at > newest) ? r.fetched_at : newest),
+        null,
+      )
+    : null;
 
   // Header values
   const headerValue = !bundle
@@ -187,7 +198,7 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
       : "—";
 
   const headerStatus = !bundle
-    ? loading ? "Loading" : "No data"
+    ? loading ? "Loading" : "Couldn't load"
     : bundle.totalReviews === 0
       ? "No reviews yet"
       : `${bundle.totalReviews} review${bundle.totalReviews === 1 ? "" : "s"} across ${bundle.platforms.filter(p => p.status === "live").length} platforms`;
@@ -200,30 +211,23 @@ export function ReviewsDrillDown({ open, onClose }: Props) {
       label="Reviews"
       value={headerValue}
       status={headerStatus}
+      feed={{ status: phase, asOf: syncedAt }}
     >
-      {loading && (
-        <div style={{
-          padding: "24px 18px", color: "#8A9C9C",
-          fontFamily: skin.fonts.body, fontSize: 12, textAlign: "center",
-        }}>
-          Loading reviews…
-        </div>
-      )}
+      {loading && <DrillNote>Loading reviews…</DrillNote>}
 
-      {!loading && bundle && bundle.totalReviews === 0 && (
-        <div style={{
-          padding: "28px 18px", color: "#8A9C9C",
-          fontFamily: skin.fonts.body, fontSize: 12, textAlign: "center", lineHeight: 1.5,
-        }}>
-          No reviews on file yet.
+      {failed && <DrillRetry subject="the review feed" onRetry={load} />}
+
+      {bundle && bundle.totalReviews === 0 && (
+        <DrillNote>
+          No reviews on file for this restaurant yet.
           <br />
           <span style={{ opacity: 0.65, fontSize: 10 }}>
-            Daily sync runs at 08:30 UTC across Yelp, Tripadvisor, and Uber Eats.
+            The review feeds are synced on the seed; nothing has landed here.
           </span>
-        </div>
+        </DrillNote>
       )}
 
-      {!loading && bundle && bundle.totalReviews > 0 && (
+      {bundle && bundle.totalReviews > 0 && (
         <>
           {bundle.totalRatedReviews > 0 && (
             <>
